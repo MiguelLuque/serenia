@@ -6,7 +6,7 @@
 
 **Architecture:** Next.js 16 App Router + TypeScript, Supabase (Postgres + Auth + RLS), clinical logic as pure TS modules in `lib/clinical/`, LLM provider abstraction in `lib/llm/` using Vercel AI SDK roles.
 
-**Tech Stack:** Next.js 16, TypeScript, Tailwind, shadcn/ui, Supabase CLI, Vitest, Vercel AI SDK, @ai-sdk/anthropic
+**Tech Stack:** Next.js 16, TypeScript, Tailwind, shadcn/ui, Supabase CLI, Vitest, Vercel AI SDK v6+ (routes `provider/model` strings through Vercel AI Gateway automatically — no provider-specific packages needed)
 
 ---
 
