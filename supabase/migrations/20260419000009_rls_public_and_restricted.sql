@@ -12,7 +12,11 @@ create policy "questionnaire_definitions_read_authenticated"
 create policy "questionnaire_items_read_authenticated"
   on questionnaire_items for select
   to authenticated
-  using (true);
+  using (
+    definition_id in (
+      select id from questionnaire_definitions where is_active = true
+    )
+  );
 
 -- v1.5 tables: deny all (no authenticated client access in MVP)
 alter table clinicians enable row level security;

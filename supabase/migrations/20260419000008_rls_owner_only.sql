@@ -21,7 +21,8 @@ create policy "user_profiles_select_own"
 
 create policy "user_profiles_update_own"
   on user_profiles for update
-  using (user_id = auth.uid());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
 -- consents: owner read, append-only insert
 create policy "consents_select_own"
@@ -35,18 +36,21 @@ create policy "consents_insert_own"
 -- conversations
 create policy "conversations_all_own"
   on conversations for all
-  using (user_id = auth.uid());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
 -- clinical_sessions
 create policy "clinical_sessions_all_own"
   on clinical_sessions for all
-  using (user_id = auth.uid());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
--- messages: select own, insert via service role only (no direct client insert)
+-- messages: select own AND user-visible only; inserts via service role
 create policy "messages_select_own"
   on messages for select
   using (
-    conversation_id in (
+    visible_to_user = true
+    and conversation_id in (
       select id from conversations where user_id = auth.uid()
     )
   );
@@ -59,7 +63,8 @@ create policy "session_summaries_select_own"
 -- questionnaire_instances
 create policy "qi_all_own"
   on questionnaire_instances for all
-  using (user_id = auth.uid());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
 -- questionnaire_answers: select own; insert via service role
 create policy "qa_select_own"
@@ -92,4 +97,5 @@ create policy "risk_events_select_own"
 -- audit_log: no access for authenticated users (service-role only)
 create policy "audit_log_deny_all"
   on audit_log for all
-  using (false);
+  using (false)
+  with check (false);
