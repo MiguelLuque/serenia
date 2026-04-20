@@ -13,7 +13,7 @@ create policy "questionnaire_items_read_authenticated"
   on questionnaire_items for select
   to authenticated
   using (
-    definition_id in (
+    questionnaire_id in (
       select id from questionnaire_definitions where is_active = true
     )
   );
