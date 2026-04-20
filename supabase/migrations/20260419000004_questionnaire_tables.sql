@@ -2,13 +2,13 @@
 
 create table questionnaire_definitions (
   id                uuid primary key default gen_random_uuid(),
-  code              text not null unique,
+  code              text not null unique,   -- PHQ9, GAD7, ASQ
   name              text not null,
-  domain            text not null,
+  domain            text not null,          -- depression, anxiety, risk
   version           text not null default '1.0',
   language          text not null default 'es-ES',
   is_active         boolean not null default true,
-  scoring_strategy  text not null,
+  scoring_strategy  text not null,          -- sum, conditional
   source_reference  text,
   instructions_json jsonb not null default '{}',
   created_at        timestamptz not null default now()
@@ -23,7 +23,7 @@ create table questionnaire_items (
   options_json         jsonb not null default '[]',
   numeric_value_map_json jsonb not null default '{}',
   is_required          boolean not null default true,
-  risk_flag_rule       jsonb,
+  risk_flag_rule       jsonb,               -- e.g. {"gte": 1} for PHQ9 item 9
   created_at           timestamptz not null default now(),
   unique (questionnaire_id, order_index)
 );

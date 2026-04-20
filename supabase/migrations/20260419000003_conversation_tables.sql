@@ -44,6 +44,7 @@ create table session_summaries (
   created_at   timestamptz not null default now()
 );
 
+-- Now add deferred FKs
 alter table conversations
   add constraint fk_conversations_latest_summary
   foreign key (latest_session_summary_id)

@@ -41,11 +41,13 @@ create table care_plans (
   updated_at        timestamptz not null default now()
 );
 
+-- Now add FK from user_profiles to care_plans
 alter table user_profiles
   add constraint fk_user_profiles_care_plan
   foreign key (active_care_plan_id)
   references care_plans(id) on delete set null;
 
+-- FK from assessments.reviewed_by to clinicians
 alter table assessments
   add constraint fk_assessments_reviewed_by
   foreign key (reviewed_by)

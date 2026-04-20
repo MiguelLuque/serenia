@@ -9,13 +9,14 @@ create table assessments (
   summary_json              jsonb not null,
   status                    assessment_status not null default 'draft_ai',
   review_status             review_status,
-  reviewed_by               uuid,
+  reviewed_by               uuid,             -- FK to clinicians added in v1.5 migration
   reviewed_at               timestamptz,
   supersedes_assessment_id  uuid references assessments(id) on delete set null,
   created_at                timestamptz not null default now(),
   updated_at                timestamptz not null default now()
 );
 
+-- Add deferred FK on user_profiles
 alter table user_profiles
   add constraint fk_user_profiles_last_assessment
   foreign key (last_reviewed_assessment_id)
@@ -26,7 +27,7 @@ create table risk_events (
   user_id         uuid not null references auth.users(id) on delete cascade,
   conversation_id uuid references conversations(id) on delete set null,
   session_id      uuid references clinical_sessions(id) on delete set null,
-  source_type     text not null,
+  source_type     text not null,              -- 'message' | 'questionnaire' | 'manual_review'
   risk_type       risk_type not null,
   severity        risk_severity not null,
   payload_json    jsonb not null default '{}',
