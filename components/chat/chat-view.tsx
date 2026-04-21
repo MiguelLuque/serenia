@@ -7,19 +7,38 @@ import { DefaultChatTransport, type UIMessage } from 'ai'
 import { MessageBubble } from './message-bubble'
 import { ChatInput } from './chat-input'
 import { CrisisBanner } from './crisis-banner'
+import { QuestionnaireCard } from './questionnaire-card'
 import { endSessionAction } from '@/app/app/actions'
+
+interface ActiveQuestionnaire {
+  instanceId: string
+  status: 'proposed' | 'in_progress' | 'scored'
+  definition: { code: string; name: string }
+  items: Array<{
+    id: string
+    order_index: number
+    prompt: string
+    options_json: unknown
+  }>
+}
 
 interface ChatViewProps {
   sessionId: string
   initialMessages: UIMessage[]
   expiresAt: Date
+  activeQuestionnaire?: ActiveQuestionnaire | null
 }
 
 function minutesRemaining(expiresAt: Date, now = Date.now()): number {
   return Math.max(0, Math.ceil((expiresAt.getTime() - now) / 60_000))
 }
 
-export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProps) {
+export function ChatView({
+  sessionId,
+  initialMessages,
+  expiresAt,
+  activeQuestionnaire,
+}: ChatViewProps) {
   const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt))
   const isExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
@@ -101,13 +120,23 @@ export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProp
           </p>
         </div>
       ) : (
-        <ChatInput
-          status={status}
-          disabled={isExpired}
-          onSend={(text) => {
-            void sendMessage({ text })
-          }}
-        />
+        <>
+          {activeQuestionnaire &&
+            activeQuestionnaire.status !== 'scored' && (
+              <QuestionnaireCard
+                instanceId={activeQuestionnaire.instanceId}
+                definition={activeQuestionnaire.definition}
+                items={activeQuestionnaire.items}
+              />
+            )}
+          <ChatInput
+            status={status}
+            disabled={isExpired}
+            onSend={(text) => {
+              void sendMessage({ text })
+            }}
+          />
+        </>
       )}
 
       <CrisisBanner />

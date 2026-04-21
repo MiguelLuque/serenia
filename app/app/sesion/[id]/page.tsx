@@ -6,6 +6,7 @@ import {
   isSessionExpired,
   SESSION_MAX_DURATION_MS,
 } from '@/lib/sessions/service'
+import { getActiveInstanceForSession } from '@/lib/questionnaires/service'
 import { ChatView } from '@/components/chat/chat-view'
 
 function rowToUIMessage(row: {
@@ -59,11 +60,31 @@ export default async function SessionPage({
     new Date(session.opened_at).getTime() + SESSION_MAX_DURATION_MS,
   )
 
+  const active = await getActiveInstanceForSession(supabase, session.id)
+  const activeQuestionnaire =
+    active && active.instance.status !== 'scored'
+      ? {
+          instanceId: active.instance.id,
+          status: active.instance.status as 'proposed' | 'in_progress',
+          definition: {
+            code: active.definition.code,
+            name: active.definition.name,
+          },
+          items: active.items.map((i) => ({
+            id: i.id,
+            order_index: i.order_index,
+            prompt: i.prompt,
+            options_json: i.options_json,
+          })),
+        }
+      : null
+
   return (
     <ChatView
       sessionId={session.id}
       initialMessages={initialMessages}
       expiresAt={expiresAt}
+      activeQuestionnaire={activeQuestionnaire}
     />
   )
 }
