@@ -188,6 +188,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          last_activity_at: string
           opened_at: string
           status: Database["public"]["Enums"]["session_status"]
           summary_id: string | null
@@ -200,6 +201,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          last_activity_at?: string
           opened_at?: string
           status?: Database["public"]["Enums"]["session_status"]
           summary_id?: string | null
@@ -212,6 +214,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          last_activity_at?: string
           opened_at?: string
           status?: Database["public"]["Enums"]["session_status"]
           summary_id?: string | null
@@ -900,6 +903,7 @@ export type Database = {
     }
     Functions: {
       gdpr_erase_user: { Args: { target_user_id: string }; Returns: undefined }
+      is_clinician: { Args: never; Returns: boolean }
     }
     Enums: {
       actor_type: "user" | "service" | "system"
