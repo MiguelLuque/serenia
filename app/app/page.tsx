@@ -41,6 +41,41 @@ export default async function AppHome() {
 
   const activeSession = await getOrResolveActiveSession(supabase, user!.id)
 
+  let lastClosed:
+    | {
+        closureReason: string | null
+        patientFacingSummary: string | null
+      }
+    | null = null
+
+  if (!activeSession) {
+    const { data: sess } = await supabase
+      .from('clinical_sessions')
+      .select('id, closed_at, closure_reason')
+      .eq('user_id', user!.id)
+      .eq('status', 'closed')
+      .order('closed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (sess) {
+      const { data: assessment } = await supabase
+        .from('assessments')
+        .select('summary_json')
+        .eq('session_id', sess.id)
+        .eq('assessment_type', 'closure')
+        .maybeSingle()
+
+      const summary = assessment?.summary_json as
+        | { patient_facing_summary?: string }
+        | null
+      lastClosed = {
+        closureReason: sess.closure_reason,
+        patientFacingSummary: summary?.patient_facing_summary ?? null,
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -65,19 +100,44 @@ export default async function AppHome() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Empieza una sesión nueva</CardTitle>
-            <CardDescription>
-              Las sesiones duran hasta 60 minutos. Puedes pausar y seguir cuando quieras.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={startSessionAction}>
-              <Button type="submit">Iniciar nueva sesión</Button>
-            </form>
-          </CardContent>
-        </Card>
+        <>
+          {lastClosed?.closureReason === 'crisis_detected' ? (
+            <Card className="border-red-200 bg-red-50">
+              <CardHeader>
+                <CardTitle>Tu última sesión se cerró por seguridad.</CardTitle>
+                <CardDescription>
+                  Tu psicólogo la está revisando hoy. Si necesitas ayuda ahora,
+                  llama a la <strong>Línea 024</strong>.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : lastClosed?.patientFacingSummary ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Resumen de tu última sesión</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-slate-700">
+                  {lastClosed.patientFacingSummary}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Empieza una sesión nueva</CardTitle>
+              <CardDescription>
+                Las sesiones duran hasta 60 minutos. Puedes pausar y seguir cuando quieras.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form action={startSessionAction}>
+                <Button type="submit">Iniciar nueva sesión</Button>
+              </form>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   )
