@@ -39,5 +39,27 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL('/app', request.url))
   }
 
+  if (user && path.startsWith('/app')) {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('onboarding_status')
+      .eq('user_id', user.id)
+      .single()
+    if (profile?.onboarding_status !== 'complete') {
+      return NextResponse.redirect(new URL('/onboarding', request.url))
+    }
+  }
+
+  if (user && path === '/onboarding') {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('onboarding_status')
+      .eq('user_id', user.id)
+      .single()
+    if (profile?.onboarding_status === 'complete') {
+      return NextResponse.redirect(new URL('/app', request.url))
+    }
+  }
+
   return response
 }
