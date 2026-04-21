@@ -8,7 +8,7 @@ Este directorio es la **ficha de empleado** del asistente de IA que atiende a lo
 
 - [`roles/`](roles/) — Qué hace cada agente, alcance, herramientas, restricciones.
 - [`protocols/`](protocols/) — Procedimientos clínicos (crisis, flujo de sesión, etc.).
-- [`prompts/`](prompts/) — System prompts en español. Se cargan en runtime desde estos `.md`.
+- [`prompts/`](prompts/) — System prompts en español. **El frontmatter YAML (entre `---`) es metadata y NO se envía al modelo.** Todo lo que hay debajo del frontmatter se envía literalmente al modelo como system prompt en cada llamada. Se cargan en runtime desde estos `.md`.
 - [`changelog.md`](changelog.md) — Historial de cambios con motivo clínico.
 
 ## Cómo proponer un cambio
