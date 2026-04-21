@@ -1,3 +1,9 @@
+import { loadPromptFromMarkdown } from './loader'
+
+export function getSessionTherapistPrompt(): string {
+  return loadPromptFromMarkdown('docs/agents/prompts/session-therapist.md')
+}
+
 export function buildClinicalSystemPrompt(): string {
   return `Eres Serenia, un asistente de apoyo emocional especializado en ansiedad y depresión.
 
