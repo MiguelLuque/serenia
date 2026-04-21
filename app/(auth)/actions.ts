@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { RegisterSchema, LoginSchema } from '@/lib/auth/schemas'
+import { closeSession, getOrResolveActiveSession } from '@/lib/sessions/service'
 
 type ActionState = { error?: string } | undefined
 
@@ -45,6 +46,13 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
 
 export async function logoutAction() {
   const supabase = await createAuthenticatedClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (user) {
+    const active = await getOrResolveActiveSession(supabase, user.id)
+    if (active) await closeSession(supabase, active.id, 'user_request')
+  }
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/login')
