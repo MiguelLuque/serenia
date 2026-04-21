@@ -237,7 +237,8 @@ describe('closeSession', () => {
 
     await closeSession(supabase, 'session-1', 'user_request')
 
-    expect(fromMock).toHaveBeenCalledTimes(3)
+    // 1-3 are the core close flow; the generator may issue extra reads
+    // but is wrapped in try/catch and must not block closure.
     expect(fromMock).toHaveBeenNthCalledWith(1, 'clinical_sessions')
     expect(fromMock).toHaveBeenNthCalledWith(2, 'clinical_sessions')
     expect(fromMock).toHaveBeenNthCalledWith(3, 'conversations')

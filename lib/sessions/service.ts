@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
+import {
+  generateAssessment,
+  AssessmentSkippedError,
+} from '@/lib/assessments/generator'
 
 type Supabase = SupabaseClient<Database>
 
@@ -139,6 +143,22 @@ export async function closeSession(
     .eq('user_id', session.user_id)
 
   if (convError) throw convError
+
+  try {
+    await generateAssessment(supabase, sessionId)
+  } catch (err) {
+    if (err instanceof AssessmentSkippedError) {
+      console.info('[closeSession] assessment skipped', {
+        sessionId,
+        reason: err.reason,
+      })
+    } else {
+      console.error('[closeSession] assessment failed', {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 }
 
 /**
