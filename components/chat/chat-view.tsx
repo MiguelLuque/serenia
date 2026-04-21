@@ -7,6 +7,7 @@ import { DefaultChatTransport, type UIMessage } from 'ai'
 import { MessageBubble } from './message-bubble'
 import { ChatInput } from './chat-input'
 import { CrisisBanner } from './crisis-banner'
+import { endSessionAction } from '@/app/app/actions'
 
 interface ChatViewProps {
   sessionId: string
@@ -50,7 +51,7 @@ export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProp
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div
-        className={`flex items-center justify-between border-b px-4 py-2 text-xs ${
+        className={`flex items-center justify-between gap-3 border-b px-4 py-2 text-xs ${
           isEnding
             ? 'border-amber-200 bg-amber-50 text-amber-900'
             : 'border-slate-200 bg-slate-50 text-slate-500'
@@ -61,9 +62,22 @@ export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProp
             ? 'La sesión ha terminado.'
             : `${minsLeft} min restantes`}
         </span>
-        {isEnding && !isExpired && (
-          <span className="font-medium">Queda poco tiempo en esta sesión.</span>
-        )}
+        <div className="flex items-center gap-3">
+          {isEnding && !isExpired && (
+            <span className="font-medium">Queda poco tiempo.</span>
+          )}
+          {!isExpired && (
+            <form action={endSessionAction}>
+              <input type="hidden" name="sessionId" value={sessionId} />
+              <button
+                type="submit"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Terminar sesión
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
