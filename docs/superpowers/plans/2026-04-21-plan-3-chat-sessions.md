@@ -37,59 +37,49 @@ Al terminar este plan:
 
 ---
 
-## Task 1: Migración — tabla `sessions` y extender `conversations`
+## Task 1: Migración — extender `clinical_sessions`
 
 **Files:**
-- Create: `supabase/migrations/20260421000001_sessions_table.sql`
+- Create: `supabase/migrations/20260421000001_clinical_sessions_extend.sql`
 
-Plan 1 creó `conversations` (genérico). Ahora materializamos **sesiones clínicas** como un tipo concreto de conversación.
+Plan 1 ya creó la tabla `clinical_sessions` (conversación clínica 1:1 con `conversations`) y el enum `session_status` con valores `('open','paused','closed')`. En lugar de duplicar la tabla, extendemos lo existente:
+
+- Mantenemos el enum tal cual. Semántica:
+  - `status='open'` ⇒ sesión **activa**.
+  - `status='closed'` ⇒ sesión finalizada. El tipo de cierre se distingue por `closure_reason ∈ { 'user_request' | 'time_limit' | 'crisis_detected' | 'inactivity' }`. "Abandoned" = `closure_reason='inactivity'`.
+  - `paused` no se usa en esta versión (se reserva por si más adelante hiciera falta).
+- Añadimos `last_activity_at` para calcular expiración por inactividad.
+- Añadimos índices para la cola de limpieza.
+- Añadimos política `select` para clínicos (reutiliza `is_clinician()` creado en Plan 2).
 
 ```sql
--- supabase/migrations/20260421000001_sessions_table.sql
+-- supabase/migrations/20260421000001_clinical_sessions_extend.sql
 
--- Estado de la sesión.
-create type session_status as enum ('active', 'completed', 'abandoned');
+alter table clinical_sessions
+  add column last_activity_at timestamptz not null default now();
 
--- Una sesión es una conversación clínica con duración acotada.
--- 1:1 con conversations.
-create table sessions (
-  id              uuid primary key default gen_random_uuid(),
-  conversation_id uuid not null unique references conversations(id) on delete cascade,
-  user_id         uuid not null references auth.users(id) on delete cascade,
-  status          session_status not null default 'active',
-  started_at      timestamptz not null default now(),
-  closed_at       timestamptz,
-  last_activity_at timestamptz not null default now(),
-  close_reason    text,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
-);
+create index clinical_sessions_user_open_idx
+  on clinical_sessions(user_id)
+  where status = 'open';
 
-create index sessions_user_active_idx on sessions(user_id) where status = 'active';
-create index sessions_last_activity_idx on sessions(last_activity_at) where status = 'active';
+create index clinical_sessions_last_activity_idx
+  on clinical_sessions(last_activity_at)
+  where status = 'open';
 
-alter table sessions enable row level security;
-
-create policy "sessions_all_own"
-  on sessions for all
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
-
-create policy "sessions_select_clinician"
-  on sessions for select
+create policy "clinical_sessions_select_clinician"
+  on clinical_sessions for select
   using (is_clinician());
-
--- Trigger para updated_at
-create trigger sessions_updated_at
-  before update on sessions
-  for each row execute function touch_updated_at();
 ```
+
+Notas para implementación:
+- La función de trigger existente es `set_updated_at()` (ya enganchada a `clinical_sessions` en `20260419000007_updated_at_trigger.sql`) — no hace falta crear trigger nuevo.
+- RLS ya activo: política `clinical_sessions_all_own` existe. Solo añadimos `select_clinician`.
 
 Commit:
 ```bash
 npx supabase db push
-git add supabase/migrations/20260421000001_sessions_table.sql
-git commit -m "feat: sessions table with lifecycle and RLS"
+git add supabase/migrations/20260421000001_clinical_sessions_extend.sql
+git commit -m "feat: extend clinical_sessions with last_activity_at + clinician RLS"
 ```
 
 ---
@@ -324,11 +314,11 @@ git commit -m "feat: message persistence helpers"
 
 Usar `useChat` del AI SDK v6. Props de `ChatView`: `sessionId`, `initialMessages`, `expiresAt`.
 
-- `MessageBubble`: burbuja user (derecha, fondo oscuro) vs assistant (izquierda, fondo claro). Markdown simple.
+- `MessageBubble`: burbuja user (derecha, fondo oscuro) vs assistant (izquierda, fondo claro). Usar **AI Elements** (`@ai-sdk/react` o `ai/react` primitives) para renderizar mensajes AI de forma segura y stream-aware, en vez de markdown manual.
 - `ChatInput`: textarea auto-resize, botón enviar, Enter = submit, Shift+Enter = newline. Disabled si `expiresAt < now`.
 - `CrisisBanner`: pie fijo con "Si estás en crisis: **Línea 024** (gratuito 24/7) · **112** (emergencias)". Discreto pero siempre visible.
 
-Sin dependencias nuevas más allá de AI SDK + react-markdown (si hace falta).
+Usar AI Elements (primitives del AI SDK v6) para el rendering de mensajes del asistente — manejan streaming + sanitización de contenido AI de forma segura. No reinventar parsers manuales.
 
 Commit:
 ```bash
