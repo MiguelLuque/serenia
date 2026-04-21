@@ -67,15 +67,32 @@ export async function POST(req: Request) {
     ? detectCrisis(lastUserText)
     : { detected: false, matchedTerms: [] }
 
+  const elapsedMs = Date.now() - new Date(session.opened_at).getTime()
+  const minutesRemaining = Math.max(
+    0,
+    Math.ceil((60 * 60 * 1000 - elapsedMs) / 60_000),
+  )
+  const timeNotice =
+    minutesRemaining <= 10
+      ? `[AVISO DE TIEMPO]
+Quedan ${minutesRemaining} minutos de la sesión. Empieza a cerrar si procede: resume lo hablado, pregunta cómo se va el paciente, y despídete. Si llegas al límite, llama a close_session con reason='time_limit'.
+
+---
+
+`
+      : ''
+
   const basePrompt = getSessionTherapistPrompt()
-  const systemPrompt = crisis.detected
+  const crisisNotice = crisis.detected
     ? `[AVISO DE SEGURIDAD — ALERTA ACTIVADA]
 El último mensaje del paciente contiene señales de crisis (${crisis.matchedTerms.join(', ')}). Activa el protocolo de crisis AHORA: valida, mide riesgo con calma, ofrece la Línea 024 textualmente, marca la sesión para revisión del psicólogo, y considera llamar a close_session con reason='crisis_detected' si el riesgo es inmediato.
 
 ---
 
-${basePrompt}`
-    : basePrompt
+`
+    : ''
+
+  const systemPrompt = `${crisisNotice}${timeNotice}${basePrompt}`
 
   const closeSessionTool = tool({
     description:

@@ -14,8 +14,14 @@ interface ChatViewProps {
   expiresAt: Date
 }
 
+function minutesRemaining(expiresAt: Date, now = Date.now()): number {
+  return Math.max(0, Math.ceil((expiresAt.getTime() - now) / 60_000))
+}
+
 export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProps) {
-  const [isExpired, setIsExpired] = useState(() => new Date() >= expiresAt)
+  const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt))
+  const isExpired = minsLeft <= 0
+  const isEnding = minsLeft > 0 && minsLeft <= 10
   const listRef = useRef<HTMLDivElement>(null)
 
   const { messages, sendMessage, status } = useChat({
@@ -30,9 +36,7 @@ export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProp
   useEffect(() => {
     if (isExpired) return
     const interval = setInterval(() => {
-      if (new Date() >= expiresAt) {
-        setIsExpired(true)
-      }
+      setMinsLeft(minutesRemaining(expiresAt))
     }, 30_000)
     return () => clearInterval(interval)
   }, [expiresAt, isExpired])
@@ -45,6 +49,23 @@ export function ChatView({ sessionId, initialMessages, expiresAt }: ChatViewProp
 
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div
+        className={`flex items-center justify-between border-b px-4 py-2 text-xs ${
+          isEnding
+            ? 'border-amber-200 bg-amber-50 text-amber-900'
+            : 'border-slate-200 bg-slate-50 text-slate-500'
+        }`}
+      >
+        <span>
+          {isExpired
+            ? 'La sesión ha terminado.'
+            : `${minsLeft} min restantes`}
+        </span>
+        {isEnding && !isExpired && (
+          <span className="font-medium">Queda poco tiempo en esta sesión.</span>
+        )}
+      </div>
+
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <p className="text-center text-sm text-slate-500">
