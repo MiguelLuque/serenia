@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Trash2, Plus } from 'lucide-react'
 
-import type { AssessmentSummary } from '@/lib/assessments/generator'
+import type { AssessmentSummary, ProposedTask } from '@/lib/assessments/generator'
+import type { SessionDetail } from '@/lib/clinician/session-detail'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,6 +43,18 @@ const SELF_HARM_OPTIONS: Array<{ value: SelfHarmLevel; label: string }> = [
   { value: 'current', label: 'Autolesiones actuales' },
 ]
 
+type PatientTaskStatus = SessionDetail['inheritedTasks'][number]['estado']
+
+const TASK_STATUS_OPTIONS: Array<{ value: PatientTaskStatus; label: string }> = [
+  { value: 'pendiente', label: 'Pendiente' },
+  { value: 'cumplida', label: 'Cumplida' },
+  { value: 'parcial', label: 'Parcial' },
+  { value: 'no_realizada', label: 'No realizada' },
+  { value: 'no_abordada', label: 'No abordada' },
+]
+
+type InheritedTaskEdit = { estado: PatientTaskStatus; nota: string }
+
 type ListField =
   | 'presenting_issues'
   | 'cognitive_patterns'
@@ -61,6 +74,7 @@ export function AssessmentEditor({
   sessionId,
   userId,
   initial,
+  inheritedTasks,
   onCancel,
   onSaved,
 }: {
@@ -68,10 +82,14 @@ export function AssessmentEditor({
   sessionId: string
   userId: string
   initial: AssessmentSummary
+  inheritedTasks: SessionDetail['inheritedTasks']
   onCancel: () => void
   onSaved: () => void
 }) {
   const [draft, setDraft] = useState<AssessmentSummary>(initial)
+  const [inheritedEdits, setInheritedEdits] = useState<
+    Record<string, InheritedTaskEdit>
+  >({})
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -111,6 +129,50 @@ export function AssessmentEditor({
     }))
   }
 
+  function updateProposedTask(index: number, field: keyof ProposedTask, value: string) {
+    setDraft((prev) => {
+      const next = [...prev.proposed_tasks]
+      next[index] = { ...next[index], [field]: value }
+      return { ...prev, proposed_tasks: next }
+    })
+  }
+
+  function removeProposedTask(index: number) {
+    setDraft((prev) => ({
+      ...prev,
+      proposed_tasks: prev.proposed_tasks.filter((_, i) => i !== index),
+    }))
+  }
+
+  function addProposedTask() {
+    setDraft((prev) => ({
+      ...prev,
+      proposed_tasks: [...prev.proposed_tasks, { descripcion: '', nota: undefined }],
+    }))
+  }
+
+  function updateInheritedEstado(id: string, value: PatientTaskStatus) {
+    setInheritedEdits((prev) => {
+      const original = inheritedTasks.find((t) => t.id === id)
+      const base: InheritedTaskEdit = prev[id] ?? {
+        estado: original!.estado,
+        nota: original!.nota ?? '',
+      }
+      return { ...prev, [id]: { ...base, estado: value } }
+    })
+  }
+
+  function updateInheritedNota(id: string, value: string) {
+    setInheritedEdits((prev) => {
+      const original = inheritedTasks.find((t) => t.id === id)
+      const base: InheritedTaskEdit = prev[id] ?? {
+        estado: original!.estado,
+        nota: original!.nota ?? '',
+      }
+      return { ...prev, [id]: { ...base, nota: value } }
+    })
+  }
+
   function handleSubmit() {
     setError(null)
     const cleaned: AssessmentSummary = {
@@ -121,7 +183,31 @@ export function AssessmentEditor({
       recommended_actions_for_clinician: cleanStringList(
         draft.recommended_actions_for_clinician,
       ),
+      proposed_tasks: draft.proposed_tasks
+        .map((t) => ({
+          descripcion: t.descripcion.trim(),
+          nota: t.nota?.trim() || undefined,
+        }))
+        .filter((t) => t.descripcion.length >= 3),
     }
+
+    // Only send rows where the clinician changed at least one field vs original.
+    const inherited_task_updates = inheritedTasks
+      .filter((original) => {
+        const edit = inheritedEdits[original.id]
+        if (!edit) return false
+        return (
+          edit.estado !== original.estado ||
+          (edit.nota ?? '') !== (original.nota ?? '')
+        )
+      })
+      .map((original) => {
+        const edit = inheritedEdits[original.id]!
+        const nota = edit.nota.trim() || undefined
+        return nota !== undefined
+          ? { id: original.id, estado: edit.estado, nota }
+          : { id: original.id, estado: edit.estado }
+      })
 
     startTransition(async () => {
       const result = await saveAssessmentAction({
@@ -129,6 +215,7 @@ export function AssessmentEditor({
         sessionId,
         userId,
         summary: cleaned,
+        inherited_task_updates,
       })
       if (result.ok) {
         toast.success('Informe actualizado.')
@@ -353,6 +440,132 @@ export function AssessmentEditor({
           />
         </CardContent>
       </Card>
+
+      {/* Tareas propuestas en esta sesión */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Tareas propuestas en esta sesión</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {draft.proposed_tasks.length === 0 ? (
+            <p className="text-sm text-slate-600">Sin tareas propuestas.</p>
+          ) : (
+            draft.proposed_tasks.map((task, i) => (
+              <div key={i} className="space-y-2 rounded-md border p-3">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor={`task-desc-${i}`}>Descripción</Label>
+                    <Input
+                      id={`task-desc-${i}`}
+                      value={task.descripcion}
+                      onChange={(e) =>
+                        updateProposedTask(i, 'descripcion', e.target.value)
+                      }
+                      placeholder="Descripción de la tarea (mín. 3 caracteres)"
+                    />
+                    <Label htmlFor={`task-nota-${i}`}>Nota (opcional)</Label>
+                    <Textarea
+                      id={`task-nota-${i}`}
+                      value={task.nota ?? ''}
+                      onChange={(e) =>
+                        updateProposedTask(i, 'nota', e.target.value)
+                      }
+                      rows={2}
+                      placeholder="Nota adicional…"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeProposedTask(i)}
+                    aria-label="Eliminar tarea"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+          <Button variant="outline" size="sm" onClick={addProposedTask}>
+            <Plus className="size-4" />
+            Añadir tarea
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Acuerdos heredados de sesiones anteriores */}
+      {inheritedTasks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Acuerdos heredados de sesiones anteriores
+            </CardTitle>
+            <CardDescription>
+              Tareas pendientes o parciales acordadas en sesiones previas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {inheritedTasks.map((task) => {
+              const edit = inheritedEdits[task.id]
+              const currentEstado = edit?.estado ?? task.estado
+              const currentNota = edit?.nota ?? task.nota ?? ''
+              return (
+                <div key={task.id} className="space-y-2 rounded-md border p-3">
+                  <p className="text-sm font-medium">{task.descripcion}</p>
+                  <p className="text-xs text-slate-500">
+                    Acordada el{' '}
+                    {new Date(task.createdAt).toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}{' '}
+                    · Sesión anterior
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor={`inherited-estado-${task.id}`}>
+                      Estado
+                    </Label>
+                    <Select
+                      value={currentEstado}
+                      onValueChange={(value) =>
+                        updateInheritedEstado(task.id, value as PatientTaskStatus)
+                      }
+                    >
+                      <SelectTrigger
+                        id={`inherited-estado-${task.id}`}
+                        className="w-full sm:w-48"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TASK_STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor={`inherited-nota-${task.id}`}>
+                      Nota (opcional)
+                    </Label>
+                    <Textarea
+                      id={`inherited-nota-${task.id}`}
+                      value={currentNota}
+                      onChange={(e) =>
+                        updateInheritedNota(task.id, e.target.value)
+                      }
+                      rows={2}
+                      placeholder="Nota sobre el seguimiento…"
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumen para el paciente */}
       <Card className="bg-slate-50">

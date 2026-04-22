@@ -156,6 +156,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
             sessionId={session.id}
             userId={session.userId}
             initial={assessment.summary}
+            inheritedTasks={detail.inheritedTasks}
             onCancel={() => setIsEditing(false)}
             onSaved={() => setIsEditing(false)}
           />
@@ -163,6 +164,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
           <AssessmentSections
             assessment={assessment}
             sessionId={session.id}
+            inheritedTasks={detail.inheritedTasks}
             onEdit={() => setIsEditing(true)}
           />
         )
@@ -216,13 +218,26 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
   )
 }
 
+const TASK_STATUS_LABEL: Record<
+  SessionDetail['inheritedTasks'][number]['estado'],
+  string
+> = {
+  pendiente: 'Pendiente',
+  cumplida: 'Cumplida',
+  parcial: 'Parcial',
+  no_realizada: 'No realizada',
+  no_abordada: 'No abordada',
+}
+
 function AssessmentSections({
   assessment,
   sessionId,
+  inheritedTasks,
   onEdit,
 }: {
   assessment: NonNullable<SessionDetail['assessment']>
   sessionId: string
+  inheritedTasks: SessionDetail['inheritedTasks']
   onEdit: () => void
 }) {
   const { summary } = assessment
@@ -450,6 +465,71 @@ function AssessmentSections({
           <BulletList items={summary.recommended_actions_for_clinician} />
         </CardContent>
       </Card>
+
+      {/* Tareas propuestas en esta sesión */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Tareas propuestas en esta sesión
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {summary.proposed_tasks.length === 0 ? (
+            <p className="text-sm text-slate-600">—</p>
+          ) : (
+            <ul className="space-y-2">
+              {summary.proposed_tasks.map((task, i) => (
+                <li key={i} className="rounded-md border p-3">
+                  <p className="text-sm font-medium">{task.descripcion}</p>
+                  {task.nota && (
+                    <p className="mt-1 text-xs text-slate-500">{task.nota}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Acuerdos heredados de sesiones anteriores — read-only */}
+      {inheritedTasks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Acuerdos heredados de sesiones anteriores
+            </CardTitle>
+            <CardDescription>
+              Tareas pendientes o parciales acordadas en sesiones previas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {inheritedTasks.map((task) => (
+                <li key={task.id} className="rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{task.descripcion}</p>
+                    <Badge variant="secondary">
+                      {TASK_STATUS_LABEL[task.estado] ?? task.estado}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Acordada el{' '}
+                    {new Date(task.createdAt).toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}{' '}
+                    · Sesión anterior
+                  </p>
+                  {task.nota && (
+                    <p className="mt-1 text-xs text-slate-600">{task.nota}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumen para el paciente — muted card para diferenciarlo */}
       <Card className="bg-slate-50">

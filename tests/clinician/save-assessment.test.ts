@@ -30,7 +30,10 @@ const validSummary = {
   preliminary_impression: 'Sintomatología consistente con ánimo bajo leve.',
   recommended_actions_for_clinician: ['seguimiento en 1 semana'],
   patient_facing_summary: 'Gracias por compartir esto hoy.',
-  proposed_tasks: [],
+  proposed_tasks: [
+    { descripcion: 'Practicar respiración diafragmática', nota: 'Al menos 5 minutos al día' },
+    { descripcion: 'Registro de pensamientos automáticos', nota: undefined },
+  ],
 }
 
 type Calls = {
@@ -196,5 +199,83 @@ describe('saveAssessmentAction', () => {
     if (result.ok) throw new Error('unreachable')
     expect(result.error).toContain('rls_fail')
     expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts empty inherited_task_updates without regression', async () => {
+    const calls: Calls = {}
+    const supabase = makeSupabase({ calls, reviewerId: 'reviewer-1' })
+    createAuthenticatedClientMock.mockResolvedValue(supabase)
+
+    const result = await saveAssessmentAction({
+      assessmentId: 'prev-assessment',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+      inherited_task_updates: [],
+    })
+
+    expect(result).toEqual({ ok: true, assessmentId: 'new-assessment-id' })
+  })
+
+  it('accepts valid inherited_task_updates and returns ok:true (updates dropped until T4)', async () => {
+    const calls: Calls = {}
+    const supabase = makeSupabase({ calls, reviewerId: 'reviewer-1' })
+    createAuthenticatedClientMock.mockResolvedValue(supabase)
+
+    const result = await saveAssessmentAction({
+      assessmentId: 'prev-assessment',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+      inherited_task_updates: [
+        {
+          id: '123e4567-e89b-42d3-a456-426614174000',
+          estado: 'cumplida',
+          nota: 'Completada satisfactoriamente',
+        },
+      ],
+    })
+
+    expect(result).toEqual({ ok: true, assessmentId: 'new-assessment-id' })
+  })
+
+  it('returns {ok:false} when inherited_task_updates contains an invalid estado value', async () => {
+    const calls: Calls = {}
+    const supabase = makeSupabase({ calls })
+    createAuthenticatedClientMock.mockResolvedValue(supabase)
+
+    const result = await saveAssessmentAction({
+      assessmentId: 'prev-assessment',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+      inherited_task_updates: [
+        {
+          id: '123e4567-e89b-42d3-a456-426614174000',
+          estado: 'invalido' as never,
+        },
+      ],
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect(result.error).toBeTruthy()
+  })
+
+  it('preserves proposed_tasks in the inserted summary_json', async () => {
+    const calls: Calls = {}
+    const supabase = makeSupabase({ calls, reviewerId: 'reviewer-1' })
+    createAuthenticatedClientMock.mockResolvedValue(supabase)
+
+    await saveAssessmentAction({
+      assessmentId: 'prev-assessment',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+    })
+
+    const insertPayload = calls.insertPayload as Record<string, unknown>
+    const summaryJson = insertPayload.summary_json as typeof validSummary
+    expect(summaryJson.proposed_tasks).toEqual(validSummary.proposed_tasks)
   })
 })

@@ -1,15 +1,28 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { AssessmentSchema } from '@/lib/assessments/generator'
 import type { Json } from '@/lib/supabase/types'
+
+const InheritedTaskUpdateSchema = z.object({
+  id: z.string().uuid(),
+  estado: z.enum(['pendiente', 'cumplida', 'parcial', 'no_realizada', 'no_abordada']),
+  nota: z.string().max(300).optional(),
+})
+const InheritedUpdatesSchema = z.array(InheritedTaskUpdateSchema)
 
 type SaveAssessmentInput = {
   assessmentId: string
   sessionId: string
   userId: string
   summary: unknown
+  inherited_task_updates?: Array<{
+    id: string
+    estado: 'pendiente' | 'cumplida' | 'parcial' | 'no_realizada' | 'no_abordada'
+    nota?: string
+  }>
 }
 
 type SaveAssessmentResult =
@@ -34,6 +47,19 @@ export async function saveAssessmentAction(
     return {
       ok: false,
       error: path ? `${path}: ${message}` : message,
+    }
+  }
+
+  const parsedUpdates = InheritedUpdatesSchema.safeParse(
+    input.inherited_task_updates ?? [],
+  )
+  if (!parsedUpdates.success) {
+    const first = parsedUpdates.error.issues[0]
+    const path = first?.path.join('.') ?? ''
+    const message = first?.message ?? 'Actualizaciones de tareas inválidas'
+    return {
+      ok: false,
+      error: path ? `inherited_task_updates.${path}: ${message}` : message,
     }
   }
 

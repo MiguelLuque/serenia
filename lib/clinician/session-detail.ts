@@ -7,6 +7,7 @@ import {
 
 type AssessmentStatus = Database['public']['Enums']['assessment_status']
 type GeneratedBy = Database['public']['Enums']['generated_by_source']
+type PatientTaskStatus = Database['public']['Enums']['patient_task_status']
 
 export type SessionDetail = {
   session: {
@@ -33,6 +34,15 @@ export type SessionDetail = {
     role: 'user' | 'assistant'
     text: string
     createdAt: string
+  }>
+  inheritedTasks: Array<{
+    id: string
+    descripcion: string
+    nota: string | null
+    estado: PatientTaskStatus
+    createdAt: string
+    originSessionId: string
+    originAssessmentId: string
   }>
 }
 
@@ -79,7 +89,7 @@ export async function getSessionDetail(
   if (sessionError) throw sessionError
   if (!sessionRow) return null
 
-  const [profileRes, assessmentRes, messagesRes] = await Promise.all([
+  const [profileRes, assessmentRes, messagesRes, inheritedTasksRes] = await Promise.all([
     supabase
       .from('user_profiles')
       .select('user_id, display_name')
@@ -108,11 +118,21 @@ export async function getSessionDetail(
           .in('role', ['user', 'assistant'])
           .order('created_at', { ascending: true })
       : Promise.resolve({ data: [], error: null } as const),
+    supabase
+      .from('patient_tasks')
+      .select(
+        'id, descripcion, nota, estado, created_at, acordada_en_session_id, acordada_en_assessment_id',
+      )
+      .eq('user_id', sessionRow.user_id)
+      .in('estado', ['pendiente', 'parcial'])
+      .neq('acordada_en_session_id', sessionId)
+      .order('created_at', { ascending: false }),
   ])
 
   if (profileRes.error) throw profileRes.error
   if (assessmentRes.error) throw assessmentRes.error
   if (messagesRes.error) throw messagesRes.error
+  if (inheritedTasksRes.error) throw inheritedTasksRes.error
 
   const messages: SessionDetail['messages'] = (messagesRes.data ?? []).flatMap(
     (m) => {
@@ -129,6 +149,18 @@ export async function getSessionDetail(
       ]
     },
   )
+
+  const inheritedTasks: SessionDetail['inheritedTasks'] = (
+    inheritedTasksRes.data ?? []
+  ).map((t) => ({
+    id: t.id,
+    descripcion: t.descripcion,
+    nota: t.nota,
+    estado: t.estado,
+    createdAt: t.created_at,
+    originSessionId: t.acordada_en_session_id,
+    originAssessmentId: t.acordada_en_assessment_id,
+  }))
 
   return {
     session: {
@@ -155,5 +187,6 @@ export async function getSessionDetail(
         }
       : null,
     messages,
+    inheritedTasks,
   }
 }
