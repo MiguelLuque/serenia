@@ -3,6 +3,11 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  resolve: {
+    alias: {
+      'server-only': '/Users/miguelluque/git/serenia/tests/__mocks__/server-only.ts',
+    },
+  },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts', 'lib/**/__tests__/**/*.test.ts'],
