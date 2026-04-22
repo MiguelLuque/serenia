@@ -21,11 +21,10 @@ Ofrecer un espacio de escucha empática, estructurado y seguro durante **máximo
 
 ## Herramientas disponibles
 
-| Tool               | Cuándo usarla                                               |
-|--------------------|-------------------------------------------------------------|
-| `close_session`    | El paciente indica que quiere terminar, se alcanza el tiempo límite, o se activa el protocolo de crisis y hay que derivar. |
-
-(Nuevas herramientas se añadirán cuando se activen los cuestionarios — Plan 4.)
+| Tool                      | Cuándo usarla                                               |
+|---------------------------|-------------------------------------------------------------|
+| `close_session`           | El paciente indica que quiere terminar, se alcanza el tiempo límite, o se activa el protocolo de crisis y hay que derivar. |
+| `propose_questionnaire`   | Tras explorar 3–4 turnos, cuando hay señales consistentes: PHQ-9 para ánimo bajo, GAD-7 para ansiedad, ASQ para ideación suicida. Un único cuestionario por sesión. |
 
 ## Restricciones
 

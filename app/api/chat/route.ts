@@ -11,6 +11,11 @@ import {
 } from '@/lib/sessions/service'
 import { saveUserMessage, saveAssistantMessage } from '@/lib/sessions/messages'
 import { detectCrisis } from '@/lib/chat/crisis-detector'
+import {
+  createInstance,
+  getActiveInstanceForSession,
+} from '@/lib/questionnaires/service'
+import type { QuestionnaireCode } from '@/lib/questionnaires/types'
 
 export const maxDuration = 60
 
@@ -92,7 +97,37 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
 `
     : ''
 
-  const systemPrompt = `${crisisNotice}${timeNotice}${basePrompt}`
+  const questionnaireNotice = await buildQuestionnaireResultNotice(
+    supabase,
+    session.id,
+    session.opened_at,
+    session.conversation_id,
+  )
+
+  const systemPrompt = `${crisisNotice}${questionnaireNotice}${timeNotice}${basePrompt}`
+
+  const proposeQuestionnaireTool = tool({
+    description:
+      'Propone un cuestionario clínico validado cuando la conversación lo justifica. Usa solo si hay señales claras: ánimo bajo sostenido => PHQ9, ansiedad sostenida => GAD7, ideación suicida (directa o indirecta) => ASQ. Nunca más de uno por sesión.',
+    inputSchema: z.object({
+      code: z.enum(['PHQ9', 'GAD7', 'ASQ']),
+      reason: z.string().min(10).max(300),
+    }),
+    execute: async ({ code, reason }) => {
+      const existing = await getActiveInstanceForSession(supabase, sessionId)
+      if (existing) {
+        return { skipped: true, reason: 'already_active' as const }
+      }
+      const inst = await createInstance(supabase, {
+        userId: user.id,
+        sessionId,
+        conversationId: session.conversation_id,
+        questionnaireCode: code as QuestionnaireCode,
+        triggerReason: reason,
+      })
+      return { proposed: true, code, instanceId: inst.id }
+    },
+  })
 
   const closeSessionTool = tool({
     description:
@@ -110,7 +145,10 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
     model: llm.conversational(),
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
-    tools: { close_session: closeSessionTool },
+    tools: {
+      close_session: closeSessionTool,
+      propose_questionnaire: proposeQuestionnaireTool,
+    },
   })
 
   return result.toUIMessageStreamResponse({
@@ -138,4 +176,77 @@ function extractText(message: UIMessage | undefined): string {
     .filter((p): p is { type: 'text'; text: string } => p?.type === 'text')
     .map((p) => p.text ?? '')
     .join('')
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createAuthenticatedClient>>
+
+async function buildQuestionnaireResultNotice(
+  supabase: SupabaseClient,
+  sessionId: string,
+  openedAt: string,
+  conversationId: string,
+): Promise<string> {
+  const { data: instance } = await supabase
+    .from('questionnaire_instances')
+    .select('id, questionnaire_id, status, scored_at')
+    .eq('session_id', sessionId)
+    .eq('status', 'scored')
+    .gte('scored_at', openedAt)
+    .order('scored_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!instance || !instance.scored_at) return ''
+
+  const { count } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('role', 'assistant')
+    .gt('created_at', instance.scored_at)
+
+  if (count && count > 0) return ''
+
+  const [{ data: def }, { data: result }] = await Promise.all([
+    supabase
+      .from('questionnaire_definitions')
+      .select('code')
+      .eq('id', instance.questionnaire_id)
+      .single(),
+    supabase
+      .from('questionnaire_results')
+      .select('total_score, severity_band, flags_json')
+      .eq('instance_id', instance.id)
+      .single(),
+  ])
+
+  if (!def || !result) return ''
+
+  const flags = Array.isArray(result.flags_json)
+    ? (result.flags_json as Array<{ reason: string; itemOrder: number }>)
+    : []
+  const acute = flags.some((f) => f.reason === 'acute_risk')
+
+  if (def.code === 'ASQ' && acute) {
+    return `[RESULTADO DE CUESTIONARIO — ASQ — RIESGO AGUDO]
+El item 5 del ASQ es positivo. Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session con reason='crisis_detected' si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal.
+
+---
+
+`
+  }
+
+  const flagsLabel =
+    flags.length === 0
+      ? 'ninguno'
+      : flags.map((f) => `${f.reason} (item ${f.itemOrder})`).join(', ')
+
+  return `[RESULTADO DE CUESTIONARIO — ${def.code}]
+Puntuación: ${result.total_score} (${result.severity_band}).
+Flags: ${flagsLabel}.
+El paciente ha completado el cuestionario. Acknowledge con tacto, valida el esfuerzo, explícale qué significa la puntuación en términos no clínicos (sin citar cifras), y continúa la sesión. NO diagnostiques. Menciona que tu psicólogo revisará el informe.
+
+---
+
+`
 }

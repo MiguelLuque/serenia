@@ -1,6 +1,11 @@
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Header } from '@/components/app/header'
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/app/app-sidebar'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createAuthenticatedClient()
@@ -14,12 +19,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single()
 
   return (
-    <>
-      <Header
+    <SidebarProvider>
+      <AppSidebar
         displayName={profile?.display_name ?? ''}
         role={(profile?.role as 'patient' | 'clinician') ?? 'patient'}
       />
-      <main className="mx-auto max-w-4xl p-6">{children}</main>
-    </>
+      <SidebarInset>
+        <header className="flex h-12 items-center gap-2 border-b px-3 md:hidden">
+          <SidebarTrigger />
+          <span className="text-sm font-medium">Serenia</span>
+        </header>
+        <main className="mx-auto w-full max-w-4xl p-6">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
