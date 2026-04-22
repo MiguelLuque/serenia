@@ -11,6 +11,12 @@ type AssessmentRow = Database['public']['Tables']['assessments']['Row']
 const MIN_USER_MESSAGES = 3
 const MAX_TRANSCRIPT_MESSAGES = 60
 
+export const ProposedTaskSchema = z.object({
+  descripcion: z.string().min(3).max(500),
+  nota: z.string().max(300).optional(),
+})
+export type ProposedTask = z.infer<typeof ProposedTaskSchema>
+
 export const AssessmentSchema = z.object({
   chief_complaint: z.string(),
   presenting_issues: z.array(z.string()),
@@ -35,6 +41,7 @@ export const AssessmentSchema = z.object({
   preliminary_impression: z.string(),
   recommended_actions_for_clinician: z.array(z.string()),
   patient_facing_summary: z.string(),
+  proposed_tasks: z.array(ProposedTaskSchema).default([]),
 })
 
 export type AssessmentSummary = z.infer<typeof AssessmentSchema>

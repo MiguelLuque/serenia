@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
-import type { AssessmentSummary } from '@/lib/assessments/generator'
+import {
+  AssessmentSchema,
+  type AssessmentSummary,
+} from '@/lib/assessments/generator'
 
 type AssessmentStatus = Database['public']['Enums']['assessment_status']
 type GeneratedBy = Database['public']['Enums']['generated_by_source']
@@ -146,8 +149,7 @@ export async function getSessionDetail(
       ? {
           id: assessmentRes.data.id,
           status: assessmentRes.data.status,
-          summary: assessmentRes.data
-            .summary_json as unknown as AssessmentSummary,
+          summary: AssessmentSchema.parse(assessmentRes.data.summary_json),
           generatedBy: assessmentRes.data.generated_by,
           createdAt: assessmentRes.data.created_at,
         }

@@ -30,6 +30,7 @@ const validSummary = {
   preliminary_impression: 'Sintomatología consistente con ánimo bajo leve.',
   recommended_actions_for_clinician: ['seguimiento en 1 semana'],
   patient_facing_summary: 'Gracias por compartir esto hoy.',
+  proposed_tasks: [],
 }
 
 type Calls = {

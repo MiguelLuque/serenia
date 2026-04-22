@@ -40,8 +40,20 @@ Respondes siempre en JSON válido con esta estructura:
   ],
   "preliminary_impression": "string — observación clínica cuidadosa sin etiqueta DSM. Ej: 'Síntomas consistentes con sintomatología depresiva de intensidad moderada con componente ansioso. Requiere evaluación por psicólogo para formular.'",
   "recommended_actions_for_clinician": ["string", "..."],
-  "patient_facing_summary": "string — 2–3 frases cálidas en segunda persona, sin puntuaciones ni impresión clínica"
+  "patient_facing_summary": "string — 2–3 frases cálidas en segunda persona, sin puntuaciones ni impresión clínica",
+  "proposed_tasks": [
+    { "descripcion": "string — acuerdo terapéutico en la voz del paciente", "nota": "string opcional — contexto clínico breve" }
+  ]
 }
 ```
 
 Todas las claves son obligatorias. Si no hay datos suficientes para un campo, devuelve array vacío o string con la nota *"Datos insuficientes en esta sesión."* — nunca omitas la clave.
+
+## `proposed_tasks`
+
+Extrae **0 o más acuerdos terapéuticos explícitos** que el paciente haya verbalizado en la sesión (p. ej. *"voy a probar X"*, *"quedo en hacer Y"*, *"me comprometo a Z"*, *"esta semana voy a…"*). Para cada uno:
+
+- `descripcion` (3–500 caracteres): la tarea en la voz del paciente, breve y accionable.
+- `nota` (opcional, ≤300 caracteres): contexto clínico útil para que el psicólogo decida si la acepta (frecuencia implícita, contingencias, barreras mencionadas).
+
+**No inventes** tareas que el paciente no haya propuesto. Si no hay acuerdos explícitos en la transcripción, devuelve `"proposed_tasks": []`.
