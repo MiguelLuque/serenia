@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { getOrResolveActiveSession } from '@/lib/sessions/service'
+import { getClinicianInbox } from '@/lib/clinician/inbox'
+import { InboxList } from '@/components/clinician/inbox-list'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -29,12 +31,16 @@ export default async function AppHome() {
     .single()
 
   if (profile?.role === 'clinician') {
+    const rows = await getClinicianInbox(supabase)
     return (
-      <div>
-        <h2 className="text-xl font-semibold">Panel clínico</h2>
-        <p className="mt-2 text-slate-600">
-          Próximamente — Plan 5 añade el listado de pacientes y la revisión de informes.
-        </p>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold">Bandeja</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Sesiones cerradas pendientes de revisión.
+          </p>
+        </div>
+        <InboxList rows={rows} />
       </div>
     )
   }
