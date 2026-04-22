@@ -439,7 +439,7 @@ describe('buildPatientContext', () => {
   })
 
   // I3.2: pendingTasks estado narrowing and acordadaEn = created_at
-  it('pendingTasks: pendiente + parcial tasks are emitted with acordadaEn=created_at', async () => {
+  it('pendingTasks: pendiente + parcial tasks are emitted; terminal estados excluded', async () => {
     const task1 = {
       id: 'task-1',
       descripcion: 'Practicar respiración',
@@ -452,9 +452,30 @@ describe('buildPatientContext', () => {
       estado: 'parcial' as const,
       created_at: daysAgo(5),
     }
+    // Terminal rows: if the DB filter regressed and they leaked into the mock
+    // result, the JS-level estado filter must still exclude them.
+    const taskCumplida = {
+      id: 'task-cumplida',
+      descripcion: 'Cerrada — cumplida',
+      estado: 'cumplida',
+      created_at: daysAgo(3),
+    }
+    const taskNoRealizada = {
+      id: 'task-no-realizada',
+      descripcion: 'Cerrada — no realizada',
+      estado: 'no_realizada',
+      created_at: daysAgo(4),
+    }
+    const taskNoAbordada = {
+      id: 'task-no-abordada',
+      descripcion: 'Cerrada — no abordada',
+      estado: 'no_abordada',
+      created_at: daysAgo(6),
+    }
 
     const supabase = makeSupabase((table) => {
-      if (table === 'patient_tasks') return ok([task1, task2])
+      if (table === 'patient_tasks')
+        return ok([task1, taskCumplida, task2, taskNoRealizada, taskNoAbordada])
       if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
       return noRows()
     })
@@ -462,6 +483,12 @@ describe('buildPatientContext', () => {
     const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
 
     expect(ctx.pendingTasks).toHaveLength(2)
+    const ids = ctx.pendingTasks.map((t) => t.id)
+    expect(ids).toEqual(['task-1', 'task-2'])
+    expect(ids).not.toContain('task-cumplida')
+    expect(ids).not.toContain('task-no-realizada')
+    expect(ids).not.toContain('task-no-abordada')
+
     expect(ctx.pendingTasks[0]).toEqual({
       id: 'task-1',
       descripcion: 'Practicar respiración',
@@ -501,6 +528,17 @@ describe('buildPatientContext', () => {
     })
     const ctx2 = await buildPatientContext(supabase2 as never, 'user-1', NOW)
     expect(ctx2.patient.age).toBe(26)
+
+    // Birthday TODAY (NOW = 2026-04-22, born 2000-04-22 → age=26 exactly).
+    // Guards the `>=` in computeAge: if someone refactors to `>`, this regresses.
+    const profileToday = { display_name: 'Hoy', birth_date: '2000-04-22' }
+    const supabaseToday = makeSupabase((table) => {
+      if (table === 'user_profiles') return ok(profileToday)
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+    const ctxToday = await buildPatientContext(supabaseToday as never, 'user-1', NOW)
+    expect(ctxToday.patient.age).toBe(26)
 
     // Null birth_date → null age
     const profileNoDob = { display_name: 'Sin fecha', birth_date: null }

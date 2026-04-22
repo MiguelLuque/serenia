@@ -202,14 +202,7 @@ export async function buildPatientContext(
   if (tier === 'none') {
     const bRow = tierBRow.data
     if (bRow) {
-      // Supabase infers the !inner join as a single object (FK is to-one).
-      // Some client versions may return an array shape; narrow from the typed
-      // value without casting through unknown.
-      const rawSessions: unknown = bRow.clinical_sessions
-      const closedAt: string | null = Array.isArray(rawSessions)
-        ? (rawSessions[0] as { closed_at?: string | null } | undefined)?.closed_at ?? null
-        : (rawSessions as { closed_at?: string | null } | null)?.closed_at ?? null
-
+      const closedAt = bRow.clinical_sessions?.closed_at ?? null
       if (closedAt) {
         const parsed = AssessmentSchema.safeParse(bRow.summary_json)
         if (!parsed.success) {
