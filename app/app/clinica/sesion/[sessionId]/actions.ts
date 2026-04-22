@@ -108,6 +108,72 @@ export async function saveAssessmentAction(
     }
   }
 
+  // Delete open tasks from prior revisions of this same session so re-saving
+  // doesn't duplicate rows. Open tasks from this session can only have come
+  // from an earlier revision of this exact assessment flow.
+  const { error: cleanupError } = await supabase
+    .from('patient_tasks')
+    .delete()
+    .eq('acordada_en_session_id', input.sessionId)
+    .is('closed_at', null)
+
+  if (cleanupError) {
+    console.error('[T4] patient_tasks cleanup failed — assessment already saved, skipping task materialization', cleanupError)
+    return {
+      ok: false,
+      error: `Informe guardado pero no se pudo limpiar tareas previas: ${cleanupError.message}`,
+    }
+  }
+
+  // Apply inherited_task_updates: update estado/nota and stamp closed_at when
+  // the new estado is terminal so the task lifecycle is properly closed.
+  const terminalStates = new Set(['cumplida', 'no_realizada', 'no_abordada'])
+  const updateResults = await Promise.all(
+    parsedUpdates.data.map(({ id, estado, nota }) => {
+      const isTerminal = terminalStates.has(estado)
+      return supabase
+        .from('patient_tasks')
+        .update({
+          estado,
+          nota: nota === '' ? null : (nota ?? null),
+          closed_at: isTerminal ? new Date().toISOString() : null,
+          closed_by_assessment_id: isTerminal ? inserted.id : null,
+        })
+        .eq('id', id)
+        .eq('user_id', input.userId)
+    }),
+  )
+
+  const failedUpdate = updateResults.find((r) => r.error)
+  if (failedUpdate?.error) {
+    console.error('[T4] patient_tasks update failed — assessment already saved', failedUpdate.error)
+    return {
+      ok: false,
+      error: `Informe guardado pero no se pudo actualizar tareas heredadas: ${failedUpdate.error.message}`,
+    }
+  }
+
+  // Materialize proposed_tasks as new patient_tasks rows.
+  const inserts = parsed.data.proposed_tasks.map((t) => ({
+    user_id: input.userId,
+    acordada_en_session_id: input.sessionId,
+    acordada_en_assessment_id: inserted.id,
+    descripcion: t.descripcion,
+    nota: t.nota ?? null,
+    estado: 'pendiente' as const,
+  }))
+
+  if (inserts.length > 0) {
+    const { error: insertTasksError } = await supabase.from('patient_tasks').insert(inserts)
+    if (insertTasksError) {
+      console.error('[T4] patient_tasks insert failed — assessment already saved', insertTasksError)
+      return {
+        ok: false,
+        error: `Informe guardado pero no se pudieron crear las tareas: ${insertTasksError.message}`,
+      }
+    }
+  }
+
   revalidatePath('/app')
   revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
 
@@ -120,7 +186,8 @@ type ReviewActionResult = { ok: true } | { ok: false; error: string }
  * Mark the AI-generated assessment as reviewed without changes. Updates
  * the row in place — no supersede, no new row — because there is nothing
  * to diff against the original AI draft. Stamps `reviewed_by` /
- * `reviewed_at` with the current clinician.
+ * `reviewed_at` with the current clinician. Materializes proposed_tasks
+ * using the existing assessmentId (no new row created).
  */
 export async function markReviewedAction(input: {
   assessmentId: string
@@ -131,6 +198,27 @@ export async function markReviewedAction(input: {
   const { data: userData, error: userError } = await supabase.auth.getUser()
   if (userError || !userData?.user) {
     return { ok: false, error: 'No autenticado' }
+  }
+
+  const { data: assessmentRow, error: fetchError } = await supabase
+    .from('assessments')
+    .select('user_id, summary_json')
+    .eq('id', input.assessmentId)
+    .single()
+
+  if (fetchError || !assessmentRow) {
+    return {
+      ok: false,
+      error: fetchError?.message ?? 'No se pudo obtener el informe',
+    }
+  }
+
+  const parsed = AssessmentSchema.safeParse(assessmentRow.summary_json)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: 'El resumen del informe no es válido y no se pueden materializar las tareas',
+    }
   }
 
   const { error: updateError } = await supabase
@@ -146,6 +234,42 @@ export async function markReviewedAction(input: {
     return {
       ok: false,
       error: updateError.message ?? 'No se pudo marcar como revisado',
+    }
+  }
+
+  // Idempotent cleanup: rare in practice but guards against re-confirm after an
+  // edit path was taken before mark-reviewed.
+  const { error: cleanupError } = await supabase
+    .from('patient_tasks')
+    .delete()
+    .eq('acordada_en_session_id', input.sessionId)
+    .is('closed_at', null)
+
+  if (cleanupError) {
+    console.error('[T4] markReviewed patient_tasks cleanup failed — assessment already confirmed', cleanupError)
+    return {
+      ok: false,
+      error: `Revisión confirmada pero no se pudo limpiar tareas previas: ${cleanupError.message}`,
+    }
+  }
+
+  const inserts = parsed.data.proposed_tasks.map((t) => ({
+    user_id: assessmentRow.user_id,
+    acordada_en_session_id: input.sessionId,
+    acordada_en_assessment_id: input.assessmentId,
+    descripcion: t.descripcion,
+    nota: t.nota ?? null,
+    estado: 'pendiente' as const,
+  }))
+
+  if (inserts.length > 0) {
+    const { error: insertTasksError } = await supabase.from('patient_tasks').insert(inserts)
+    if (insertTasksError) {
+      console.error('[T4] markReviewed patient_tasks insert failed — assessment already confirmed', insertTasksError)
+      return {
+        ok: false,
+        error: `Revisión confirmada pero no se pudieron crear las tareas: ${insertTasksError.message}`,
+      }
     }
   }
 
