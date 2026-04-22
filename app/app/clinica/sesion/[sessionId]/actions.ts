@@ -87,3 +87,90 @@ export async function saveAssessmentAction(
 
   return { ok: true, assessmentId: inserted.id }
 }
+
+type ReviewActionResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Mark the AI-generated assessment as reviewed without changes. Updates
+ * the row in place — no supersede, no new row — because there is nothing
+ * to diff against the original AI draft. Stamps `reviewed_by` /
+ * `reviewed_at` with the current clinician.
+ */
+export async function markReviewedAction(input: {
+  assessmentId: string
+  sessionId: string
+}): Promise<ReviewActionResult> {
+  const supabase = await createAuthenticatedClient()
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData?.user) {
+    return { ok: false, error: 'No autenticado' }
+  }
+
+  const { error: updateError } = await supabase
+    .from('assessments')
+    .update({
+      status: 'reviewed_confirmed',
+      reviewed_by: userData.user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', input.assessmentId)
+
+  if (updateError) {
+    return {
+      ok: false,
+      error: updateError.message ?? 'No se pudo marcar como revisado',
+    }
+  }
+
+  revalidatePath('/app')
+  revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
+
+  return { ok: true }
+}
+
+/**
+ * Reject the AI-generated assessment. Updates the row to
+ * `status='rejected'` and persists the clinician's reason. The reason
+ * is required — a blank rejection would not give us anything to audit
+ * against later, so we enforce a 3-char minimum after trim.
+ */
+export async function rejectAssessmentAction(input: {
+  assessmentId: string
+  sessionId: string
+  reason: string
+}): Promise<ReviewActionResult> {
+  const reason = input.reason.trim()
+  if (reason.length < 3) {
+    return { ok: false, error: 'Motivo requerido' }
+  }
+
+  const supabase = await createAuthenticatedClient()
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData?.user) {
+    return { ok: false, error: 'No autenticado' }
+  }
+
+  const { error: updateError } = await supabase
+    .from('assessments')
+    .update({
+      status: 'rejected',
+      reviewed_by: userData.user.id,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: reason,
+    })
+    .eq('id', input.assessmentId)
+
+  if (updateError) {
+    return {
+      ok: false,
+      error: updateError.message ?? 'No se pudo rechazar el informe',
+    }
+  }
+
+  revalidatePath('/app')
+  revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
+
+  return { ok: true }
+}

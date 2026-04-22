@@ -1,9 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
 import type { SessionDetail } from '@/lib/clinician/session-detail'
 import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
 import { AssessmentEditor } from '@/components/clinician/assessment-editor'
+import {
+  markReviewedAction,
+  rejectAssessmentAction,
+} from '@/app/app/clinica/sesion/[sessionId]/actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +18,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
 type SuicidalityLevel = 'none' | 'passive' | 'active' | 'acute'
 type SelfHarmLevel = 'none' | 'historic' | 'current'
@@ -155,6 +162,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
         ) : (
           <AssessmentSections
             assessment={assessment}
+            sessionId={session.id}
             onEdit={() => setIsEditing(true)}
           />
         )
@@ -210,13 +218,58 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
 
 function AssessmentSections({
   assessment,
+  sessionId,
   onEdit,
 }: {
   assessment: NonNullable<SessionDetail['assessment']>
+  sessionId: string
   onEdit: () => void
 }) {
   const { summary } = assessment
   const risk = summary.risk_assessment
+  const [isPending, startTransition] = useTransition()
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectError, setRejectError] = useState<string | null>(null)
+
+  function handleMarkReviewed() {
+    startTransition(async () => {
+      const result = await markReviewedAction({
+        assessmentId: assessment.id,
+        sessionId,
+      })
+      if (result.ok) {
+        toast.success('Informe marcado como revisado')
+      } else {
+        toast.error(`Error: ${result.error}`)
+      }
+    })
+  }
+
+  function handleConfirmReject() {
+    setRejectError(null)
+    startTransition(async () => {
+      const result = await rejectAssessmentAction({
+        assessmentId: assessment.id,
+        sessionId,
+        reason: rejectReason,
+      })
+      if (result.ok) {
+        toast.success('Informe rechazado')
+        setRejectOpen(false)
+        setRejectReason('')
+      } else {
+        setRejectError(result.error)
+        toast.error(`Error: ${result.error}`)
+      }
+    })
+  }
+
+  function handleCancelReject() {
+    setRejectOpen(false)
+    setRejectReason('')
+    setRejectError(null)
+  }
 
   return (
     <>
@@ -418,24 +471,65 @@ function AssessmentSections({
         <CardHeader>
           <CardTitle className="text-base">Acciones</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button onClick={onEdit}>Editar informe</Button>
-          <Button
-            variant="secondary"
-            // TODO T6: marcar como revisado sin cambios
-            onClick={() => {}}
-            disabled
-          >
-            Marcar como revisado sin cambios
-          </Button>
-          <Button
-            variant="destructive"
-            // TODO T6: rechazar informe
-            onClick={() => {}}
-            disabled
-          >
-            Rechazar informe
-          </Button>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onEdit} disabled={isPending || rejectOpen}>
+              Editar informe
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleMarkReviewed}
+              disabled={isPending || rejectOpen}
+            >
+              {isPending && !rejectOpen
+                ? 'Guardando…'
+                : 'Marcar como revisado sin cambios'}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setRejectOpen(true)}
+              disabled={isPending || rejectOpen}
+            >
+              Rechazar informe
+            </Button>
+          </div>
+
+          {rejectOpen && (
+            <div className="flex flex-col gap-2 rounded-md border border-red-200 bg-red-50 p-3">
+              <Label htmlFor="reject-reason" className="text-red-900">
+                Motivo del rechazo
+              </Label>
+              <Textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+                placeholder="Explica por qué se rechaza este informe…"
+                disabled={isPending}
+              />
+              {rejectError && (
+                <p className="text-sm text-red-700" role="alert">
+                  {rejectError}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmReject}
+                  disabled={isPending}
+                >
+                  {isPending ? 'Rechazando…' : 'Confirmar rechazo'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={handleCancelReject}
+                  disabled={isPending}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </>

@@ -45,6 +45,7 @@ export type Database = {
           created_at: string
           generated_by: Database["public"]["Enums"]["generated_by_source"]
           id: string
+          rejection_reason: string | null
           review_status: Database["public"]["Enums"]["review_status"] | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -60,6 +61,7 @@ export type Database = {
           created_at?: string
           generated_by?: Database["public"]["Enums"]["generated_by_source"]
           id?: string
+          rejection_reason?: string | null
           review_status?: Database["public"]["Enums"]["review_status"] | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -75,6 +77,7 @@ export type Database = {
           created_at?: string
           generated_by?: Database["public"]["Enums"]["generated_by_source"]
           id?: string
+          rejection_reason?: string | null
           review_status?: Database["public"]["Enums"]["review_status"] | null
           reviewed_at?: string | null
           reviewed_by?: string | null
