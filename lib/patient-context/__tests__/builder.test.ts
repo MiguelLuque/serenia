@@ -400,4 +400,117 @@ describe('buildPatientContext', () => {
     expect(ctx.previousSession).not.toBeNull()
     expect(ctx.previousSession!.daysAgo).toBe(7)
   })
+
+  // I3.1: all 3 questionnaire codes present — prove grouping + emit-up-to-3
+  it('recentQuestionnaires: PHQ9 + GAD7 + ASQ all present → 3 entries with correct deltas', async () => {
+    const makeQRow = (code: 'PHQ9' | 'GAD7' | 'ASQ', score: number, offset: number) => ({
+      total_score: score,
+      severity_band: 'moderate',
+      created_at: daysAgo(offset),
+      questionnaire_instances: {
+        user_id: 'user-1',
+        questionnaire_definitions: { code },
+      },
+    })
+
+    // DB-order: newest first. For each code, the first occurrence is latest.
+    const qRows = [
+      makeQRow('PHQ9', 10, 1), // latest PHQ9
+      makeQRow('GAD7', 8, 2), // latest GAD7
+      makeQRow('ASQ', 3, 3), // latest ASQ (only one → null delta)
+      makeQRow('PHQ9', 14, 5), // previous PHQ9 → delta 10-14=-4
+      makeQRow('GAD7', 5, 6), // previous GAD7 → delta 8-5=+3
+    ]
+
+    const supabase = makeSupabase((table) => {
+      if (table === 'questionnaire_results') return ok(qRows)
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+
+    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+
+    expect(ctx.recentQuestionnaires).toHaveLength(3)
+
+    const byCode = Object.fromEntries(ctx.recentQuestionnaires.map((q) => [q.code, q]))
+    expect(byCode.PHQ9).toMatchObject({ score: 10, deltaVsPrevious: -4 })
+    expect(byCode.GAD7).toMatchObject({ score: 8, deltaVsPrevious: 3 })
+    expect(byCode.ASQ).toMatchObject({ score: 3, deltaVsPrevious: null })
+  })
+
+  // I3.2: pendingTasks estado narrowing and acordadaEn = created_at
+  it('pendingTasks: pendiente + parcial tasks are emitted with acordadaEn=created_at', async () => {
+    const task1 = {
+      id: 'task-1',
+      descripcion: 'Practicar respiración',
+      estado: 'pendiente' as const,
+      created_at: daysAgo(2),
+    }
+    const task2 = {
+      id: 'task-2',
+      descripcion: 'Registro de pensamientos',
+      estado: 'parcial' as const,
+      created_at: daysAgo(5),
+    }
+
+    const supabase = makeSupabase((table) => {
+      if (table === 'patient_tasks') return ok([task1, task2])
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+
+    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+
+    expect(ctx.pendingTasks).toHaveLength(2)
+    expect(ctx.pendingTasks[0]).toEqual({
+      id: 'task-1',
+      descripcion: 'Practicar respiración',
+      estado: 'pendiente',
+      acordadaEn: task1.created_at,
+    })
+    expect(ctx.pendingTasks[1]).toEqual({
+      id: 'task-2',
+      descripcion: 'Registro de pensamientos',
+      estado: 'parcial',
+      acordadaEn: task2.created_at,
+    })
+  })
+
+  // I3.3: patient.displayName + patient.age with birthday-tomorrow edge case
+  it('patient profile: displayName + age computed from birth_date; birthday tomorrow → age = N-1', async () => {
+    // NOW = 2026-04-22. Birthday tomorrow = 2026-04-23. Born 2000-04-23 → age=25 today (turning 26 tomorrow).
+    const profile = { display_name: 'María García', birth_date: '2000-04-23' }
+
+    const supabase = makeSupabase((table) => {
+      if (table === 'user_profiles') return ok(profile)
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+
+    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+
+    expect(ctx.patient.displayName).toBe('María García')
+    expect(ctx.patient.age).toBe(25)
+
+    // Sanity: same year, birthday already passed → age=26
+    const profileAfter = { display_name: 'Pedro', birth_date: '2000-01-15' }
+    const supabase2 = makeSupabase((table) => {
+      if (table === 'user_profiles') return ok(profileAfter)
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+    const ctx2 = await buildPatientContext(supabase2 as never, 'user-1', NOW)
+    expect(ctx2.patient.age).toBe(26)
+
+    // Null birth_date → null age
+    const profileNoDob = { display_name: 'Sin fecha', birth_date: null }
+    const supabase3 = makeSupabase((table) => {
+      if (table === 'user_profiles') return ok(profileNoDob)
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+    const ctx3 = await buildPatientContext(supabase3 as never, 'user-1', NOW)
+    expect(ctx3.patient.displayName).toBe('Sin fecha')
+    expect(ctx3.patient.age).toBeNull()
+  })
 })

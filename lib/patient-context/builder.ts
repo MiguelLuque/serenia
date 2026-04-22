@@ -93,7 +93,7 @@ export async function buildPatientContext(
       .in('status', ['draft_ai', 'rejected'])
       .eq('user_id', userId)
       .eq('clinical_sessions.status', 'closed')
-      .order('clinical_sessions.closed_at', { ascending: false })
+      .order('closed_at', { referencedTable: 'clinical_sessions', ascending: false })
       .limit(1)
       .maybeSingle(),
 
@@ -202,14 +202,14 @@ export async function buildPatientContext(
   if (tier === 'none') {
     const bRow = tierBRow.data
     if (bRow) {
-      // The join returns clinical_sessions as a nested object or array depending
-      // on Supabase client version. Normalise defensively.
-      const rawSessions = (bRow as unknown as { clinical_sessions: unknown }).clinical_sessions
-      const sessionData = Array.isArray(rawSessions)
-        ? (rawSessions[0] as { closed_at: string } | undefined)
-        : (rawSessions as { closed_at: string } | null | undefined) ?? null
+      // Supabase infers the !inner join as a single object (FK is to-one).
+      // Some client versions may return an array shape; narrow from the typed
+      // value without casting through unknown.
+      const rawSessions: unknown = bRow.clinical_sessions
+      const closedAt: string | null = Array.isArray(rawSessions)
+        ? (rawSessions[0] as { closed_at?: string | null } | undefined)?.closed_at ?? null
+        : (rawSessions as { closed_at?: string | null } | null)?.closed_at ?? null
 
-      const closedAt = sessionData?.closed_at ?? null
       if (closedAt) {
         const parsed = AssessmentSchema.safeParse(bRow.summary_json)
         if (!parsed.success) {
