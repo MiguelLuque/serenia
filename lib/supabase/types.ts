@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       assessments: {
@@ -101,13 +76,6 @@ export type Database = {
             columns: ["supersedes_assessment_id"]
             isOneToOne: false
             referencedRelation: "assessments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_assessments_reviewed_by"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "clinicians"
             referencedColumns: ["id"]
           },
         ]
@@ -416,6 +384,70 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "clinical_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      patient_tasks: {
+        Row: {
+          acordada_en_assessment_id: string
+          acordada_en_session_id: string
+          closed_at: string | null
+          closed_by_assessment_id: string | null
+          created_at: string
+          descripcion: string
+          estado: Database["public"]["Enums"]["patient_task_status"]
+          id: string
+          nota: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acordada_en_assessment_id: string
+          acordada_en_session_id: string
+          closed_at?: string | null
+          closed_by_assessment_id?: string | null
+          created_at?: string
+          descripcion: string
+          estado?: Database["public"]["Enums"]["patient_task_status"]
+          id?: string
+          nota?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          acordada_en_assessment_id?: string
+          acordada_en_session_id?: string
+          closed_at?: string | null
+          closed_by_assessment_id?: string | null
+          created_at?: string
+          descripcion?: string
+          estado?: Database["public"]["Enums"]["patient_task_status"]
+          id?: string
+          nota?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_tasks_acordada_en_assessment_id_fkey"
+            columns: ["acordada_en_assessment_id"]
+            isOneToOne: false
+            referencedRelation: "assessments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_tasks_acordada_en_session_id_fkey"
+            columns: ["acordada_en_session_id"]
+            isOneToOne: false
+            referencedRelation: "clinical_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_tasks_closed_by_assessment_id_fkey"
+            columns: ["closed_by_assessment_id"]
+            isOneToOne: false
+            referencedRelation: "assessments"
             referencedColumns: ["id"]
           },
         ]
@@ -905,6 +937,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      close_stale_sessions: {
+        Args: { threshold_minutes?: number }
+        Returns: number
+      }
       gdpr_erase_user: { Args: { target_user_id: string }; Returns: undefined }
       is_clinician: { Args: never; Returns: boolean }
     }
@@ -927,6 +963,12 @@ export type Database = {
         | "age_gate"
         | "baseline"
         | "complete"
+      patient_task_status:
+        | "pendiente"
+        | "cumplida"
+        | "parcial"
+        | "no_realizada"
+        | "no_abordada"
       questionnaire_instance_status:
         | "proposed"
         | "in_progress"
@@ -1075,9 +1117,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       actor_type: ["user", "service", "system"],
@@ -1099,6 +1138,13 @@ export const Constants = {
         "age_gate",
         "baseline",
         "complete",
+      ],
+      patient_task_status: [
+        "pendiente",
+        "cumplida",
+        "parcial",
+        "no_realizada",
+        "no_abordada",
       ],
       questionnaire_instance_status: [
         "proposed",
