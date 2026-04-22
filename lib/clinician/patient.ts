@@ -8,6 +8,7 @@ type RiskType = Database['public']['Enums']['risk_type']
 export type PatientProfile = {
   userId: string
   displayName: string | null
+  birthDate: string | null
 }
 
 export type PatientQuestionnaireResult = {
@@ -59,7 +60,7 @@ export async function getPatientDetail(
   const [profileRes, instancesRes, riskRes, sessionsRes] = await Promise.all([
     supabase
       .from('user_profiles')
-      .select('user_id, display_name')
+      .select('user_id, display_name, birth_date')
       .eq('user_id', userId)
       .maybeSingle(),
     // Scored instances of the trend questionnaires, joined with their result.
@@ -92,6 +93,7 @@ export async function getPatientDetail(
   const profile: PatientProfile = {
     userId,
     displayName: profileRes.data?.display_name ?? null,
+    birthDate: profileRes.data?.birth_date ?? null,
   }
 
   const questionnaireResults: PatientQuestionnaireResult[] = (

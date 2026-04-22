@@ -46,6 +46,15 @@ const QUESTIONNAIRE_LABEL: Record<string, string> = {
   GAD7: 'GAD-7',
 }
 
+function calculateAge(birthDate: string): number {
+  const birth = new Date(birthDate)
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
+  return age
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-ES', {
@@ -85,6 +94,11 @@ export default async function PatientDetailPage({
           <CardTitle className="text-xl">
             {profile.displayName ?? 'Paciente sin nombre'}
           </CardTitle>
+          {profile.birthDate && (
+            <p className="text-sm text-slate-600">
+              {calculateAge(profile.birthDate)} años
+            </p>
+          )}
         </CardHeader>
       </Card>
 
