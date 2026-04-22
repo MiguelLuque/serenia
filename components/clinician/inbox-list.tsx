@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { InboxRow } from '@/lib/clinician/inbox'
+import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -25,29 +26,6 @@ function formatRelative(iso: string | null): string {
   })
 }
 
-type StatusLabel = {
-  label: string
-  variant: 'default' | 'secondary' | 'destructive' | 'outline'
-}
-
-function statusLabel(row: InboxRow): StatusLabel {
-  if (row.assessmentStatus === null) {
-    return { label: 'Sin informe', variant: 'outline' }
-  }
-  switch (row.assessmentStatus) {
-    case 'draft_ai':
-    case 'pending_clinician_review':
-      return { label: 'Sin revisar', variant: 'destructive' }
-    case 'reviewed_confirmed':
-    case 'reviewed_modified':
-      return { label: 'Revisado', variant: 'secondary' }
-    case 'rejected':
-      return { label: 'Rechazado', variant: 'outline' }
-    case 'superseded':
-      return { label: 'Sustituido', variant: 'outline' }
-  }
-}
-
 export function InboxList({ rows }: { rows: InboxRow[] }) {
   if (rows.length === 0) {
     return (
@@ -64,7 +42,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
   return (
     <div className="space-y-3">
       {rows.map((row) => {
-        const status = statusLabel(row)
+        const status = assessmentStatusLabel(row.assessmentStatus)
         return (
           <Link
             key={row.sessionId}
