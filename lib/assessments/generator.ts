@@ -11,7 +11,7 @@ type AssessmentRow = Database['public']['Tables']['assessments']['Row']
 const MIN_USER_MESSAGES = 3
 const MAX_TRANSCRIPT_MESSAGES = 60
 
-const AssessmentSchema = z.object({
+export const AssessmentSchema = z.object({
   chief_complaint: z.string(),
   presenting_issues: z.array(z.string()),
   mood_affect: z.string(),

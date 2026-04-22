@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import type { SessionDetail } from '@/lib/clinician/session-detail'
 import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
+import { AssessmentEditor } from '@/components/clinician/assessment-editor'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -95,6 +97,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
     ? CLOSURE_LABELS[session.closureReason] ?? session.closureReason
     : null
   const isCrisis = session.closureReason === 'crisis_detected'
+  const [isEditing, setIsEditing] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -140,7 +143,21 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
       </Card>
 
       {assessment ? (
-        <AssessmentSections assessment={assessment} />
+        isEditing ? (
+          <AssessmentEditor
+            assessmentId={assessment.id}
+            sessionId={session.id}
+            userId={session.userId}
+            initial={assessment.summary}
+            onCancel={() => setIsEditing(false)}
+            onSaved={() => setIsEditing(false)}
+          />
+        ) : (
+          <AssessmentSections
+            assessment={assessment}
+            onEdit={() => setIsEditing(true)}
+          />
+        )
       ) : (
         <Card>
           <CardHeader>
@@ -193,8 +210,10 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
 
 function AssessmentSections({
   assessment,
+  onEdit,
 }: {
   assessment: NonNullable<SessionDetail['assessment']>
+  onEdit: () => void
 }) {
   const { summary } = assessment
   const risk = summary.risk_assessment
@@ -400,13 +419,7 @@ function AssessmentSections({
           <CardTitle className="text-base">Acciones</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <Button
-            // TODO T5: entrar a modo edición del informe
-            onClick={() => {}}
-            disabled
-          >
-            Editar informe
-          </Button>
+          <Button onClick={onEdit}>Editar informe</Button>
           <Button
             variant="secondary"
             // TODO T6: marcar como revisado sin cambios
