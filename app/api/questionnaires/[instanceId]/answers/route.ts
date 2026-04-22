@@ -41,7 +41,13 @@ export async function POST(
     })
     return Response.json({ result })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[answers POST] failed', { instanceId, err })
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Unknown error'
     return new Response(message, { status: 400 })
   }
 }

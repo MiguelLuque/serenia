@@ -7,6 +7,13 @@ interface MessageBubbleProps {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
 
+  const textParts = message.parts.filter(
+    (p): p is Extract<typeof p, { type: 'text' }> =>
+      p.type === 'text' && p.text.trim().length > 0,
+  )
+
+  if (textParts.length === 0) return null
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -16,13 +23,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : 'rounded-bl-sm bg-slate-100 text-slate-900'
         }`}
       >
-        {message.parts.map((part, i) =>
-          part.type === 'text' ? (
-            <span key={i} className="whitespace-pre-wrap">
-              {part.text}
-            </span>
-          ) : null,
-        )}
+        {textParts.map((part, i) => (
+          <span key={i} className="whitespace-pre-wrap">
+            {part.text}
+          </span>
+        ))}
       </div>
     </div>
   )

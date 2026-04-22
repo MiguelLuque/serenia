@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import { MessageBubble } from './message-bubble'
@@ -39,10 +40,12 @@ export function ChatView({
   expiresAt,
   activeQuestionnaire,
 }: ChatViewProps) {
+  const router = useRouter()
   const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt))
   const isExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
   const listRef = useRef<HTMLDivElement>(null)
+  const refreshedToolsRef = useRef<Set<string>>(new Set())
 
   const { messages, sendMessage, status } = useChat({
     id: sessionId,
@@ -52,6 +55,25 @@ export function ChatView({
       body: { sessionId },
     }),
   })
+
+  useEffect(() => {
+    if (status !== 'ready') return
+    for (const message of messages) {
+      for (const part of message.parts) {
+        if (
+          part.type === 'tool-propose_questionnaire' &&
+          'state' in part &&
+          part.state === 'output-available'
+        ) {
+          const key = `${message.id}:${'toolCallId' in part ? part.toolCallId : ''}`
+          if (!refreshedToolsRef.current.has(key)) {
+            refreshedToolsRef.current.add(key)
+            router.refresh()
+          }
+        }
+      }
+    }
+  }, [messages, status, router])
 
   useEffect(() => {
     if (isExpired) return
