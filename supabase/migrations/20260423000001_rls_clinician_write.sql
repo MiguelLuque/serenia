@@ -16,10 +16,9 @@
 -- -----------------------------------------------------------------------
 -- SELECT policies for clinicians
 -- -----------------------------------------------------------------------
-
-create policy "clinical_sessions_select_clinician"
-  on clinical_sessions for select
-  using (is_clinician());
+--
+-- `clinical_sessions_select_clinician` already exists — created in
+-- 20260421000001_clinical_sessions_extend.sql. Skipped here.
 
 -- Clinicians see ALL messages in any conversation, including non
 -- user-visible system/tool messages — they need the full transcript
