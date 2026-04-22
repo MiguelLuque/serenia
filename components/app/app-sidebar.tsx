@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, NotebookText, LogOut } from 'lucide-react'
+import { Home, NotebookText, LogOut, Inbox, Users } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -26,9 +26,24 @@ const patientNav = [
   { href: '/app/sesiones', label: 'Sesiones', icon: NotebookText },
 ]
 
+const clinicianNav = [
+  { href: '/app', label: 'Bandeja', icon: Inbox },
+  { href: '/app/clinica/pacientes', label: 'Pacientes', icon: Users },
+]
+
+function isNavItemActive(href: string, pathname: string): boolean {
+  if (href === '/app') return pathname === '/app'
+  // Keep "Pacientes" highlighted on any /app/clinica/* route, including
+  // the patient detail route /app/clinica/paciente/:userId.
+  if (href === '/app/clinica/pacientes') {
+    return pathname.startsWith('/app/clinica')
+  }
+  return pathname.startsWith(href)
+}
+
 export function AppSidebar({ displayName, role }: AppSidebarProps) {
   const pathname = usePathname()
-  const items = patientNav
+  const items = role === 'clinician' ? clinicianNav : patientNav
 
   return (
     <Sidebar collapsible="icon">
@@ -47,10 +62,7 @@ export function AppSidebar({ displayName, role }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
-                const isActive =
-                  item.href === '/app'
-                    ? pathname === '/app'
-                    : pathname.startsWith(item.href)
+                const isActive = isNavItemActive(item.href, pathname)
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
