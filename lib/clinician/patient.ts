@@ -1,9 +1,11 @@
+import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import type { AssessmentStatus } from './assessment-labels'
 
 type RiskSeverity = Database['public']['Enums']['risk_severity']
 type RiskType = Database['public']['Enums']['risk_type']
+type PatientTaskStatus = Database['public']['Enums']['patient_task_status']
 
 export type PatientProfile = {
   userId: string
@@ -34,11 +36,21 @@ export type PatientSession = {
   assessmentStatus: AssessmentStatus | null
 }
 
+export type OpenTask = {
+  id: string
+  descripcion: string
+  nota: string | null
+  estado: Extract<PatientTaskStatus, 'pendiente' | 'parcial'>
+  acordadaEnSessionId: string
+  updatedAt: string
+}
+
 export type PatientDetail = {
   profile: PatientProfile
   questionnaireResults: PatientQuestionnaireResult[]
   riskEvents: PatientRiskEvent[]
   sessions: PatientSession[]
+  openTasks: OpenTask[]
 }
 
 // Codes included in the "tendencias" trend table. ASQ is a risk screener,
@@ -57,38 +69,51 @@ export async function getPatientDetail(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<PatientDetail> {
-  const [profileRes, instancesRes, riskRes, sessionsRes] = await Promise.all([
-    supabase
-      .from('user_profiles')
-      .select('user_id, display_name, birth_date')
-      .eq('user_id', userId)
-      .maybeSingle(),
-    // Scored instances of the trend questionnaires, joined with their result.
-    supabase
-      .from('questionnaire_instances')
-      .select(
-        'id, scored_at, questionnaire_definitions!inner(code), questionnaire_results!inner(total_score, severity_band)'
-      )
-      .eq('user_id', userId)
-      .eq('status', 'scored')
-      .in('questionnaire_definitions.code', TREND_CODES as unknown as string[])
-      .order('scored_at', { ascending: false }),
-    supabase
-      .from('risk_events')
-      .select('id, risk_type, severity, session_id, created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('clinical_sessions')
-      .select('id, opened_at, closed_at, closure_reason')
-      .eq('user_id', userId)
-      .order('opened_at', { ascending: false }),
-  ])
+  const [profileRes, instancesRes, riskRes, sessionsRes, tasksRes] =
+    await Promise.all([
+      supabase
+        .from('user_profiles')
+        .select('user_id, display_name, birth_date')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      // Scored instances of the trend questionnaires, joined with their result.
+      supabase
+        .from('questionnaire_instances')
+        .select(
+          'id, scored_at, questionnaire_definitions!inner(code), questionnaire_results!inner(total_score, severity_band)'
+        )
+        .eq('user_id', userId)
+        .eq('status', 'scored')
+        .in(
+          'questionnaire_definitions.code',
+          TREND_CODES as unknown as string[]
+        )
+        .order('scored_at', { ascending: false }),
+      supabase
+        .from('risk_events')
+        .select('id, risk_type, severity, session_id, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('clinical_sessions')
+        .select('id, opened_at, closed_at, closure_reason')
+        .eq('user_id', userId)
+        .order('opened_at', { ascending: false }),
+      supabase
+        .from('patient_tasks')
+        .select(
+          'id, descripcion, nota, estado, acordada_en_session_id, updated_at'
+        )
+        .eq('user_id', userId)
+        .in('estado', ['pendiente', 'parcial'])
+        .order('updated_at', { ascending: false }),
+    ])
 
   if (profileRes.error) throw profileRes.error
   if (instancesRes.error) throw instancesRes.error
   if (riskRes.error) throw riskRes.error
   if (sessionsRes.error) throw sessionsRes.error
+  if (tasksRes.error) throw tasksRes.error
 
   const profile: PatientProfile = {
     userId,
@@ -158,10 +183,25 @@ export async function getPatientDetail(
     assessmentStatus: assessmentBySession.get(s.id) ?? null,
   }))
 
+  const openTasks: OpenTask[] = (tasksRes.data ?? [])
+    .filter(
+      (t): t is typeof t & { estado: 'pendiente' | 'parcial' } =>
+        t.estado === 'pendiente' || t.estado === 'parcial'
+    )
+    .map((t) => ({
+      id: t.id,
+      descripcion: t.descripcion,
+      nota: t.nota,
+      estado: t.estado,
+      acordadaEnSessionId: t.acordada_en_session_id,
+      updatedAt: t.updated_at,
+    }))
+
   return {
     profile,
     questionnaireResults,
     riskEvents,
     sessions,
+    openTasks,
   }
 }

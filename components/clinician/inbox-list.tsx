@@ -26,6 +26,33 @@ function formatRelative(iso: string | null): string {
   })
 }
 
+const RISK_LABEL: Record<
+  Exclude<InboxRow['riskState'], 'none'>,
+  { label: string; variant: 'secondary' | 'destructive' }
+> = {
+  watch: { label: 'Vigilar', variant: 'secondary' },
+  active: { label: 'Riesgo activo', variant: 'destructive' },
+  acute: { label: 'Riesgo agudo', variant: 'destructive' },
+}
+
+function buildLongitudinalLine(row: InboxRow): string {
+  const pieces: string[] = [`Sesión nº ${row.sessionNumber}`]
+  if (row.daysSincePrevious !== null) {
+    pieces.push(`${row.daysSincePrevious} días desde la anterior`)
+  }
+  if (row.phq9Trend.length > 0) {
+    pieces.push(`PHQ-9: ${row.phq9Trend.join('→')}`)
+  }
+  if (row.gad7Trend.length > 0) {
+    pieces.push(`GAD-7: ${row.gad7Trend.join('→')}`)
+  }
+  if (row.openTasksCount > 0) {
+    const suffix = row.openTasksCount === 1 ? 'acuerdo abierto' : 'acuerdos abiertos'
+    pieces.push(`${row.openTasksCount} ${suffix}`)
+  }
+  return pieces.join(' · ')
+}
+
 export function InboxList({ rows }: { rows: InboxRow[] }) {
   if (rows.length === 0) {
     return (
@@ -43,6 +70,8 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
     <div className="space-y-3">
       {rows.map((row) => {
         const status = assessmentStatusLabel(row.assessmentStatus)
+        const riskBadge =
+          row.riskState !== 'none' ? RISK_LABEL[row.riskState] : null
         return (
           <Link
             key={row.sessionId}
@@ -52,15 +81,21 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
             <Card className={row.hasCrisis ? 'border-red-200 bg-red-50' : undefined}>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <CardTitle className="text-base">
                       {row.displayName ?? 'Paciente sin nombre'}
                     </CardTitle>
                     <CardDescription>
                       Cerrada {formatRelative(row.closedAt)}
                     </CardDescription>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {buildLongitudinalLine(row)}
+                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {riskBadge && (
+                      <Badge variant={riskBadge.variant}>{riskBadge.label}</Badge>
+                    )}
                     {row.hasCrisis && (
                       <Badge variant="destructive">CRISIS</Badge>
                     )}

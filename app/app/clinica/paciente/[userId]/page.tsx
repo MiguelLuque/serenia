@@ -84,7 +84,13 @@ export default async function PatientDetailPage({
   const supabase = await createAuthenticatedClient()
   const detail = await getPatientDetail(supabase, userId)
 
-  const { profile, questionnaireResults, riskEvents, sessions } = detail
+  const { profile, questionnaireResults, riskEvents, sessions, openTasks } =
+    detail
+
+  const TASK_STATUS_LABEL: Record<'pendiente' | 'parcial', string> = {
+    pendiente: 'Pendiente',
+    parcial: 'Parcial',
+  }
 
   return (
     <div className="space-y-6">
@@ -191,6 +197,41 @@ export default async function PatientDetailPage({
                   </li>
                 )
               })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Acuerdos abiertos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Acuerdos abiertos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {openTasks.length === 0 ? (
+            <p className="text-sm text-slate-600">Sin acuerdos abiertos.</p>
+          ) : (
+            <ul className="space-y-2">
+              {openTasks.map((task) => (
+                <li key={task.id}>
+                  <Link
+                    href={`/app/clinica/sesion/${task.acordadaEnSessionId}`}
+                    className="block transition-opacity hover:opacity-90"
+                  >
+                    <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                      <div className="min-w-0">
+                        <div className="font-medium">{task.descripcion}</div>
+                        {task.nota && (
+                          <div className="text-slate-600">{task.nota}</div>
+                        )}
+                      </div>
+                      <Badge variant="secondary">
+                        {TASK_STATUS_LABEL[task.estado]}
+                      </Badge>
+                    </div>
+                  </Link>
+                </li>
+              ))}
             </ul>
           )}
         </CardContent>
