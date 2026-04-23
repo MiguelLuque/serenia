@@ -148,8 +148,25 @@ where u.id in ('<USER_B_ID>','<USER_C_ID>');
 
 - [ ] Paciente C abre una nueva sesión inmediatamente.
 - [ ] **Esperado inicial:** bloque contiene `riskOpeningNotice` (rama `watch` — header `[AVISO DE CONTINUIDAD — VIGILANCIA]`). La IA abre normal pero con atención a reaparición.
-- [ ] Cerrar esa sesión. Clínico revisa, genera nuevo assessment con `summary_json.risk_assessment.suicidality='none'`, confirma.
-- [ ] Paciente C abre una sesión siguiente.
+- [ ] Cerrar esa sesión desde la UI del paciente (o con `close_session`).
+- [ ] **Clínico: editar el draft AI para que `suicidality='none'`.** Pasos exactos de UI:
+  1. Inicia sesión como el usuario clínico del prerrequisito.
+  2. En la bandeja (`/app`) aparecerá la sesión recién cerrada de Paciente C en la lista de pendientes. Click sobre la fila para entrar al detalle (`/app/clinica/sesion/<sessionId>`).
+  3. En la página de detalle de la sesión, el draft AI se muestra en modo lectura (`AssessmentView`). Pulsa el botón **"Editar informe"** (o equivalente que monta `AssessmentEditor`).
+  4. Dentro del editor, localiza la tarjeta **"Evaluación de riesgo"**. El campo `summary_json.risk_assessment.suicidality` se expone como el dropdown **"Ideación suicida"** (ver `components/clinician/assessment-editor.tsx` — `SUICIDALITY_OPTIONS`, valores `none`/`passive`/`active`/`acute` con labels "Sin ideación" / "Ideación pasiva" / "Ideación activa" / "Ideación aguda").
+  5. Cambia el dropdown a **"Sin ideación"** (`value='none'`).
+  6. En la tarjeta final **"Guardar cambios"**, pulsa **"Guardar cambios"**. El `saveAssessmentAction` actualizará `summary_json`.
+  7. De vuelta en el detalle de sesión, confirma el draft con el flujo habitual (el botón que dispara la transición a `reviewed_confirmed` / `reviewed_modified`). Tras confirmar, el assessment quedará en `status='reviewed_confirmed'` o `'reviewed_modified'` con `suicidality='none'` en `summary_json`.
+  8. **Fallback si la UI no expone el confirm en este entorno:** actualizar directamente con SQL:
+     ```sql
+     update assessments
+     set status = 'reviewed_confirmed',
+         reviewed_by = '<CLINICIAN_ID>',
+         reviewed_at = now(),
+         summary_json = jsonb_set(summary_json, '{risk_assessment,suicidality}', '"none"'::jsonb)
+     where session_id = '<SESSION_ID_PACIENTE_C>';
+     ```
+- [ ] Volver al flujo del smoke: **Paciente C abre una sesión siguiente** desde su propia cuenta.
 - [ ] **Esperado tras recuperación:** `riskState='none'` — no hay `riskOpeningNotice` en el system prompt. Ejecutar snippet SQL 3 para confirmar el estado del `suicidality` en el último assessment.
 
 ---

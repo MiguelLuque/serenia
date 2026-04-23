@@ -22,10 +22,24 @@ Cuando el flag **no** vale `on` (cualquier otro valor, incluido ausente o vacío
 
 ### Estado por defecto
 
-**`off`**. Debe permanecer en `off` en todos los entornos hasta que se cumplan **ambas** condiciones:
+La política depende de si la app ya está **lanzada oficialmente a usuarios reales** o no. A fecha de 2026-04-23 Serenia está en **pre-lanzamiento**: no hay usuarios reales, el entorno local apunta a la BD de producción y los features nuevos se activan con `flag=on` desde el día 1 para poder validarlos end-to-end antes del lanzamiento. Esto permite descubrir problemas con los datos reales en vez de hacerlo el día del lanzamiento.
+
+#### Activación pre-lanzamiento (aplica **ahora**)
+
+Se permite encender el flag a `on` en **cualquier entorno — incluyendo producción** — mientras la app no esté oficialmente lanzada. Único prerrequisito:
+
+1. El [smoke checklist](../superpowers/specs/2026-04-23-plan-6-smoke-checklist.md) manual ha pasado al menos una vez en ese entorno (o en uno equivalente que use la misma BD y la misma build).
+
+El sign-off clínico y la Fase 2 de métricas **no son bloqueantes** en este modo — son aún deseables pero no se exigen para encender el flag. El razonamiento: si no hay usuarios reales, la única forma de detectar drift entre el copy firmado y el copy que realmente ve el modelo es mirando prompts generados con datos reales, y eso requiere el flag encendido.
+
+#### Activación post-lanzamiento (se aplicará tras el lanzamiento oficial)
+
+Cuando la app se lance oficialmente a usuarios reales (fecha/hito a determinar, se actualizará este documento en ese momento), el flag volverá a `off` por defecto en producción y a partir de ese instante aplicará la política estricta: **debe permanecer en `off`** en todos los entornos donde pueda tocar a un usuario real hasta que se cumplan **ambas** condiciones:
 
 1. El documento de sign-off clínico [`2026-04-23-plan-6-cross-session-continuity-signoff.md`](../superpowers/specs/2026-04-23-plan-6-cross-session-continuity-signoff.md) esté firmado por el revisor primario y el revisor independiente.
 2. La instrumentación de métricas de Fase 2 (`continuity_references`, regex de referencia, vistas y cron) esté desplegada y recogiendo datos. La Fase 2 se planificará en un plan separado cuando el equipo decida encender el flag en producción.
+
+El momento del "switch" entre ambos modos coincide con el lanzamiento oficial. Hasta entonces, usar el modo pre-lanzamiento.
 
 ### Cómo alternar el flag en local
 
