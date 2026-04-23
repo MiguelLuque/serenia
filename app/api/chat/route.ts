@@ -18,6 +18,7 @@ import {
 import type { QuestionnaireCode } from '@/lib/questionnaires/types'
 import { buildPatientContext } from '@/lib/patient-context/builder'
 import { assemblePlan6ContextPieces } from '@/lib/chat/assemble-plan6-prompt'
+import { buildChatSystemPrompt } from '@/lib/chat/system-prompt'
 import { logContextInjection } from '@/lib/patient-context/telemetry'
 
 export const maxDuration = 60
@@ -110,8 +111,9 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
   // ── Plan 6 T10: cross-session continuity (feature-flagged) ─────────────────
   // When FEATURE_CROSS_SESSION_CONTEXT === 'on', build a patient-context block
   // from prior-session data, derive a risk-state opening notice, and record a
-  // telemetry row via the service role (fire-and-forget — never blocks the
-  // chat). The actual assembly lives in a pure helper (easier to test).
+  // telemetry row via the service role. The telemetry write is awaited with a
+  // `.catch` so the handler never returns before the row lands, but a failed
+  // insert never blocks the chat response.
   const featureOn = process.env.FEATURE_CROSS_SESSION_CONTEXT === 'on'
   let patientContextBlock = ''
   let riskOpeningNotice = ''
@@ -121,9 +123,7 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
     patientContextBlock = pieces.patientContextBlock
     riskOpeningNotice = pieces.riskOpeningNotice
 
-    // Fire-and-forget telemetry: swallow errors so the chat never fails on an
-    // audit-log miss.
-    void logContextInjection({
+    await logContextInjection({
       userId: user.id,
       sessionId: session.id,
       ...pieces.telemetry,
@@ -132,17 +132,14 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
     })
   }
 
-  // Concatenation order (per Plan 6 T10): basePrompt first, then the
-  // risk-state continuity notice, then per-turn alerts, then the context
-  // block. Empty strings stay empty so join is no-op.
-  const systemPrompt = [
+  const systemPrompt = buildChatSystemPrompt({
     basePrompt,
     riskOpeningNotice,
     crisisNotice,
     questionnaireNotice,
     timeNotice,
     patientContextBlock,
-  ].join('')
+  })
 
   const proposeQuestionnaireTool = tool({
     description:

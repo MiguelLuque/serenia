@@ -510,33 +510,35 @@ describe('computeRiskOpeningNotice', () => {
     expect(computeRiskOpeningNotice(ctx)).toBeNull()
   })
 
-  it('returns exact acute notice string', () => {
+  it('returns exact acute notice string ending with block separator', () => {
     const ctx = makeTierACtx({ riskState: 'acute' })
     expect(computeRiskOpeningNotice(ctx)).toBe(
-      "[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.",
+      "[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.\n\n---\n\n",
     )
   })
 
-  it('returns exact active notice string', () => {
+  it('returns exact active notice string ending with block separator', () => {
     const ctx = makeTierACtx({ riskState: 'active' })
     expect(computeRiskOpeningNotice(ctx)).toBe(
-      '[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.',
+      '[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.\n\n---\n\n',
     )
   })
 
-  it('returns exact watch notice string', () => {
+  it('returns exact watch notice string ending with block separator', () => {
     const ctx = makeTierACtx({ riskState: 'watch' })
     expect(computeRiskOpeningNotice(ctx)).toBe(
-      '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.',
+      '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.\n\n---\n\n',
     )
   })
 
-  it('none/watch/active/acute notices do not have surrounding newlines', () => {
+  it('all non-none notices end with the project separator so adjacent blocks do not glue', () => {
+    // Prevents regressions like riskOpeningNotice + crisisNotice rendering on the
+    // same line because the risk string forgot the "\n\n---\n\n" terminator that
+    // every other notice in app/api/chat/route.ts appends.
     const states = ['watch', 'active', 'acute'] as const
     for (const state of states) {
       const notice = computeRiskOpeningNotice(makeTierACtx({ riskState: state }))!
-      expect(notice).not.toMatch(/^\n/)
-      expect(notice).not.toMatch(/\n$/)
+      expect(notice.endsWith('\n\n---\n\n')).toBe(true)
     }
   })
 })
@@ -758,5 +760,73 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
     expect(block).toContain('C'.repeat(149) + '…')
     // Full 400 C's would mean the 300-cap ran; step 3 replaces with 150-cap.
     expect(block).not.toContain('C'.repeat(200))
+  })
+})
+
+// ── renderPatientContextBlockWithMeta — retakeHint placement ────────────────
+
+describe('renderPatientContextBlockWithMeta — retakeHint option', () => {
+  it('injects the hint as a bullet INSIDE "Instrucciones para esta sesión" for tier A', () => {
+    const hint = 'el PHQ-9 del paciente era severo y tiene más de una semana; considera proponerlo de nuevo.'
+    const { block } = renderPatientContextBlockWithMeta(makeTierACtx(), { retakeHint: hint })
+
+    // The hint must appear — and it must appear BEFORE the final "\n\n---" terminator,
+    // meaning it lives inside the Instructions section, not below the separator.
+    const hintIndex = block.indexOf(hint)
+    const instructionsIndex = block.indexOf('Instrucciones para esta sesión:')
+    const finalSeparatorIndex = block.lastIndexOf('\n\n---')
+
+    expect(hintIndex).toBeGreaterThan(instructionsIndex)
+    expect(hintIndex).toBeLessThan(finalSeparatorIndex)
+    expect(block).toContain(`- ${hint}`)
+  })
+
+  it('injects the hint inside Instructions for historic tier', () => {
+    const hint = 'combo PHQ-9+GAD-7 pendiente'
+    const ctx = makeTierACtx({
+      validated: {
+        id: 'historic-fix',
+        reviewedAt: daysAgo(120),
+        summary: {
+          chief_complaint: 'Motivo histórico.',
+          presenting_issues: ['a'],
+          areas_for_exploration: ['b'],
+          risk_assessment: baseRisk,
+          questionnaires: [],
+        },
+        ageInDays: 120,
+      },
+      tier: 'historic',
+    })
+    const { block } = renderPatientContextBlockWithMeta(ctx, { retakeHint: hint })
+
+    expect(block).toContain(`- ${hint}`)
+    expect(block.indexOf(hint)).toBeLessThan(block.lastIndexOf('\n\n---'))
+  })
+
+  it('injects the hint inside Instructions for tier B', () => {
+    const hint = 'GAD-7 moderado hace más de 2 semanas'
+    const { block } = renderPatientContextBlockWithMeta(makeTierBCtx(), { retakeHint: hint })
+
+    expect(block).toContain(`- ${hint}`)
+    expect(block.indexOf(hint)).toBeLessThan(block.lastIndexOf('\n\n---'))
+  })
+
+  it('produces byte-identical output when retakeHint is null, undefined, or missing', () => {
+    const ctx = makeTierACtx()
+    const noOpts = renderPatientContextBlockWithMeta(ctx).block
+    const undef = renderPatientContextBlockWithMeta(ctx, { retakeHint: undefined }).block
+    const nully = renderPatientContextBlockWithMeta(ctx, { retakeHint: null }).block
+
+    expect(undef).toBe(noOpts)
+    expect(nully).toBe(noOpts)
+  })
+
+  it('silently ignores retakeHint for tier=none (no Instructions section to host it)', () => {
+    const hint = 'PHQ-9 severo'
+    const { block } = renderPatientContextBlockWithMeta(makeNoneCtx(), { retakeHint: hint })
+
+    expect(block).not.toContain(hint)
+    expect(block).toContain('postura de intake habitual')
   })
 })

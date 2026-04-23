@@ -117,10 +117,16 @@ const TIER_B_INSTRUCTIONS = `Instrucciones para esta sesión:
 
 type AssembleResult = { block: string; truncatedSections: string[] }
 
+function appendHintBullet(instructions: string, hint: string | null | undefined): string {
+  if (!hint) return instructions
+  return `${instructions}\n- ${hint}`
+}
+
 function assembleTierAOrHistoric(
   ctx: PatientContext,
   header: string,
   isHistoric: boolean,
+  retakeHint: string | null | undefined,
 ): AssembleResult {
   const validated = ctx.validated!
   const summary = validated.summary
@@ -148,9 +154,10 @@ function assembleTierAOrHistoric(
   const questionnairesSection = renderQuestionnaires(ctx.recentQuestionnaires)
   const patientLine = renderPatientLine(ctx)
 
-  const instructions = isHistoric
+  const baseInstructions = isHistoric
     ? `${TIER_A_INSTRUCTIONS}\n${HISTORIC_EXTRA_INSTRUCTION}`
     : TIER_A_INSTRUCTIONS
+  const instructions = appendHintBullet(baseInstructions, retakeHint)
 
   // Build sections conditionally
   const parts: string[] = []
@@ -302,18 +309,20 @@ function assembleTierAOrHistoric(
  */
 export function renderPatientContextBlockWithMeta(
   ctx: PatientContext,
+  options: { retakeHint?: string | null } = {},
 ): { block: string; truncatedSections: string[] } {
+  const { retakeHint } = options
   switch (ctx.tier) {
     case 'tierA': {
       const ageInDays = ctx.validated!.ageInDays
       const header = `[CONTEXTO DEL PACIENTE — última revisión clínica de hace ${ageInDays} días]`
-      return assembleTierAOrHistoric(ctx, header, false)
+      return assembleTierAOrHistoric(ctx, header, false, retakeHint)
     }
 
     case 'historic': {
       const ageInDays = ctx.validated!.ageInDays
       const header = `[CONTEXTO HISTÓRICO DEL PACIENTE — última revisión de hace ${ageInDays} días; puede estar desactualizado]`
-      return assembleTierAOrHistoric(ctx, header, true)
+      return assembleTierAOrHistoric(ctx, header, true, retakeHint)
     }
 
     case 'tierB': {
@@ -343,7 +352,7 @@ export function renderPatientContextBlockWithMeta(
       }
 
       parts.push('')
-      parts.push(TIER_B_INSTRUCTIONS)
+      parts.push(appendHintBullet(TIER_B_INSTRUCTIONS, retakeHint))
       parts.push('')
       parts.push('---')
 
@@ -352,6 +361,9 @@ export function renderPatientContextBlockWithMeta(
 
     case 'none':
     default: {
+      // `none` has no Instructions section; a retake hint for a first-session
+      // patient with questionnaire history is not expected, so we ignore it
+      // rather than inventing a section just to host it.
       const block = [
         '[CONTEXTO DEL PACIENTE — primera sesión]',
         'No hay evaluación clínica previa ni sesiones anteriores registradas con este paciente. Usa la postura de intake habitual.',
@@ -376,10 +388,10 @@ export function computeRiskOpeningNotice(ctx: PatientContext): string | null {
     case 'none':
       return null
     case 'acute':
-      return "[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo."
+      return "[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.\n\n---\n\n"
     case 'active':
-      return '[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.'
+      return '[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.\n\n---\n\n'
     case 'watch':
-      return '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.'
+      return '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.\n\n---\n\n'
   }
 }

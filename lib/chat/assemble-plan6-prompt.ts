@@ -13,14 +13,9 @@ import type { ContextTelemetryPayload } from '@/lib/patient-context/telemetry'
  * injects into the system prompt, plus the telemetry payload (minus the
  * per-request userId/sessionId fields) to be written via the service role.
  *
- * Keeping this logic in a pure function makes it testable without an HTTP
- * harness: the route is left as a thin caller.
- *
- * The retake hint (when present) is appended to the context block on its own
- * line. The block already ends in '---'; wrapping the hint before that
- * separator would require render-level awareness. This placement keeps the
- * rendered block self-contained and the hint visible to the model as an
- * addendum to the Instructions section.
+ * The retake hint (when present) is injected INSIDE the block's "Instrucciones
+ * para esta sesión" section as an additional bullet, so the model reads it as
+ * part of the instructions rather than as stray text below the `---` separator.
  */
 export function assemblePlan6ContextPieces(
   ctx: PatientContext,
@@ -30,18 +25,17 @@ export function assemblePlan6ContextPieces(
   riskOpeningNotice: string
   telemetry: Omit<ContextTelemetryPayload, 'userId' | 'sessionId'>
 } {
-  const { block, truncatedSections } = renderPatientContextBlockWithMeta(ctx)
-  const hint = computeQuestionnaireRetakeHint(ctx, now)
-  const patientContextBlock = hint ? `${block}\n${hint}` : block
+  const retakeHint = computeQuestionnaireRetakeHint(ctx, now)
+  const { block, truncatedSections } = renderPatientContextBlockWithMeta(ctx, { retakeHint })
   const riskOpeningNotice = computeRiskOpeningNotice(ctx) ?? ''
 
   return {
-    patientContextBlock,
+    patientContextBlock: block,
     riskOpeningNotice,
     telemetry: {
       tier: ctx.tier,
       riskState: ctx.riskState,
-      blockCharCount: patientContextBlock.length,
+      blockCharCount: block.length,
       pendingTasksCount: ctx.pendingTasks.length,
       riskTriggered: riskOpeningNotice.length > 0,
       lastValidatedAssessmentId: ctx.validated?.id ?? null,
