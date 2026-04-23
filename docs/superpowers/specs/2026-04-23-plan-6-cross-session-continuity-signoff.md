@@ -12,14 +12,14 @@ Plan 6 introduce **continuidad entre sesiones** en Serenia: la IA deja de entrar
 
 Esto significa que **pacientes reales van a ver copy generado por IA que menciona datos de sesiones previas** — acuerdos pendientes, síntomas registrados, estado de riesgo. La IA también puede abrir con avisos de continuidad cuando el estado es `watch`, `active` o `acute`. Todo este texto se inyecta en el system prompt y condiciona la conversación.
 
-Antes de encender el flag `FEATURE_CROSS_SESSION_CONTEXT` en producción, un clínico debe revisar y firmar el literal del copy relevante, asegurándose de que:
+Antes del **lanzamiento oficial a usuarios reales**, un clínico debe revisar y firmar el literal del copy relevante, asegurándose de que:
 
 - Es clínicamente seguro en los tres estados de riesgo.
 - El tono es apropiado para pacientes en recuperación y para pacientes en crisis.
 - Las menciones a "tu psicólogo" están alineadas con el rol real de la persona que revisa.
 - Los avisos de crisis dirigen a la **Línea 024** de forma correcta.
 
-El flag queda `off` hasta que este documento esté firmado por dos revisores.
+Este sign-off es **requisito para el lanzamiento oficial a usuarios reales** (activación post-lanzamiento, ver [feature-flags.md](../../operations/feature-flags.md) — sección _Estado por defecto_). En pre-lanzamiento (estado actual a 2026-04-23), el flag `FEATURE_CROSS_SESSION_CONTEXT` puede encenderse en cualquier entorno sin este sign-off firmado, bajo el prerrequisito del smoke checklist, pero el sign-off debe completarse antes de abrir el producto a pacientes fuera del equipo.
 
 ---
 
@@ -239,7 +239,7 @@ Explícitamente **no** hay un camino de la forma "passive + crisis_detected reci
 **`riskState='watch'`** — tres caminos (todos requieren que las ramas de `acute` y `active` no hayan disparado antes):
 1. `suicidality='passive'` y `reviewed_at` dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:62-68`).
 2. Algún `open_risk_event` con `severity='high'` creado dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:70-78`).
-3. `previous_session.closure_reason='crisis_detected'` dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:80-85`). **Nota:** este camino se dispara incluso si el último assessment validado es más reciente que la crisis, salvo en la rama especial de recuperación de `'none'` (ver abajo).
+3. `previous_session.closure_reason='crisis_detected'` dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:80-85`). **Nota sobre el orden de evaluación:** este camino (path 3) se evalúa **después** de la rama de recuperación `'none'` (`lib/clinical/risk-rules.ts:50-60`, que corre antes que los tres paths de `watch`). Por tanto, si el último assessment validado tiene `suicidality='none'` y `reviewedAt > crisis.closedAt`, `derivePatientRiskState` ya ha devuelto `'none'` antes de llegar aquí y path 3 no se ejecuta. En el resto de combinaciones (assessment más reciente que la crisis pero con `suicidality !== 'none'`, o assessment anterior a la crisis), path 3 sí dispara y fija `watch`.
 
 **`riskState='none'`** — dos formas:
 1. El último assessment tiene `suicidality='none'` **y** todos los `open_risk_events` y la sesión `crisis_detected` (si existe) son anteriores a ese assessment (`lib/clinical/risk-rules.ts:50-60`). Es la regla de recuperación que valida el paso 8 del smoke.
@@ -304,4 +304,6 @@ Si durante la revisión se detecta texto problemático:
 
 ## Dependencia
 
-El flag `FEATURE_CROSS_SESSION_CONTEXT` **no debe encenderse en producción** hasta que este documento esté firmado por ambos revisores (primario e independiente). El procedimiento operativo del flag está en [docs/operations/feature-flags.md](../../operations/feature-flags.md).
+Este sign-off es **requisito para el lanzamiento oficial a usuarios reales**: el flag `FEATURE_CROSS_SESSION_CONTEXT` no debe tocar a pacientes fuera del equipo hasta que este documento esté firmado por ambos revisores (primario e independiente).
+
+En pre-lanzamiento (estado actual a 2026-04-23, sin usuarios reales), el flag puede encenderse en cualquier entorno sin este sign-off firmado, siempre que el smoke checklist haya pasado al menos una vez en ese entorno o en uno equivalente. Esta excepción expira en el lanzamiento oficial: a partir de ese momento vuelve a aplicarse la política estricta de "flag off hasta firmar + Fase 2 de métricas desplegada". El procedimiento operativo completo del flag — incluida la transición entre modos pre- y post-lanzamiento — está en [docs/operations/feature-flags.md](../../operations/feature-flags.md), sección _Estado por defecto_.
