@@ -204,6 +204,8 @@ describe('renderPatientContextBlock — Tier B', () => {
   it('does NOT include hard-excluded fields even if smuggled into summary context', () => {
     // We pass a ctx where no smuggled fields are possible (they're not in the Pick),
     // but we verify the rendered block does not contain those strings at all.
+    // This test catches accidental hardcoding of forbidden field NAMES in the
+    // template string, but NOT a Pick<> regression — see the smuggle test below.
     const ctx = makeTierBCtx()
     const block = renderPatientContextBlock(ctx)
     expect(block).not.toContain('preliminary_impression')
@@ -212,6 +214,31 @@ describe('renderPatientContextBlock — Tier B', () => {
     expect(block).not.toContain('cognitive_patterns')
     expect(block).not.toContain('patient_facing_summary')
     expect(block).not.toContain('proposed_tasks')
+  })
+
+  it('Tier B: even if chief_complaint contains a forbidden field NAME as literal text, no pick-leak happens', () => {
+    // The builder's Pick<> is what prevents forbidden fields from reaching
+    // render. This test documents that assumption: when the forbidden field
+    // NAMES appear as legitimate user content inside chief_complaint, they
+    // DO surface in the rendered block (as content, not as leaked fields).
+    // If a future refactor removes the Pick<> on tierBDraft.summary, forbidden
+    // fields would start leaking silently and the `.not.toContain` tests
+    // above would not catch it — only the Pick<> guards that. This test locks
+    // the architectural invariant in place.
+    const ctx = makeTierBCtx({
+      tierBDraft: {
+        closedAt: daysAgo(5),
+        summary: {
+          chief_complaint:
+            'Preocupaciones generales (el paciente mencionó preliminary_impression como duda) sobre recommended_actions_for_clinician',
+          presenting_issues: ['irritabilidad'],
+          questionnaires: [],
+        },
+      },
+    })
+    const block = renderPatientContextBlock(ctx)
+    expect(block).toContain('preliminary_impression')
+    expect(block).toContain('recommended_actions_for_clinician')
   })
 
   it('includes Tier B instructions', () => {
@@ -332,13 +359,22 @@ describe('renderPatientContextBlock — first session', () => {
 // ── Test 5: Truncation ────────────────────────────────────────────────────────
 
 describe('renderPatientContextBlock — truncation', () => {
-  it('block.length <= 2500 when content is huge; chief_complaint (first 150 chars) still present; risk_assessment and instructions still present', () => {
-    // 400-char chief_complaint
+  it('block.length <= 2500 when content is huge; cascade steps 1+2 both fire (areas + presenting dropped); chief_complaint, risk_assessment and instructions survive', () => {
+    // 400-char chief_complaint (will be capped to 300, then to 150 if step 3 fires)
     const hugeCc = 'X'.repeat(400)
-    // 10 large presenting_issues items (130 chars each)
+    // 10 large presenting_issues items (130 chars each — truncated to 120)
     const hugePresenting = Array.from({ length: 10 }, (_, i) => `Síntoma ${i}: ${'A'.repeat(120)}`)
     // 10 large areas_for_exploration items
     const hugeAreas = Array.from({ length: 10 }, (_, i) => `Área ${i}: ${'B'.repeat(120)}`)
+    // Large pending-tasks section (not dropped by cascade) to force step 2 to fire.
+    // Without tasks eating budget, step 1 alone already gets the block under 2500
+    // and step 2 would never execute — masking a regression where step 1 is broken.
+    const heavyTasks = Array.from({ length: 5 }, (_, i) => ({
+      id: `t-${i}`,
+      descripcion: `Tarea pesada número ${i}: ${'T'.repeat(90)}`,
+      estado: 'pendiente' as const,
+      acordadaEn: daysAgo(i + 1),
+    }))
 
     const ctx = makeTierACtx({
       validated: {
@@ -352,6 +388,7 @@ describe('renderPatientContextBlock — truncation', () => {
         },
         ageInDays: 10,
       },
+      pendingTasks: heavyTasks,
     })
 
     const block = renderPatientContextBlock(ctx)
@@ -359,7 +396,12 @@ describe('renderPatientContextBlock — truncation', () => {
     // Length constraint
     expect(block.length).toBeLessThanOrEqual(2500)
 
-    // chief_complaint first 150 chars still present (truncated to 150)
+    // Cascade step 1 fired: areas_for_exploration section dropped
+    expect(block).not.toContain('Áreas a explorar pendientes:')
+    // Cascade step 2 fired: presenting_issues section also dropped
+    expect(block).not.toContain('Síntomas presentes:')
+
+    // chief_complaint survives (at least the first 150 chars) — never dropped
     expect(block).toContain(hugeCc.slice(0, 149))
 
     // risk_assessment still present
@@ -431,10 +473,11 @@ describe('renderPatientContextBlock — questionnaire delta', () => {
       ],
     })
     const block = renderPatientContextBlock(ctx)
-    expect(block).toContain('ASQ')
-    // 0 delta renders as "0" (no +), "antes" still present
-    expect(block).toContain('0')
-    expect(block).toContain('antes')
+    // Match the exact rendered shape of the 0-delta questionnaire line:
+    //   - ASQ: 2 (low) el <date> — antes 0
+    // The bare char '0' is too loose (appears in dates, ages, session nº).
+    expect(block).toContain('- ASQ: 2 (low) el ')
+    expect(block).toContain(' — antes 0')
   })
 
   it('omits " — antes ..." when deltaVsPrevious is null', () => {
