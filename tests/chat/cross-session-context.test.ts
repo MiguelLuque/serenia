@@ -484,7 +484,7 @@ describe('POST /api/chat — graceful degradation when buildPatientContext rejec
         streamText: (opts: { system: string }) => {
           capturedSystemPrompts.push(opts.system)
           return {
-            toUIMessageStreamResponse: (_opts: unknown) => fakeStreamResponse,
+            toUIMessageStreamResponse: () => fakeStreamResponse,
           }
         },
         convertToModelMessages: async (msgs: unknown) => msgs as never,
