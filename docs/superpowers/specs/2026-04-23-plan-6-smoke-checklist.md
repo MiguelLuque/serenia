@@ -22,6 +22,87 @@ Verificación manual end-to-end del comportamiento de Plan 6 antes de encender `
 - [ ] Acceso al SQL editor de Supabase del entorno (para los snippets de verificación).
 - [ ] Un usuario clínico válido en el entorno (para revisar el informe en el paso 2 y 4).
 
+### Fixtures para Paciente B y Paciente C
+
+Paciente A no requiere setup — es cualquier usuario nuevo sin historial.
+
+Paciente B y Paciente C sí necesitan estado previo en BD. Ejecuta en el SQL editor sustituyendo los UUID. Los fixtures asumen que los usuarios (`auth.users`) y sus `user_profiles` con `role='patient'` ya existen en el entorno.
+
+```sql
+-- Paciente B: 1 sesión cerrada + assessment en draft_ai sin revisar
+-- (genera Tier B en la siguiente sesión).
+with new_conv as (
+  insert into conversations (user_id)
+  values ('<USER_B_ID>')
+  returning id
+),
+new_session as (
+  insert into clinical_sessions (conversation_id, user_id, status, opened_at, closed_at, closure_reason)
+  select id, '<USER_B_ID>', 'closed', now() - interval '3 days', now() - interval '3 days' + interval '30 minutes', 'natural_end'
+  from new_conv
+  returning id, user_id
+)
+insert into assessments (user_id, session_id, generated_by, assessment_type, summary_json, status)
+select
+  user_id,
+  id,
+  'ai',
+  'follow_up',
+  jsonb_build_object(
+    'narrative', 'Paciente de prueba Tier B — contenido no revisado.',
+    'risk_assessment', jsonb_build_object('suicidality', 'none')
+  ),
+  'draft_ai'
+from new_session;
+```
+
+```sql
+-- Paciente C: sesión previa cerrada por crisis_detected hace 10 días
+-- + último assessment validado con suicidality='passive' (genera riskOpeningNotice watch o active).
+with new_conv as (
+  insert into conversations (user_id)
+  values ('<USER_C_ID>')
+  returning id
+),
+new_session as (
+  insert into clinical_sessions (conversation_id, user_id, status, opened_at, closed_at, closure_reason)
+  select id, '<USER_C_ID>', 'closed', now() - interval '10 days', now() - interval '10 days' + interval '15 minutes', 'crisis_detected'
+  from new_conv
+  returning id, user_id
+)
+insert into assessments (user_id, session_id, generated_by, assessment_type, summary_json, status, review_status, reviewed_by, reviewed_at)
+select
+  user_id,
+  id,
+  'ai',
+  'follow_up',
+  jsonb_build_object(
+    'narrative', 'Paciente de prueba con ideación pasiva.',
+    'risk_assessment', jsonb_build_object('suicidality', 'passive')
+  ),
+  'reviewed_confirmed',
+  'confirmed',
+  '<CLINICIAN_ID>',
+  now() - interval '10 days' + interval '1 hour'
+from new_session;
+```
+
+Confirmación rápida tras ejecutar:
+
+```sql
+-- Verifica que B tiene exactamente un draft_ai y C tiene un reviewed_confirmed con passive.
+select
+  u.id as user_id,
+  (select count(*) from assessments where user_id = u.id and status = 'draft_ai') as drafts,
+  (select summary_json -> 'risk_assessment' ->> 'suicidality' from assessments
+   where user_id = u.id and status in ('reviewed_confirmed','reviewed_modified')
+   order by reviewed_at desc limit 1) as last_suicidality
+from auth.users u
+where u.id in ('<USER_B_ID>','<USER_C_ID>');
+```
+
+**Pass:** fila B → `drafts=1`, `last_suicidality` null; fila C → `drafts=0`, `last_suicidality='passive'`.
+
 ---
 
 ## Los 8 pasos
@@ -84,9 +165,9 @@ select
   created_at,
   tier,
   risk_state,
-  context_block_chars,
+  block_char_count,
   pending_tasks_count,
-  risk_opening_triggered,
+  risk_triggered,
   last_validated_assessment_id,
   truncated_sections
 from patient_context_injections

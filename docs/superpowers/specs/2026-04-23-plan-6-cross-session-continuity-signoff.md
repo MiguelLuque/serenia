@@ -29,9 +29,17 @@ Todas las citas son verbatim del código en `main` a fecha de 2026-04-23. Si al 
 
 ### 1. Línea de transparencia en el dashboard del paciente
 
-Fuente: [app/app/page.tsx:44-46](../../../app/app/page.tsx) (CardDescription del bloque "Tus acuerdos recientes") y [app/app/page.tsx:72-73](../../../app/app/page.tsx) (nota al pie cuando hay acuerdos abiertos).
+Fuente: [app/app/page.tsx:43](../../../app/app/page.tsx) (CardTitle del bloque), [app/app/page.tsx:44-46](../../../app/app/page.tsx) (CardDescription) y [app/app/page.tsx:72-73](../../../app/app/page.tsx) (nota al pie cuando hay acuerdos abiertos).
+
+Título del bloque (CardTitle, L43):
+
+> Tus acuerdos recientes
+
+Descripción bajo el título (CardDescription, L44-46):
 
 > Lo que acordaste con tu psicólogo para esta semana.
+
+Nota al pie, solo cuando `tasks.length > 0` (L72-73):
 
 > Estos acuerdos los revisó tu psicólogo después de tu última sesión. Serenia los tendrá presentes la próxima vez que hables con ella.
 
@@ -43,17 +51,34 @@ Variante cuando aún no hay acuerdos ([app/app/page.tsx:50-53](../../../app/app/
 
 Fuente: [lib/patient-context/render.ts](../../../lib/patient-context/render.ts), función `computeRiskOpeningNotice`, líneas 386-397.
 
+Cada rama devuelve el aviso seguido de `\n\n---\n\n` como terminador que separa este bloque del resto del system prompt. Se firma la cadena completa (texto + separador), tal como la ve el modelo.
+
 **Rama `acute`** (L391):
 
-> [AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.
+```
+[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.
+
+---
+
+```
 
 **Rama `active`** (L393):
 
-> [AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.
+```
+[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.
+
+---
+
+```
 
 **Rama `watch`** (L395):
 
-> [AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.
+```
+[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.
+
+---
+
+```
 
 (La rama `none` devuelve `null` — no se inyecta nada.)
 
@@ -161,6 +186,40 @@ Fuente: [app/api/chat/route.ts:279-286](../../../app/api/chat/route.ts).
 Fuente: [app/api/chat/route.ts:57](../../../app/api/chat/route.ts).
 
 > Se ha alcanzado el límite de tiempo de la sesión. He preparado las notas para que tu psicólogo las revise. Nos vemos en la próxima sesión.
+
+---
+
+## Perfiles de paciente de ejemplo
+
+Para cada perfil, contrasta mentalmente qué bloques del copy de arriba se le inyectarían y si el tono es el adecuado. Si alguno se siente mal en algún perfil, marca `no` en el criterio correspondiente y abre issue.
+
+### Perfil 1 — En recuperación
+
+- **Historia:** 6 sesiones previas. Último assessment validado hace 12 días con `suicidality='none'` tras haber estado en `passive`. PHQ-9 bajó de 18 → 8. Acuerdos: 1 cumplido, 1 pendiente.
+- **Estado que genera el sistema:** `tier='tierA'`, `riskState='none'`.
+- **Copy que vería:** Header Tier A (§7), `TIER_A_INSTRUCTIONS` (§3), línea de transparencia en dashboard (§1, con el acuerdo pendiente citado). **NO** hay `riskOpeningNotice`.
+- **A verificar:** el tono de §1 y §3 no da por hecho que el paciente sigue mal; la IA no abrirá con check-in de seguridad.
+
+### Perfil 2 — Ansiedad moderada persistente
+
+- **Historia:** 4 sesiones. Último assessment validado hace 20 días con GAD-7 = 12 (moderado). `suicidality='none'` siempre. Sin acuerdos abiertos.
+- **Estado que genera el sistema:** `tier='tierA'`, `riskState='none'`.
+- **Copy que vería:** Header Tier A (§7), `TIER_A_INSTRUCTIONS` (§3), hint de retake moderate (§6) adjunto como bullet extra por GAD-7 > 14 días. **NO** hay `riskOpeningNotice`.
+- **A verificar:** el hint de §6 ("podría ser un buen momento para re-administrarlo") es clínicamente apropiado como sugerencia, no como obligación.
+
+### Perfil 3 — Depresión severa en seguimiento
+
+- **Historia:** 3 sesiones. Último assessment validado hace 5 días con PHQ-9 = 22 (severo), `suicidality='passive'`. 2 acuerdos pendientes.
+- **Estado que genera el sistema:** `tier='tierA'`, `riskState='active'` (suicidality pasivo en último assessment reciente).
+- **Copy que vería:** Header Tier A (§7), `riskOpeningNotice` rama `active` (§2), `TIER_A_INSTRUCTIONS` (§3), línea de transparencia con los 2 acuerdos (§1), hint de retake severe para PHQ-9 (§6) si aplica el umbral.
+- **A verificar:** la secuencia risk notice → instrucciones → acuerdos en el system prompt guía al modelo a check-in breve si hay afecto positivo; el acuerdo pendiente no tapa la señal de seguridad.
+
+### Perfil 4 — Ideación pasiva, sesión previa cerrada por crisis
+
+- **Historia:** sesión anterior cerrada por `crisis_detected` hace 10 días. Último assessment validado con `suicidality='passive'`. El paciente abre sesión siguiente.
+- **Estado que genera el sistema:** `tier='tierA'`, `riskState='acute'` si el cierre por crisis está dentro de la ventana de arrastre; en otro caso `active`.
+- **Copy que vería:** Header Tier A (§7), `riskOpeningNotice` rama `acute` o `active` (§2), `TIER_A_INSTRUCTIONS` (§3). La copy de crisis del dashboard (no cubierta aquí; vive en `app/app/page.tsx` fuera del bloque de continuidad) acompaña al paciente en la pantalla de inicio.
+- **A verificar:** la rama `acute` de §2 menciona Línea 024 textualmente y ordena no abrir otras líneas de conversación hasta asegurar continuidad de riesgo.
 
 ---
 
