@@ -31,16 +31,11 @@ export async function getPatientOpenTasks(
 
   if (error) throw error
 
-  return (data ?? [])
-    .filter(
-      (t): t is typeof t & { estado: 'pendiente' | 'parcial' } =>
-        t.estado === 'pendiente' || t.estado === 'parcial',
-    )
-    .map((t) => ({
-      id: t.id,
-      descripcion: t.descripcion,
-      createdAt: t.created_at,
-      acordadaEnSessionId: t.acordada_en_session_id,
-      estado: t.estado,
-    }))
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    descripcion: t.descripcion,
+    createdAt: t.created_at,
+    acordadaEnSessionId: t.acordada_en_session_id,
+    estado: t.estado as 'pendiente' | 'parcial',
+  }))
 }

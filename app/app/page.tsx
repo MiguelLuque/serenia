@@ -28,6 +28,7 @@ function formatMinutesAgo(from: string): string {
 const AGREED_ON_FORMATTER = new Intl.DateTimeFormat('es-ES', {
   day: 'numeric',
   month: 'short',
+  timeZone: 'Europe/Madrid',
 })
 
 function formatAgreedOn(iso: string): string {
