@@ -223,6 +223,30 @@ Para cada perfil, contrasta mentalmente qué bloques del copy de arriba se le in
 
 _Nota sobre la rama `watch`:_ no se exhibe con un perfil dedicado para no alargar la sección. Se dispara cuando (a) `suicidality='passive'` con `reviewed_at` dentro de los últimos 21 días, (b) hay un evento de riesgo abierto de severidad `high` dentro de 21 días, o (c) la sesión anterior se cerró por `crisis_detected` dentro de 21 días y el último assessment validado no devolvió `none` (`lib/clinical/risk-rules.ts:62-85`). El literal firmado es la rama `watch` de §2.
 
+### Detalle: caminos de cómputo en `derivePatientRiskState`
+
+Referencia de lo que mapea cada estado de riesgo, para que al revisar los perfiles no haya ambigüedad sobre qué combinación de entradas dispara cada rama. Fuente: [`lib/clinical/risk-rules.ts`](../../../lib/clinical/risk-rules.ts), función `derivePatientRiskState` (orden de evaluación de arriba abajo — la primera rama que coincide gana).
+
+**`riskState='acute'`** — dos caminos:
+1. Algún `open_risk_event` tiene `severity='critical'` (`lib/clinical/risk-rules.ts:44`). Independiente del assessment.
+2. El último `assessment` validado reporta `risk_assessment.suicidality='acute'` (`lib/clinical/risk-rules.ts:46`). Cubre el Perfil 4.
+
+**`riskState='active'`** — un único camino:
+1. El último `assessment` validado reporta `risk_assessment.suicidality='active'` (`lib/clinical/risk-rules.ts:48`). Cubre el Perfil 3.
+
+Explícitamente **no** hay un camino de la forma "passive + crisis_detected recient → active": esa combinación cae en `watch` (ver caminos (a) y (c) de abajo). Escalar de `passive` a `active` requiere una re-evaluación clínica que actualice el `summary_json.risk_assessment.suicidality` del assessment.
+
+**`riskState='watch'`** — tres caminos (todos requieren que las ramas de `acute` y `active` no hayan disparado antes):
+1. `suicidality='passive'` y `reviewed_at` dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:62-68`).
+2. Algún `open_risk_event` con `severity='high'` creado dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:70-78`).
+3. `previous_session.closure_reason='crisis_detected'` dentro de los últimos 21 días (`lib/clinical/risk-rules.ts:80-85`). **Nota:** este camino se dispara incluso si el último assessment validado es más reciente que la crisis, salvo en la rama especial de recuperación de `'none'` (ver abajo).
+
+**`riskState='none'`** — dos formas:
+1. El último assessment tiene `suicidality='none'` **y** todos los `open_risk_events` y la sesión `crisis_detected` (si existe) son anteriores a ese assessment (`lib/clinical/risk-rules.ts:50-60`). Es la regla de recuperación que valida el paso 8 del smoke.
+2. Fallback por defecto cuando ningún path de `acute`/`active`/`watch` ha disparado (`lib/clinical/risk-rules.ts:87`). Cubre al Perfil 1 cuando ya no queda señal reciente.
+
+Ventana de decay: constante `DECAY_WINDOW_MS = 21 * 24 * 60 * 60 * 1000` (`lib/clinical/risk-rules.ts:30`).
+
 ---
 
 ## Criterios de aprobación
@@ -242,17 +266,27 @@ Si algún criterio es **no**, no firmar; abrir issue siguiendo el _Follow-up_.
 
 ## Firmas
 
+La aprobación clínica de este documento **requiere las dos firmas clínicas de abajo** (revisor primario y revisor independiente). Las dos firmas son clínicas — el técnico que ejecuta el smoke E2E no cuenta como aprobación clínica, su rol es verificar reproducibilidad técnica del flujo (ver `2026-04-23-plan-6-smoke-checklist.md`, sección _Firma del smoke_) y es independiente de esta firma clínica.
+
 ### Revisor clínico primario
 
+Persona clínicamente cualificada que revisa la copy firmada en este documento en profundidad.
+
 - Revisado por: `___________________________________`
+- Cualificación / rol: `___________________________________`
 - Fecha: `___________________________________`
 - Firma: `___________________________________`
 
 ### Revisor clínico independiente (segundo par de ojos)
 
+Segunda persona clínicamente cualificada, distinta del revisor primario, que audita la misma copy de forma independiente.
+
 - Revisado por: `___________________________________`
+- Cualificación / rol: `___________________________________`
 - Fecha: `___________________________________`
 - Firma: `___________________________________`
+
+**Ambas firmas son requisito**: una sola firma clínica (sea primaria o independiente) no basta. Si un revisor marca algún criterio como `no` en la sección _Criterios de aprobación_, no se firma hasta que el issue se haya cerrado (ver _Follow-up_).
 
 ---
 

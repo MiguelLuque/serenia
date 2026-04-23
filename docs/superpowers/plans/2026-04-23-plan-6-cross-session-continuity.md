@@ -48,6 +48,7 @@ Este plan corrige esa asimetría: la IA gana contexto longitudinal **validado po
 - **Prompt ordering:** `basePrompt` (identidad estable) → `riskOpeningNotice` (si procede) → `crisisNotice` → `questionnaireNotice` → `timeNotice` → `patientContextBlock` (último = más reciente/específico).
 - **Feature flag:** `FEATURE_CROSS_SESSION_CONTEXT` en `.env`. Si `!== 'on'`, el chat se comporta exactamente como antes de Plan 6 (sin contexto, sin riskOpeningNotice, sin telemetría). Off por defecto hasta firmar la copy clínica.
 - **Sign-off clínico:** antes de activar el flag en producción, el clínico revisor de Plan 5 debe firmar la copy literal del `patientContextBlock` y del `riskOpeningNotice`.
+- **Tier es un snapshot al arranque de la sesión, no un live feed.** `buildPatientContext` se evalúa una vez al primer `/api/chat` de la sesión y el resultado (tier, acuerdos, riskState) se inyecta en el system prompt de todos los turnos siguientes de esa misma sesión. Si el clínico valida el draft **durante** una sesión Tier B activa (promoviéndolo a `reviewed_confirmed`), la sesión en curso sigue con el contexto Tier B; la promoción a Tier A aplica solo en la **siguiente** sesión que abra el paciente. No es un bug — cambiar de tier entre turnos rompería el contrato de apertura (turn-1 sin referencias concretas). Ver comentario sobre `buildPatientContext` en [lib/patient-context/builder.ts](serenia/lib/patient-context/builder.ts).
 
 ---
 

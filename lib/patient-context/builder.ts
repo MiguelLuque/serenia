@@ -60,6 +60,28 @@ function computeAge(birthDate: string | null, now: Date): number | null {
   return age
 }
 
+/**
+ * Plan 6 T6 — build the patient context snapshot consumed by `/api/chat` when
+ * `FEATURE_CROSS_SESSION_CONTEXT` is on.
+ *
+ * **Tier is a snapshot at session start, not a live subscription.** The tier
+ * (`none` | `tierB` | `tierA` | `historic`) is determined once when this
+ * function runs — at the first `/api/chat` call of a session — and the
+ * resulting `patientContextBlock` / `riskOpeningNotice` are injected into
+ * every subsequent turn of that session with the same tier.
+ *
+ * If a clinician validates the pending draft **during** a live session — i.e.
+ * promotes it from `draft_ai` → `reviewed_confirmed` — the current session
+ * keeps its `tierB` context. The promotion to `tierA` is only applied on the
+ * *next* session the patient opens. This is by design: flipping tiers
+ * mid-conversation would swap the instructions the model sees between turns
+ * and break the opening contract (e.g. turn-1 "prohibido citar contenido
+ * concreto del snapshot"). A stable snapshot is the right trade-off.
+ *
+ * Consumers that want live-updated behavior mid-session should not rely on
+ * `tier` — instead, they should re-read fresh rows from the DB (tasks,
+ * assessments) at the point they're needed.
+ */
 export async function buildPatientContext(
   supabase: SupabaseClient<Database>,
   userId: string,
