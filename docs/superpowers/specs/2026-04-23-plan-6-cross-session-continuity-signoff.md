@@ -207,19 +207,21 @@ Para cada perfil, contrasta mentalmente qué bloques del copy de arriba se le in
 - **Copy que vería:** Header Tier A (§7), `TIER_A_INSTRUCTIONS` (§3), hint de retake moderate (§6) adjunto como bullet extra por GAD-7 > 14 días. **NO** hay `riskOpeningNotice`.
 - **A verificar:** el hint de §6 ("podría ser un buen momento para re-administrarlo") es clínicamente apropiado como sugerencia, no como obligación.
 
-### Perfil 3 — Depresión severa en seguimiento
+### Perfil 3 — Depresión severa con ideación activa
 
-- **Historia:** 3 sesiones. Último assessment validado hace 5 días con PHQ-9 = 22 (severo), `suicidality='passive'`. 2 acuerdos pendientes.
-- **Estado que genera el sistema:** `tier='tierA'`, `riskState='active'` (suicidality pasivo en último assessment reciente).
+- **Historia:** 3 sesiones. Último assessment validado hace 5 días con PHQ-9 = 22 (severo), `suicidality='active'`. 2 acuerdos pendientes.
+- **Estado que genera el sistema:** `tier='tierA'`, `riskState='active'` (regla: `suicidality==='active'` en `lib/clinical/risk-rules.ts:48`).
 - **Copy que vería:** Header Tier A (§7), `riskOpeningNotice` rama `active` (§2), `TIER_A_INSTRUCTIONS` (§3), línea de transparencia con los 2 acuerdos (§1), hint de retake severe para PHQ-9 (§6) si aplica el umbral.
 - **A verificar:** la secuencia risk notice → instrucciones → acuerdos en el system prompt guía al modelo a check-in breve si hay afecto positivo; el acuerdo pendiente no tapa la señal de seguridad.
 
-### Perfil 4 — Ideación pasiva, sesión previa cerrada por crisis
+### Perfil 4 — Crisis aguda, sesión previa cerrada por `crisis_detected`
 
-- **Historia:** sesión anterior cerrada por `crisis_detected` hace 10 días. Último assessment validado con `suicidality='passive'`. El paciente abre sesión siguiente.
-- **Estado que genera el sistema:** `tier='tierA'`, `riskState='acute'` si el cierre por crisis está dentro de la ventana de arrastre; en otro caso `active`.
-- **Copy que vería:** Header Tier A (§7), `riskOpeningNotice` rama `acute` o `active` (§2), `TIER_A_INSTRUCTIONS` (§3). La copy de crisis del dashboard (no cubierta aquí; vive en `app/app/page.tsx` fuera del bloque de continuidad) acompaña al paciente en la pantalla de inicio.
+- **Historia:** sesión anterior cerrada por `crisis_detected` hace 10 días. Último assessment validado con `suicidality='acute'`. El paciente abre sesión siguiente.
+- **Estado que genera el sistema:** `tier='tierA'`, `riskState='acute'` (regla: `suicidality==='acute'` en `lib/clinical/risk-rules.ts:46`).
+- **Copy que vería:** Header Tier A (§7), `riskOpeningNotice` rama `acute` (§2), `TIER_A_INSTRUCTIONS` (§3). La copy de crisis del dashboard (no cubierta aquí; vive en `app/app/page.tsx` fuera del bloque de continuidad) acompaña al paciente en la pantalla de inicio.
 - **A verificar:** la rama `acute` de §2 menciona Línea 024 textualmente y ordena no abrir otras líneas de conversación hasta asegurar continuidad de riesgo.
+
+_Nota sobre la rama `watch`:_ no se exhibe con un perfil dedicado para no alargar la sección. Se dispara cuando (a) `suicidality='passive'` con `reviewed_at` dentro de los últimos 21 días, (b) hay un evento de riesgo abierto de severidad `high` dentro de 21 días, o (c) la sesión anterior se cerró por `crisis_detected` dentro de 21 días y el último assessment validado no devolvió `none` (`lib/clinical/risk-rules.ts:62-85`). El literal firmado es la rama `watch` de §2.
 
 ---
 

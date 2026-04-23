@@ -81,7 +81,7 @@ select
     'risk_assessment', jsonb_build_object('suicidality', 'passive')
   ),
   'reviewed_confirmed',
-  'confirmed',
+  'reviewed',
   '<CLINICIAN_ID>',
   now() - interval '10 days' + interval '1 hour'
 from new_session;
