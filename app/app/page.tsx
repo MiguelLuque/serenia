@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { getOrResolveActiveSession } from '@/lib/sessions/service'
 import { getClinicianInbox } from '@/lib/clinician/inbox'
+import {
+  getPatientOpenTasks,
+  type PatientOpenTask,
+} from '@/lib/patient-tasks/open-tasks'
 import { InboxList } from '@/components/clinician/inbox-list'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,6 +23,57 @@ function formatMinutesAgo(from: string): string {
   if (minutes < 1) return 'hace menos de un minuto'
   if (minutes === 1) return 'hace 1 minuto'
   return `hace ${minutes} minutos`
+}
+
+const AGREED_ON_FORMATTER = new Intl.DateTimeFormat('es-ES', {
+  day: 'numeric',
+  month: 'short',
+})
+
+function formatAgreedOn(iso: string): string {
+  return AGREED_ON_FORMATTER.format(new Date(iso))
+}
+
+function OpenAgreementsCard({ tasks }: { tasks: PatientOpenTask[] }) {
+  return (
+    <div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Tus acuerdos recientes</CardTitle>
+          <CardDescription>
+            Lo que acordaste con tu psicólogo para esta semana.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tasks.length === 0 ? (
+            <p className="text-sm text-slate-600">
+              Aún no hay acuerdos. Aparecerán aquí cuando tu psicólogo revise
+              tu próxima sesión.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {tasks.map((task) => (
+                <li key={task.id}>
+                  <p className="font-medium text-slate-800">
+                    {task.descripcion}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    acordado el {formatAgreedOn(task.createdAt)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+      {tasks.length > 0 ? (
+        <p className="mt-2 text-xs text-slate-500">
+          Estos acuerdos los revisó tu psicólogo después de tu última sesión.
+          Serenia los tendrá presentes la próxima vez que hables con ella.
+        </p>
+      ) : null}
+    </div>
+  )
 }
 
 export default async function AppHome() {
@@ -46,6 +101,7 @@ export default async function AppHome() {
   }
 
   const activeSession = await getOrResolveActiveSession(supabase, user!.id)
+  const openTasks = await getPatientOpenTasks(supabase, user!.id)
 
   let lastClosed:
     | {
@@ -92,19 +148,24 @@ export default async function AppHome() {
       </div>
 
       {activeSession ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Tienes una sesión en curso.</CardTitle>
-            <CardDescription>
-              Iniciada {formatMinutesAgo(activeSession.opened_at)}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button render={<Link href={`/app/sesion/${activeSession.id}`} />} nativeButton={false}>
-              Continuar tu sesión
-            </Button>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Tienes una sesión en curso.</CardTitle>
+              <CardDescription>
+                Iniciada {formatMinutesAgo(activeSession.opened_at)}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button render={<Link href={`/app/sesion/${activeSession.id}`} />} nativeButton={false}>
+                Continuar tu sesión
+              </Button>
+            </CardContent>
+          </Card>
+          {openTasks.length > 0 ? (
+            <OpenAgreementsCard tasks={openTasks} />
+          ) : null}
+        </>
       ) : (
         <>
           {lastClosed?.closureReason === 'crisis_detected' ? (
@@ -128,6 +189,10 @@ export default async function AppHome() {
                 </p>
               </CardContent>
             </Card>
+          ) : null}
+
+          {openTasks.length > 0 || lastClosed !== null ? (
+            <OpenAgreementsCard tasks={openTasks} />
           ) : null}
 
           <Card>
