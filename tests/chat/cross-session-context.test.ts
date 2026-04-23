@@ -340,3 +340,185 @@ describe('logContextInjection — plan line 586 ("una fila escrita")', () => {
     ).rejects.toThrow('RLS violation')
   })
 })
+
+// ── Graceful degradation: buildPatientContext rejects → /api/chat still 200 ──
+//
+// d7ecb08 wrapped buildPatientContext + assembly in try/catch so a DB hiccup,
+// query timeout, or unexpected RLS error never 500s /api/chat. Pre-Plan-6 a
+// DB hiccup did not break the chat; we preserve that contract.
+//
+// This test mocks buildPatientContext to reject, invokes POST, and asserts:
+//   (a) the response is 200 (the handler didn't throw)
+//   (b) the system prompt passed to streamText contains NEITHER the Plan-6
+//       patient context block header NOR any riskOpeningNotice (block is ''
+//       after the catch, and riskOpeningNotice is '' after the catch).
+//   (c) console.error was called with the '[patient-context]' tag.
+
+describe('POST /api/chat — graceful degradation when buildPatientContext rejects', () => {
+  const OLD_ENV = process.env.FEATURE_CROSS_SESSION_CONTEXT
+  const OLD_LLM_MODEL = process.env.LLM_CONVERSATIONAL_MODEL
+  const capturedSystemPrompts: string[] = []
+  const capturedConsoleErrors: Array<{ tag: string; err: unknown }> = []
+
+  beforeEach(() => {
+    process.env.FEATURE_CROSS_SESSION_CONTEXT = 'on'
+    // llm.conversational() requires LLM_CONVERSATIONAL_MODEL; any value works
+    // because we mock `streamText` to skip the actual gateway call.
+    process.env.LLM_CONVERSATIONAL_MODEL = 'test-model'
+    capturedSystemPrompts.length = 0
+    capturedConsoleErrors.length = 0
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    process.env.FEATURE_CROSS_SESSION_CONTEXT = OLD_ENV
+    if (OLD_LLM_MODEL === undefined) delete process.env.LLM_CONVERSATIONAL_MODEL
+    else process.env.LLM_CONVERSATIONAL_MODEL = OLD_LLM_MODEL
+    vi.restoreAllMocks()
+    vi.doUnmock('@/lib/supabase/server')
+    vi.doUnmock('@/lib/patient-context/builder')
+    vi.doUnmock('@/lib/sessions/service')
+    vi.doUnmock('@/lib/sessions/messages')
+    vi.doUnmock('@/lib/chat/crisis-detector')
+    vi.doUnmock('@/lib/questionnaires/service')
+    vi.doUnmock('@/lib/patient-context/telemetry')
+    vi.doUnmock('ai')
+  })
+
+  it('returns 200 and streams normally; system prompt omits patientContextBlock and riskOpeningNotice; logs [patient-context]', async () => {
+    // Stub console.error to capture the '[patient-context]' line.
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      const tag = typeof args[0] === 'string' ? args[0] : ''
+      capturedConsoleErrors.push({ tag, err: args[1] })
+    })
+
+    // ── Mock Supabase: auth.getUser + session lookup + questionnaire probe ─
+    // The route touches: (a) auth.getUser, (b) clinical_sessions lookup by
+    // id + user_id, (c) questionnaire_instances probe (buildQuestionnaireResultNotice).
+    // We return a chainable builder that resolves to the right row per table
+    // and supports every method the route chains (.select/.eq/.gte/.order/.limit
+    // /.single/.maybeSingle).
+    const nowIso = new Date().toISOString()
+    const fakeSession = {
+      id: 'session-graceful',
+      user_id: 'user-1',
+      conversation_id: 'conv-1',
+      status: 'open',
+      opened_at: nowIso,
+      last_activity_at: nowIso,
+    }
+
+    function makeBuilder(resolvedData: unknown) {
+      const builder: Record<string, unknown> = {}
+      const passthrough = () => builder
+      builder.select = passthrough
+      builder.eq = passthrough
+      builder.gt = passthrough
+      builder.gte = passthrough
+      builder.in = passthrough
+      builder.order = passthrough
+      builder.limit = passthrough
+      builder.single = vi.fn().mockResolvedValue({ data: resolvedData, error: null })
+      builder.maybeSingle = vi.fn().mockResolvedValue({ data: resolvedData, error: null })
+      // Allow awaiting the builder directly (rare but defensive):
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(builder as any).then = (onFulfilled: (v: unknown) => unknown) =>
+        Promise.resolve({ data: resolvedData, error: null, count: 0 }).then(onFulfilled)
+      return builder
+    }
+
+    const supabaseStub = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === 'clinical_sessions') return makeBuilder(fakeSession)
+        // Any other table (questionnaire_instances, messages, definitions, results)
+        // returns an empty-row builder so buildQuestionnaireResultNotice short-circuits.
+        return makeBuilder(null)
+      }),
+    }
+    vi.doMock('@/lib/supabase/server', () => ({
+      createAuthenticatedClient: async () => supabaseStub,
+    }))
+
+    // ── Mock buildPatientContext to reject (the degradation trigger) ─────
+    const buildErr = new Error('simulated DB hiccup')
+    vi.doMock('@/lib/patient-context/builder', () => ({
+      buildPatientContext: vi.fn().mockRejectedValue(buildErr),
+    }))
+
+    // ── Mock the rest of the handler's side effects so POST can complete ─
+    vi.doMock('@/lib/sessions/service', () => ({
+      touchSession: vi.fn().mockResolvedValue(undefined),
+      closeSession: vi.fn().mockResolvedValue(undefined),
+      isSessionExpired: vi.fn().mockReturnValue(false),
+    }))
+    vi.doMock('@/lib/sessions/messages', () => ({
+      saveUserMessage: vi.fn().mockResolvedValue(undefined),
+      saveAssistantMessage: vi.fn().mockResolvedValue(undefined),
+    }))
+    vi.doMock('@/lib/chat/crisis-detector', () => ({
+      detectCrisis: vi.fn().mockReturnValue({ detected: false, matchedTerms: [] }),
+    }))
+    vi.doMock('@/lib/questionnaires/service', () => ({
+      createInstance: vi.fn(),
+      getActiveInstanceForSession: vi.fn().mockResolvedValue(null),
+    }))
+    // logContextInjection should not be called on the error path; stub it
+    // anyway so any accidental invocation doesn't hit a live service role.
+    vi.doMock('@/lib/patient-context/telemetry', () => ({
+      logContextInjection: vi.fn().mockResolvedValue(undefined),
+    }))
+
+    // ── Mock `ai` — streamText, tool, convertToModelMessages ─────────────
+    // Capture the system prompt passed to streamText.
+    const fakeStreamResponse = new Response('streamed', {
+      status: 200,
+      headers: { 'content-type': 'text/plain' },
+    })
+    vi.doMock('ai', async (importOriginal) => {
+      const mod = await importOriginal<typeof import('ai')>()
+      return {
+        ...mod,
+        streamText: (opts: { system: string }) => {
+          capturedSystemPrompts.push(opts.system)
+          return {
+            toUIMessageStreamResponse: (_opts: unknown) => fakeStreamResponse,
+          }
+        },
+        convertToModelMessages: async (msgs: unknown) => msgs as never,
+      }
+    })
+
+    // Import the handler AFTER all mocks are registered.
+    const { POST } = await import('@/app/api/chat/route')
+
+    const req = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        messages: [
+          { role: 'user', parts: [{ type: 'text', text: 'hola' }] },
+        ],
+      }),
+    })
+
+    const res = await POST(req)
+
+    // (a) 200 — the handler did not throw despite buildPatientContext rejecting.
+    expect(res.status).toBe(200)
+
+    // (b) system prompt does not contain any Plan-6 context artifacts.
+    expect(capturedSystemPrompts.length).toBe(1)
+    const systemPrompt = capturedSystemPrompts[0]!
+    expect(systemPrompt).not.toContain('[CONTEXTO DEL PACIENTE')
+    expect(systemPrompt).not.toContain('[AVISO DE CONTINUIDAD')
+
+    // (c) console.error was called with the '[patient-context]' tag exactly once.
+    const tagged = capturedConsoleErrors.filter((e) => e.tag === '[patient-context]')
+    expect(tagged).toHaveLength(1)
+    expect(tagged[0]!.err).toBe(buildErr)
+  })
+})
