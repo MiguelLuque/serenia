@@ -394,4 +394,30 @@ describe('getClinicianInbox — longitudinal enrichments (T11)', () => {
     const rowA = rows.find((r) => r.sessionId === 's-a3')!
     expect(rowA.phq9Trend).toEqual([18, 15, 12])
   })
+
+  it('per-patient trend isolation — user B scores do not leak into user A row', async () => {
+    // Adversarial fixture: user-b has a PHQ9 score that is chronologically
+    // adjacent to user-a's latest. A naive "last 3 overall" implementation
+    // would surface user-b's 8 inside rowA.phq9Trend.
+    const fixture: InboxFixture = {
+      ...baseFixture,
+      questionnaires: [
+        ...baseFixture.questionnaires,
+        // user-b scored PHQ9=8 two days before today (very recent → would
+        // dominate a global "latest 3" bucket if the group-by-user were wrong).
+        { user_id: 'user-b', code: 'PHQ9', total_score: 8, scored_at: '2026-04-21T10:00:00.000Z' },
+      ],
+    }
+    const supabase = makeSupabaseForInbox(fixture)
+    const rows = await getClinicianInbox(supabase)
+
+    const rowA = rows.find((r) => r.sessionId === 's-a3')!
+    const rowB = rows.find((r) => r.sessionId === 's-b1')!
+
+    // user-a's trend stays exactly its own three scores, with no user-b bleed.
+    expect(rowA.phq9Trend).toEqual([18, 15, 12])
+    expect(rowA.phq9Trend).not.toContain(8)
+    // user-b only owns its own single score.
+    expect(rowB.phq9Trend).toEqual([8])
+  })
 })

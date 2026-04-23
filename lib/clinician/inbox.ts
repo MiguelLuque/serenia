@@ -143,7 +143,8 @@ export async function getClinicianInbox(
       .in('user_id', userIds)
       .eq('status', 'scored')
       .in('questionnaire_definitions.code', ['PHQ9', 'GAD7'])
-      .order('scored_at', { ascending: false }),
+      .order('scored_at', { ascending: false })
+      .limit(100),
   ])
 
   if (assessmentsRes.error) throw assessmentsRes.error
