@@ -47,7 +47,7 @@ select
   user_id,
   id,
   'ai',
-  'follow_up',
+  'closure',
   jsonb_build_object(
     'narrative', 'Paciente de prueba Tier B — contenido no revisado.',
     'risk_assessment', jsonb_build_object('suicidality', 'none')
@@ -75,7 +75,7 @@ select
   user_id,
   id,
   'ai',
-  'follow_up',
+  'closure',
   jsonb_build_object(
     'narrative', 'Paciente de prueba con ideación pasiva.',
     'risk_assessment', jsonb_build_object('suicidality', 'passive')

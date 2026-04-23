@@ -156,6 +156,11 @@ export async function getPatientDetail(
 
   let assessmentBySession = new Map<string, AssessmentStatus>()
   if (sessionIds.length > 0) {
+    // Plan 6 T2 (L134): summary_json is NOT selected here — this query only
+    // needs session_id/status/created_at to derive the per-session badge.
+    // The load-boundary parse via AssessmentSchema.parse applies only to
+    // call sites that actually consume summary_json (see
+    // lib/clinician/session-detail.ts:184). No parse is required here.
     const { data: assessments, error: assessmentsError } = await supabase
       .from('assessments')
       .select('session_id, status, created_at')

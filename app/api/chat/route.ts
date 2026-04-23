@@ -111,25 +111,39 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
   // ── Plan 6 T10: cross-session continuity (feature-flagged) ─────────────────
   // When FEATURE_CROSS_SESSION_CONTEXT === 'on', build a patient-context block
   // from prior-session data, derive a risk-state opening notice, and record a
-  // telemetry row via the service role. The telemetry write is awaited with a
-  // `.catch` so the handler never returns before the row lands, but a failed
-  // insert never blocks the chat response.
+  // telemetry row via the service role.
+  //
+  // Degradation: if buildPatientContext (or the assembly that follows) throws
+  // — e.g. a DB hiccup, query timeout, unexpected RLS error — we log and fall
+  // back to flag-off behavior (empty block + empty notice) so /api/chat never
+  // 500s on a telemetry/context regression. Pre-Plan-6 the same DB hiccup did
+  // not break the chat; we preserve that contract.
+  //
+  // Telemetry: fire-and-forget — the handler never awaits the insert, so a
+  // service-role lock or latency spike cannot slow down the user's turn.
+  // Failures are logged to stderr; see docs/operations/feature-flags.md.
   const featureOn = process.env.FEATURE_CROSS_SESSION_CONTEXT === 'on'
   let patientContextBlock = ''
   let riskOpeningNotice = ''
   if (featureOn) {
-    const ctx = await buildPatientContext(supabase, user.id)
-    const pieces = assemblePlan6ContextPieces(ctx)
-    patientContextBlock = pieces.patientContextBlock
-    riskOpeningNotice = pieces.riskOpeningNotice
+    try {
+      const ctx = await buildPatientContext(supabase, user.id)
+      const pieces = assemblePlan6ContextPieces(ctx)
+      patientContextBlock = pieces.patientContextBlock
+      riskOpeningNotice = pieces.riskOpeningNotice
 
-    await logContextInjection({
-      userId: user.id,
-      sessionId: session.id,
-      ...pieces.telemetry,
-    }).catch((err) => {
-      console.error('[context-telemetry]', err)
-    })
+      void logContextInjection({
+        userId: user.id,
+        sessionId: session.id,
+        ...pieces.telemetry,
+      }).catch((err) => {
+        console.error('[context-telemetry]', err)
+      })
+    } catch (err) {
+      console.error('[patient-context]', err)
+      patientContextBlock = ''
+      riskOpeningNotice = ''
+    }
   }
 
   const systemPrompt = buildChatSystemPrompt({
