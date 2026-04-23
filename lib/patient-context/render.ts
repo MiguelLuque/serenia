@@ -115,11 +115,13 @@ const TIER_B_INSTRUCTIONS = `Instrucciones para esta sesión:
 
 // ── Block assembly helpers ────────────────────────────────────────────────────
 
+type AssembleResult = { block: string; truncatedSections: string[] }
+
 function assembleTierAOrHistoric(
   ctx: PatientContext,
   header: string,
   isHistoric: boolean,
-): string {
+): AssembleResult {
   const validated = ctx.validated!
   const summary = validated.summary
 
@@ -188,11 +190,13 @@ function assembleTierAOrHistoric(
   parts.push('---')
 
   let block = parts.join('\n')
+  const truncatedSections: string[] = []
 
   // ── Truncation by priority (2500-char cap) ────────────────────────────────
-  if (block.length <= 2500) return block
+  if (block.length <= 2500) return { block, truncatedSections }
 
   // Step 1: drop areas_for_exploration section
+  truncatedSections.push('areas_for_exploration')
   const partsNoAreas: string[] = []
   partsNoAreas.push(header)
   partsNoAreas.push('')
@@ -223,9 +227,10 @@ function assembleTierAOrHistoric(
   partsNoAreas.push('---')
 
   block = partsNoAreas.join('\n')
-  if (block.length <= 2500) return block
+  if (block.length <= 2500) return { block, truncatedSections }
 
   // Step 2: also drop presenting_issues section
+  truncatedSections.push('presenting_issues')
   const partsNoPresenting: string[] = []
   partsNoPresenting.push(header)
   partsNoPresenting.push('')
@@ -251,9 +256,10 @@ function assembleTierAOrHistoric(
   partsNoPresenting.push('---')
 
   block = partsNoPresenting.join('\n')
-  if (block.length <= 2500) return block
+  if (block.length <= 2500) return { block, truncatedSections }
 
   // Step 3: truncate chief_complaint to 150 chars and hard-cut at 2500
+  truncatedSections.push('chief_complaint_capped')
   const shortComplaint = truncate(summary.chief_complaint, 150)
   const partsFinal: string[] = []
   partsFinal.push(header)
@@ -280,14 +286,23 @@ function assembleTierAOrHistoric(
   partsFinal.push('---')
 
   block = partsFinal.join('\n')
-  if (block.length <= 2500) return block
+  if (block.length <= 2500) return { block, truncatedSections }
 
-  return block.slice(0, 2500)
+  return { block: block.slice(0, 2500), truncatedSections }
 }
 
 // ── Main exports ─────────────────────────────────────────────────────────────
 
-export function renderPatientContextBlock(ctx: PatientContext): string {
+/**
+ * Assemble the patient-context block for the system prompt and report which
+ * sections (if any) were dropped by the 2500-char truncation cascade.
+ *
+ * Only tierA/historic paths can truncate; tierB and 'none' blocks are compact
+ * by construction and always return `truncatedSections: []`.
+ */
+export function renderPatientContextBlockWithMeta(
+  ctx: PatientContext,
+): { block: string; truncatedSections: string[] } {
   switch (ctx.tier) {
     case 'tierA': {
       const ageInDays = ctx.validated!.ageInDays
@@ -332,19 +347,28 @@ export function renderPatientContextBlock(ctx: PatientContext): string {
       parts.push('')
       parts.push('---')
 
-      return parts.join('\n')
+      return { block: parts.join('\n'), truncatedSections: [] }
     }
 
     case 'none':
     default: {
-      return [
+      const block = [
         '[CONTEXTO DEL PACIENTE — primera sesión]',
         'No hay evaluación clínica previa ni sesiones anteriores registradas con este paciente. Usa la postura de intake habitual.',
         '',
         '---',
       ].join('\n')
+      return { block, truncatedSections: [] }
     }
   }
+}
+
+/**
+ * Thin wrapper that returns only the rendered block string. Kept for callers
+ * (and tests) that don't need truncation metadata.
+ */
+export function renderPatientContextBlock(ctx: PatientContext): string {
+  return renderPatientContextBlockWithMeta(ctx).block
 }
 
 export function computeRiskOpeningNotice(ctx: PatientContext): string | null {

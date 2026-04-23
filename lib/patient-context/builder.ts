@@ -11,6 +11,7 @@ export type PatientContext = {
   isFirstSession: boolean
   patient: { displayName: string | null; age: number | null }
   validated: {
+    id: string
     reviewedAt: string
     summary: Pick<
       AssessmentSummary,
@@ -181,6 +182,7 @@ export async function buildPatientContext(
     } else {
       tier = ageInDays <= TIER_A_WINDOW_DAYS ? 'tierA' : 'historic'
       validated = {
+        id: vRow.id,
         reviewedAt: vRow.reviewed_at,
         summary: {
           chief_complaint: parsed.data.chief_complaint,

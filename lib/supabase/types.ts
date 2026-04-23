@@ -388,6 +388,63 @@ export type Database = {
           },
         ]
       }
+      patient_context_injections: {
+        Row: {
+          block_char_count: number
+          created_at: string
+          id: string
+          last_validated_assessment_id: string | null
+          pending_tasks_count: number
+          risk_state: string
+          risk_triggered: boolean
+          session_id: string
+          tier: string
+          truncated_sections: string[]
+          user_id: string
+        }
+        Insert: {
+          block_char_count: number
+          created_at?: string
+          id?: string
+          last_validated_assessment_id?: string | null
+          pending_tasks_count: number
+          risk_state: string
+          risk_triggered: boolean
+          session_id: string
+          tier: string
+          truncated_sections?: string[]
+          user_id: string
+        }
+        Update: {
+          block_char_count?: number
+          created_at?: string
+          id?: string
+          last_validated_assessment_id?: string | null
+          pending_tasks_count?: number
+          risk_state?: string
+          risk_triggered?: boolean
+          session_id?: string
+          tier?: string
+          truncated_sections?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_context_injections_last_validated_assessment_id_fkey"
+            columns: ["last_validated_assessment_id"]
+            isOneToOne: false
+            referencedRelation: "assessments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_context_injections_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "clinical_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patient_tasks: {
         Row: {
           acordada_en_assessment_id: string

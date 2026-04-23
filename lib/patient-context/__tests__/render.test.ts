@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { renderPatientContextBlock, computeRiskOpeningNotice } from '@/lib/patient-context/render'
+import {
+  renderPatientContextBlock,
+  renderPatientContextBlockWithMeta,
+  computeRiskOpeningNotice,
+} from '@/lib/patient-context/render'
 import type { PatientContext } from '@/lib/patient-context/builder'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -17,6 +21,7 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     isFirstSession: false,
     patient: { displayName: 'Ana López', age: 30 },
     validated: {
+      id: 'assessment-tierA-fixture',
       reviewedAt: daysAgo(10),
       summary: {
         chief_complaint: 'Ansiedad persistente con pensamientos intrusivos.',
@@ -68,6 +73,7 @@ function makeHistoricCtx(overrides: Partial<PatientContext> = {}): PatientContex
     isFirstSession: false,
     patient: { displayName: 'Pedro Ruiz', age: 45 },
     validated: {
+      id: 'assessment-historic-fixture',
       reviewedAt: daysAgo(120),
       summary: {
         chief_complaint: 'Depresión recurrente.',
@@ -284,6 +290,7 @@ describe('renderPatientContextBlock — historic tier', () => {
     const reviewedAt = daysAgo(120)
     const ctx = makeHistoricCtx({
       validated: {
+        id: 'assessment-historic-all-predate',
         reviewedAt,
         summary: {
           chief_complaint: 'Depresión recurrente.',
@@ -308,6 +315,7 @@ describe('renderPatientContextBlock — historic tier', () => {
     const reviewedAt = daysAgo(120)
     const ctx = makeHistoricCtx({
       validated: {
+        id: 'assessment-historic-mixed',
         reviewedAt,
         summary: {
           chief_complaint: 'Depresión recurrente.',
@@ -378,6 +386,7 @@ describe('renderPatientContextBlock — truncation', () => {
 
     const ctx = makeTierACtx({
       validated: {
+        id: 'assessment-truncation',
         reviewedAt: daysAgo(10),
         summary: {
           chief_complaint: hugeCc,
@@ -548,6 +557,7 @@ describe('renderPatientContextBlock — additional edge cases', () => {
   it('risk_assessment renders raw enum values', () => {
     const ctx = makeTierACtx({
       validated: {
+        id: 'assessment-risk-enums',
         reviewedAt: daysAgo(10),
         summary: {
           chief_complaint: 'Test',
@@ -568,6 +578,7 @@ describe('renderPatientContextBlock — additional edge cases', () => {
     const longCc = 'A'.repeat(400)
     const ctx = makeTierACtx({
       validated: {
+        id: 'assessment-cc-cap',
         reviewedAt: daysAgo(10),
         summary: {
           chief_complaint: longCc,
@@ -589,6 +600,7 @@ describe('renderPatientContextBlock — additional edge cases', () => {
     const items = Array.from({ length: 10 }, (_, i) => `Item ${i}: ${'X'.repeat(130)}`)
     const ctx = makeTierACtx({
       validated: {
+        id: 'assessment-pi-cap',
         reviewedAt: daysAgo(10),
         summary: {
           chief_complaint: 'Test',
@@ -606,5 +618,145 @@ describe('renderPatientContextBlock — additional edge cases', () => {
     expect(block).not.toContain('Item 7:')
     // First item should be truncated
     expect(block).toContain('…')
+  })
+})
+
+// ── renderPatientContextBlockWithMeta — truncatedSections reporting ──────────
+
+describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
+  it('returns empty truncatedSections when block fits under 2500 chars', () => {
+    const { block, truncatedSections } = renderPatientContextBlockWithMeta(makeTierACtx())
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(truncatedSections).toEqual([])
+  })
+
+  it('returns empty truncatedSections for tier=none (first session)', () => {
+    const { truncatedSections } = renderPatientContextBlockWithMeta(makeNoneCtx())
+    expect(truncatedSections).toEqual([])
+  })
+
+  it('returns empty truncatedSections for tierB blocks (never truncate)', () => {
+    const { truncatedSections } = renderPatientContextBlockWithMeta(makeTierBCtx())
+    expect(truncatedSections).toEqual([])
+  })
+
+  it('returns [areas_for_exploration] when only step 1 fires', () => {
+    // Just enough areas_for_exploration to push over 2500 but trimming areas alone brings it under.
+    // Base tierA fixture is ~small; we inflate areas_for_exploration only.
+    const hugeAreas = Array.from({ length: 6 }, (_, i) => `Área ${i}: ${'B'.repeat(120)}`)
+    const ctx = makeTierACtx({
+      validated: {
+        id: 'trunc-step1',
+        reviewedAt: daysAgo(10),
+        summary: {
+          chief_complaint: 'Motivo breve para que solo areas inflen el bloque.',
+          presenting_issues: ['uno'],
+          areas_for_exploration: hugeAreas,
+          // Additional padding so dropping areas alone gets us under 2500 — but
+          // keeping areas overflows. We use a moderately long chief_complaint
+          // and a few presenting issues but not enough to trip step 2.
+          risk_assessment: baseRisk,
+          questionnaires: [],
+        },
+        ageInDays: 10,
+      },
+    })
+
+    // Extra padding in presenting_issues to reliably breach 2500 when areas stays.
+    ctx.validated!.summary.presenting_issues = Array.from({ length: 6 }, (_, i) => `Síntoma ${i}: ${'A'.repeat(100)}`)
+
+    const { block, truncatedSections } = renderPatientContextBlockWithMeta(ctx)
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(truncatedSections).toEqual(['areas_for_exploration'])
+    // Sanity: areas dropped but presenting_issues survived
+    expect(block).not.toContain('Áreas a explorar pendientes:')
+    expect(block).toContain('Síntomas presentes:')
+  })
+
+  it('returns [areas_for_exploration, presenting_issues] when steps 1+2 fire', () => {
+    // Inflate both presenting_issues and areas_for_exploration, plus heavy tasks.
+    // Based on the existing "huge" truncation test — we know steps 1+2 fire there.
+    const hugeCc = 'X'.repeat(400)
+    const hugePresenting = Array.from({ length: 10 }, (_, i) => `Síntoma ${i}: ${'A'.repeat(120)}`)
+    const hugeAreas = Array.from({ length: 10 }, (_, i) => `Área ${i}: ${'B'.repeat(120)}`)
+    const heavyTasks = Array.from({ length: 5 }, (_, i) => ({
+      id: `t-${i}`,
+      descripcion: `Tarea pesada número ${i}: ${'T'.repeat(90)}`,
+      estado: 'pendiente' as const,
+      acordadaEn: daysAgo(i + 1),
+    }))
+
+    const ctx = makeTierACtx({
+      validated: {
+        id: 'trunc-step12',
+        reviewedAt: daysAgo(10),
+        summary: {
+          chief_complaint: hugeCc,
+          presenting_issues: hugePresenting,
+          areas_for_exploration: hugeAreas,
+          risk_assessment: { suicidality: 'passive', self_harm: 'historic', notes: '' },
+          questionnaires: [],
+        },
+        ageInDays: 10,
+      },
+      pendingTasks: heavyTasks,
+    })
+
+    const { block, truncatedSections } = renderPatientContextBlockWithMeta(ctx)
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(truncatedSections).toEqual(['areas_for_exploration', 'presenting_issues'])
+  })
+
+  it('returns [areas_for_exploration, presenting_issues, chief_complaint_capped] when step 3 fires', () => {
+    // Force step 3 to fire by making non-truncatable sections (tasks, questionnaires)
+    // plus chief_complaint eat enough budget that even after dropping areas +
+    // presenting, the block still exceeds 2500 — then chief_complaint is capped to 150.
+    const hugeCc = 'C'.repeat(800)
+    const hugePresenting = Array.from({ length: 10 }, (_, i) => `Síntoma ${i}: ${'A'.repeat(120)}`)
+    const hugeAreas = Array.from({ length: 10 }, (_, i) => `Área ${i}: ${'B'.repeat(120)}`)
+
+    // Lots of heavy tasks — 10 tasks (5 rendered + "+5 acuerdos más") with long descriptions.
+    const heavyTasks = Array.from({ length: 10 }, (_, i) => ({
+      id: `t-${i}`,
+      descripcion: `Tarea ${i}: ${'T'.repeat(200)}`,
+      estado: 'pendiente' as const,
+      acordadaEn: daysAgo(i + 1),
+    }))
+
+    // Many questionnaires (rendered inline, not truncated by cascade) to pressure step 3.
+    const heavyQuestionnaires = [
+      { code: 'PHQ9' as const, score: 12, band: 'moderate', scoredAt: daysAgo(1), deltaVsPrevious: 2 },
+      { code: 'GAD7' as const, score: 8, band: 'mild', scoredAt: daysAgo(2), deltaVsPrevious: -1 },
+      { code: 'ASQ' as const, score: 3, band: 'low', scoredAt: daysAgo(3), deltaVsPrevious: 0 },
+    ]
+
+    const ctx = makeTierACtx({
+      validated: {
+        id: 'trunc-step3',
+        reviewedAt: daysAgo(10),
+        summary: {
+          chief_complaint: hugeCc,
+          presenting_issues: hugePresenting,
+          areas_for_exploration: hugeAreas,
+          risk_assessment: { suicidality: 'passive', self_harm: 'historic', notes: '' },
+          questionnaires: [],
+        },
+        ageInDays: 10,
+      },
+      pendingTasks: heavyTasks,
+      recentQuestionnaires: heavyQuestionnaires,
+    })
+
+    const { block, truncatedSections } = renderPatientContextBlockWithMeta(ctx)
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(truncatedSections).toEqual([
+      'areas_for_exploration',
+      'presenting_issues',
+      'chief_complaint_capped',
+    ])
+    // chief_complaint was capped to 150 (149 C's + '…')
+    expect(block).toContain('C'.repeat(149) + '…')
+    // Full 400 C's would mean the 300-cap ran; step 3 replaces with 150-cap.
+    expect(block).not.toContain('C'.repeat(200))
   })
 })
