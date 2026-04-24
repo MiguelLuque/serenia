@@ -20,7 +20,7 @@ export const ProposedTaskSchema = z.object({
 })
 export type ProposedTask = z.infer<typeof ProposedTaskSchema>
 
-export const AssessmentSchema = z.object({
+const AssessmentCore = z.object({
   chief_complaint: z.string(),
   presenting_issues: z.array(z.string()),
   mood_affect: z.string(),
@@ -44,6 +44,19 @@ export const AssessmentSchema = z.object({
   preliminary_impression: z.string(),
   recommended_actions_for_clinician: z.array(z.string()),
   patient_facing_summary: z.string(),
+})
+
+// Schema used by `generateObject` for OpenAI strict structured outputs: every
+// property must appear in `required`, so `proposed_tasks` has NO default here.
+// The LLM is instructed to emit an empty array when no tasks are proposed.
+export const AssessmentGenerationSchema = AssessmentCore.extend({
+  proposed_tasks: z.array(ProposedTaskSchema),
+})
+
+// Schema used at load boundaries (parsing stored `summary_json`). Legacy rows
+// that predate Plan 6 lack `proposed_tasks`; default to [] so those rows
+// continue to parse.
+export const AssessmentSchema = AssessmentCore.extend({
   proposed_tasks: z.array(ProposedTaskSchema).default([]),
 })
 
@@ -168,7 +181,7 @@ export async function generateAssessment(
 
   const { object: summary, usage } = await generateObject({
     model: llm.structured(),
-    schema: AssessmentSchema,
+    schema: AssessmentGenerationSchema,
     system: systemPrompt,
     prompt: userPrompt,
   })
