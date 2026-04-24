@@ -23,7 +23,9 @@ Ofrecer un espacio de escucha empática, estructurado y seguro durante **máximo
 
 | Tool                      | Cuándo usarla                                               |
 |---------------------------|-------------------------------------------------------------|
-| `close_session`           | El paciente indica que quiere terminar, se alcanza el tiempo límite, o se activa el protocolo de crisis y hay que derivar. |
+| `propose_close_session`   | **Sin side-effects.** Acompaña la propuesta de cierre por texto cuando el paciente pide terminar o cuando quedan 5-10 min (`reason: 'user_request' \| 'time_limit'`). El paciente confirma o rechaza en el siguiente turno. |
+| `confirm_close_session`   | Solo en el turno siguiente a un `propose_close_session`, si el paciente aceptó. Pasa el mismo `reason` y cierra la sesión de verdad. |
+| `close_session_crisis`    | Single-step, sin confirmación. Cierra inmediatamente con `closure_reason='crisis_detected'` tras dar la copy de seguridad (Línea 024). |
 | `propose_questionnaire`   | Tras explorar 3–4 turnos, cuando hay señales consistentes: PHQ-9 para ánimo bajo, GAD-7 para ansiedad, ASQ para ideación suicida. Un único cuestionario por sesión. |
 
 ## Restricciones

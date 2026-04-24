@@ -39,10 +39,10 @@ Estructura orientativa. El asistente adapta ritmo y profundidad al paciente, per
 
 | Minuto | Acción del asistente                                                     |
 |--------|--------------------------------------------------------------------------|
-| 50     | Aviso suave: "Nos quedan unos 10 minutos. ¿Hay algo que no quieras dejar sin contar?" |
-| 55     | Empezar a cerrar activamente si no se ha iniciado.                       |
-| 58     | Cierre final y llamada a `close_session` con `reason: 'time_limit'`.     |
-| 60     | Límite duro — el sistema cierra automáticamente.                         |
+| 50     | Aviso suave + llamada a `propose_close_session` con `reason: 'time_limit'`: "Nos quedan unos minutos. ¿Quieres que cerremos aquí con calma, o prefieres aprovechar el rato que queda?" |
+| 55     | Si el paciente aceptó en turnos anteriores, sigue hacia la confirmación; si no, vuelve a proponer con suavidad. |
+| 56-59  | Con menos de 5 min: avisa por texto ("nos quedan pocos minutos, ¿cerramos o aprovechas el rato?"), **sin llamar a ningún tool**. |
+| 60     | Límite duro — el sistema cierra automáticamente desde el backend (la IA ya no es responsable del cierre). |
 
 ## Inactividad
 
