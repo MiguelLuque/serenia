@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getQuestionnaireCardHeader } from '@/lib/questionnaires/card-metadata'
 
 interface Option {
   value: number
@@ -26,6 +27,15 @@ interface QuestionnaireCardProps {
   instanceId: string
   definition: Definition
   items: Item[]
+  /**
+   * Called once after the answers POST succeeds. Used by the parent to push a
+   * synthetic user turn into the chat so the assistant acknowledges the
+   * result (see `buildQuestionnaireResultNotice` in app/api/chat/route.ts).
+   *
+   * Without this, the stream stays idle and the ASQ acute-risk protocol
+   * (Línea 024 + close_session) is unreachable.
+   */
+  onSubmitted?: () => void
 }
 
 function parseOptions(raw: unknown): Option[] {
@@ -43,8 +53,10 @@ export function QuestionnaireCard({
   instanceId,
   definition,
   items,
+  onSubmitted,
 }: QuestionnaireCardProps) {
   const router = useRouter()
+  const header = getQuestionnaireCardHeader(definition.code, definition.name)
   const [answers, setAnswers] = useState<Record<number, Option>>({})
   const [currentIdx, setCurrentIdx] = useState(0)
   const [submitting, setSubmitting] = useState(false)
@@ -100,6 +112,12 @@ export function QuestionnaireCard({
       )
       if (!res.ok) throw new Error(await res.text())
       setSubmitted(true)
+      // Fire the synthetic user turn first so the assistant stream starts
+      // immediately; the timed router.refresh() below then clears the
+      // server-rendered `activeQuestionnaire` (page.tsx) so this card
+      // disappears. Without the sendMessage, the ASQ acute-risk protocol in
+      // buildQuestionnaireResultNotice is unreachable.
+      onSubmitted?.()
       setTimeout(() => router.refresh(), 1500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error enviando respuestas')
@@ -125,7 +143,8 @@ export function QuestionnaireCard({
   return (
     <Card className="mx-3 mb-2" size="sm">
       <CardHeader>
-        <CardTitle>{definition.name}</CardTitle>
+        <CardTitle>{header.title}</CardTitle>
+        <p className="text-xs text-muted-foreground">{header.duration}</p>
         <p className="text-xs text-muted-foreground">
           Pregunta {currentIdx + 1} de {visibleItems.length}
         </p>

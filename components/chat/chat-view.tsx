@@ -149,11 +149,27 @@ export function ChatView({
                 instanceId={activeQuestionnaire.instanceId}
                 definition={activeQuestionnaire.definition}
                 items={activeQuestionnaire.items}
+                onSubmitted={() => {
+                  // Synthetic user turn so the assistant reacts to the
+                  // scored result. The next POST to /api/chat picks up the
+                  // [RESULTADO DE CUESTIONARIO — ...] notice assembled by
+                  // buildQuestionnaireResultNotice (app/api/chat/route.ts),
+                  // which is how the ASQ acute-risk protocol (Línea 024 +
+                  // close_session) gets triggered.
+                  void sendMessage({ text: 'He completado el cuestionario.' })
+                }}
               />
             )}
           <ChatInput
             status={status}
-            disabled={isExpired}
+            // Block the input while a questionnaire card is active so the
+            // user cannot create a second concurrent turn while the
+            // synthetic "He completado el cuestionario." is flying.
+            disabled={
+              isExpired ||
+              (activeQuestionnaire != null &&
+                activeQuestionnaire.status !== 'scored')
+            }
             onSend={(text) => {
               void sendMessage({ text })
             }}
