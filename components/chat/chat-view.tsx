@@ -34,6 +34,31 @@ function minutesRemaining(expiresAt: Date, now = Date.now()): number {
   return Math.max(0, Math.ceil((expiresAt.getTime() - now) / 60_000))
 }
 
+// Walk all parts of all messages and return which close-tool, if any,
+// reached output-available. Pure function so the derived state is
+// reflected on render without a useState/useEffect round-trip.
+function detectServerClose(
+  messages: readonly UIMessage[],
+): 'none' | 'confirm' | 'crisis' {
+  let hit: 'none' | 'confirm' | 'crisis' = 'none'
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (
+        'state' in part &&
+        part.state === 'output-available' &&
+        (part.type === 'tool-confirm_close_session' ||
+          part.type === 'tool-close_session_crisis')
+      ) {
+        // Crisis wins over confirm — if both show up in the same stream
+        // (shouldn't happen, but be defensive), crisis drives the redirect.
+        if (part.type === 'tool-close_session_crisis') return 'crisis'
+        hit = 'confirm'
+      }
+    }
+  }
+  return hit
+}
+
 export function ChatView({
   sessionId,
   initialMessages,
@@ -42,10 +67,11 @@ export function ChatView({
 }: ChatViewProps) {
   const router = useRouter()
   const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt))
-  const isExpired = minsLeft <= 0
+  const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
   const listRef = useRef<HTMLDivElement>(null)
   const refreshedToolsRef = useRef<Set<string>>(new Set())
+  const crisisRedirectRef = useRef(false)
 
   const { messages, sendMessage, status } = useChat({
     id: sessionId,
@@ -56,10 +82,21 @@ export function ChatView({
     }),
   })
 
+  // `closeSignal` is derived from `messages` on every render: 'confirm'
+  // for a non-crisis close (confirm_close_session reached
+  // output-available) and 'crisis' for close_session_crisis. This is how
+  // the client knows the server closed the session before the next POST
+  // would 409.
+  const closeSignal = detectServerClose(messages)
+  const isClosed = closeSignal !== 'none'
+  const isExpired = isTimeExpired || isClosed
+
   useEffect(() => {
     if (status !== 'ready') return
     for (const message of messages) {
       for (const part of message.parts) {
+        // Plan 4: questionnaire proposal refreshes the server component
+        // so the card renders from SSR state.
         if (
           part.type === 'tool-propose_questionnaire' &&
           'state' in part &&
@@ -74,6 +111,22 @@ export function ChatView({
       }
     }
   }, [messages, status, router])
+
+  // Plan 4.2: on crisis close, push the patient to /app after a short
+  // beat so the home page's red Línea 024 banner
+  // (app/app/page.tsx — lastClosed.closureReason === 'crisis_detected')
+  // is the first thing they see. Non-crisis confirm stays put — the
+  // end-of-session banner below has a link to /app when the patient is
+  // ready.
+  useEffect(() => {
+    if (closeSignal !== 'crisis') return
+    if (crisisRedirectRef.current) return
+    crisisRedirectRef.current = true
+    const timer = setTimeout(() => {
+      router.push('/app')
+    }, 1800)
+    return () => clearTimeout(timer)
+  }, [closeSignal, router])
 
   useEffect(() => {
     if (isExpired) return
@@ -155,7 +208,7 @@ export function ChatView({
                   // [RESULTADO DE CUESTIONARIO — ...] notice assembled by
                   // buildQuestionnaireResultNotice (app/api/chat/route.ts),
                   // which is how the ASQ acute-risk protocol (Línea 024 +
-                  // close_session) gets triggered.
+                  // close_session_crisis) gets triggered.
                   void sendMessage({ text: 'He completado el cuestionario.' })
                 }}
               />

@@ -33,7 +33,7 @@ interface QuestionnaireCardProps {
    * result (see `buildQuestionnaireResultNotice` in app/api/chat/route.ts).
    *
    * Without this, the stream stays idle and the ASQ acute-risk protocol
-   * (Línea 024 + close_session) is unreachable.
+   * (Línea 024 + close_session_crisis) is unreachable.
    */
   onSubmitted?: () => void
 }
