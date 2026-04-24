@@ -13,7 +13,10 @@ const MAX_TRANSCRIPT_MESSAGES = 60
 
 export const ProposedTaskSchema = z.object({
   descripcion: z.string().min(3).max(500),
-  nota: z.string().max(300).optional(),
+  // `nullable` (not `optional`) so the JSON schema emits `nota` inside
+  // `required` — OpenAI structured-output strict mode rejects schemas where
+  // `required` does not list every property in `properties`.
+  nota: z.string().max(300).nullable(),
 })
 export type ProposedTask = z.infer<typeof ProposedTaskSchema>
 

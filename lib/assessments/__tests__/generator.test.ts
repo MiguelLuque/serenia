@@ -37,6 +37,7 @@ describe('AssessmentSchema.proposed_tasks', () => {
         },
         {
           descripcion: 'Registrar pensamientos rumiativos en una libreta',
+          nota: null,
         },
       ],
     }
@@ -50,6 +51,7 @@ describe('AssessmentSchema.proposed_tasks', () => {
     })
     expect(parsed.proposed_tasks[1]).toEqual({
       descripcion: 'Registrar pensamientos rumiativos en una libreta',
+      nota: null,
     })
   })
 })

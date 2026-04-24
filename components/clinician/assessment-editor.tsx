@@ -147,7 +147,7 @@ export function AssessmentEditor({
   function addProposedTask() {
     setDraft((prev) => ({
       ...prev,
-      proposed_tasks: [...prev.proposed_tasks, { descripcion: '', nota: undefined }],
+      proposed_tasks: [...prev.proposed_tasks, { descripcion: '', nota: null }],
     }))
   }
 
@@ -186,7 +186,7 @@ export function AssessmentEditor({
       proposed_tasks: draft.proposed_tasks
         .map((t) => ({
           descripcion: t.descripcion.trim(),
-          nota: t.nota?.trim() || undefined,
+          nota: t.nota?.trim() || null,
         }))
         .filter((t) => t.descripcion.length >= 3),
     }

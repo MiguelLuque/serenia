@@ -32,7 +32,7 @@ const validSummary = {
   patient_facing_summary: 'Gracias por compartir esto hoy.',
   proposed_tasks: [
     { descripcion: 'Practicar respiración diafragmática', nota: 'Al menos 5 minutos al día' },
-    { descripcion: 'Registro de pensamientos automáticos', nota: undefined },
+    { descripcion: 'Registro de pensamientos automáticos', nota: null },
   ],
 }
 
