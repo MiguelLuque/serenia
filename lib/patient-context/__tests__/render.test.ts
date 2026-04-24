@@ -513,7 +513,7 @@ describe('computeRiskOpeningNotice', () => {
   it('returns exact acute notice string ending with block separator', () => {
     const ctx = makeTierACtx({ riskState: 'acute' })
     expect(computeRiskOpeningNotice(ctx)).toBe(
-      "[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.\n\n---\n\n",
+      '[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session_crisis. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.\n\n---\n\n',
     )
   })
 

@@ -7,7 +7,6 @@ import {
   touchSession,
   closeSession,
   isSessionExpired,
-  type CloseReason,
 } from '@/lib/sessions/service'
 import { saveUserMessage, saveAssistantMessage } from '@/lib/sessions/messages'
 import { detectCrisis } from '@/lib/chat/crisis-detector'
@@ -83,8 +82,15 @@ export async function POST(req: Request) {
   )
   const timeNotice =
     minutesRemaining <= 10
-      ? `[AVISO DE TIEMPO]
-Quedan ${minutesRemaining} minutos de la sesión. Empieza a cerrar si procede: resume lo hablado, pregunta cómo se va el paciente, y despídete. Si llegas al límite, llama a close_session con reason='time_limit'.
+      ? minutesRemaining >= 5
+        ? `[AVISO DE TIEMPO]
+Quedan ${minutesRemaining} minutos de la sesión. Empieza a cerrar con calma: resume lo hablado, pregunta cómo se va el paciente, y llama a propose_close_session con reason='time_limit' junto al texto de propuesta. No llames a confirm_close_session hasta que el paciente acepte.
+
+---
+
+`
+        : `[AVISO DE TIEMPO]
+Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("nos quedan X min, ¿cerramos o aprovechas el rato?") pero NO llames a ningún tool de cierre todavía. Si llega el límite duro, el sistema cerrará automáticamente.
 
 ---
 
@@ -94,7 +100,7 @@ Quedan ${minutesRemaining} minutos de la sesión. Empieza a cerrar si procede: r
   const basePrompt = getSessionTherapistPrompt()
   const crisisNotice = crisis.detected
     ? `[AVISO DE SEGURIDAD — ALERTA ACTIVADA]
-El último mensaje del paciente contiene señales de crisis (${crisis.matchedTerms.join(', ')}). Activa el protocolo de crisis AHORA: valida, mide riesgo con calma, ofrece la Línea 024 textualmente, marca la sesión para revisión del psicólogo, y considera llamar a close_session con reason='crisis_detected' si el riesgo es inmediato.
+El último mensaje del paciente contiene señales de crisis (${crisis.matchedTerms.join(', ')}). Activa el protocolo de crisis AHORA: valida, mide riesgo con calma, ofrece la Línea 024 textualmente, marca la sesión para revisión del psicólogo, y considera llamar a close_session_crisis si el riesgo es inmediato. NUNCA confirmes un cierre por crisis: es single-step.
 
 ---
 
@@ -178,15 +184,50 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
     },
   })
 
-  const closeSessionTool = tool({
+  // ── Session-close tools: two-step for non-crisis, single-step for crisis ────
+  //
+  // `propose_close_session` has NO side-effects on the DB. The IA emits it
+  // alongside a conversational proposal so the patient can accept or reject.
+  // Only after explicit acceptance in the next turn does the IA call
+  // `confirm_close_session`, which actually invokes closeSession() and
+  // triggers the assessment generation.
+  //
+  // `close_session_crisis` is single-step by design: safety first, no
+  // confirmation, closes immediately with reason='crisis_detected'.
+  //
+  // The reason for a confirmed close is passed again by the model (it must
+  // match what it used in propose). We do not persist "pending proposal"
+  // server-side — the argument round-trip is the whole contract.
+  const proposeCloseSessionTool = tool({
     description:
-      'Cierra la sesión actual. Usar solo cuando el paciente quiera terminar, se alcance el tiempo límite, o el protocolo de crisis lo requiera.',
+      'Propone cerrar la sesión al paciente. NO cierra la sesión: solo señala que la IA ha sugerido el cierre en el texto del mismo turno. Tras llamar a este tool, espera la respuesta del paciente. Si acepta, en el siguiente turno llama a confirm_close_session con el mismo reason. Si rechaza, continúa la conversación sin más tool calls.',
     inputSchema: z.object({
-      reason: z.enum(['user_request', 'time_limit', 'crisis_detected']),
+      reason: z.enum(['user_request', 'time_limit']),
     }),
-    execute: async ({ reason }: { reason: CloseReason }) => {
+    execute: async ({ reason }) => {
+      return { proposed: true, reason }
+    },
+  })
+
+  const confirmCloseSessionTool = tool({
+    description:
+      'Cierra la sesión actual tras confirmación explícita del paciente. Solo se llama en el turno siguiente a un propose_close_session, si el paciente aceptó. Pasa el mismo reason que usaste en propose_close_session.',
+    inputSchema: z.object({
+      reason: z.enum(['user_request', 'time_limit']),
+    }),
+    execute: async ({ reason }) => {
       await closeSession(supabase, sessionId, reason)
       return { closed: true, reason }
+    },
+  })
+
+  const closeSessionCrisisTool = tool({
+    description:
+      'Cierra la sesión inmediatamente por protocolo de crisis. Usar solo tras haber dado la copy de seguridad (Línea 024) y cuando el riesgo es inmediato. NUNCA confirma: safety first.',
+    inputSchema: z.object({}),
+    execute: async () => {
+      await closeSession(supabase, sessionId, 'crisis_detected')
+      return { closed: true, reason: 'crisis_detected' as const }
     },
   })
 
@@ -195,7 +236,9 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     tools: {
-      close_session: closeSessionTool,
+      propose_close_session: proposeCloseSessionTool,
+      confirm_close_session: confirmCloseSessionTool,
+      close_session_crisis: closeSessionCrisisTool,
       propose_questionnaire: proposeQuestionnaireTool,
     },
   })
@@ -278,7 +321,7 @@ async function buildQuestionnaireResultNotice(
 
   if (def.code === 'ASQ' && acute) {
     return `[RESULTADO DE CUESTIONARIO — ASQ — RIESGO AGUDO]
-El item 5 del ASQ es positivo. Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session con reason='crisis_detected' si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal.
+El item 5 del ASQ es positivo. Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session_crisis si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal. NUNCA confirmes un cierre por crisis: es single-step.
 
 ---
 

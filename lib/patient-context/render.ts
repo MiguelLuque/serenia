@@ -388,7 +388,7 @@ export function computeRiskOpeningNotice(ctx: PatientContext): string | null {
     case 'none':
       return null
     case 'acute':
-      return "[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session con reason='crisis_detected'. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.\n\n---\n\n"
+      return '[AVISO DE CONTINUIDAD — RIESGO AGUDO] Protocolo de crisis inmediato: valida sin alarmismo, ofrece Línea 024 textualmente, si hay señales de riesgo inmediato llama a close_session_crisis. No inicies otras líneas de conversación hasta asegurar la continuidad de riesgo.\n\n---\n\n'
     case 'active':
       return '[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.\n\n---\n\n'
     case 'watch':
