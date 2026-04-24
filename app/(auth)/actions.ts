@@ -19,12 +19,20 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   }
 
   const supabase = await createAuthenticatedClient()
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback` },
   })
   if (error) return { error: traducirSupabaseError(error.message) }
+
+  // When Supabase's "Confirm email" is off (pre-lanzamiento), signUp returns
+  // an active session and the user is authenticated right away — skip the
+  // "check your email" step and send them to the app.
+  if (data.session) {
+    revalidatePath('/', 'layout')
+    redirect('/app')
+  }
 
   redirect('/registro/verifica-email')
 }
