@@ -26,10 +26,20 @@ alter type assessment_status add value if not exists 'requires_manual_review';
 -- a graceful "duplicate ignored". Without this index the trap never fires
 -- and racey workflows would insert two rows.
 --
--- Why partial: only `closure` rows are unique per session. Future
--- `assessment_type='follow_up'` (or others) can have multiple rows per
--- session by design.
+-- Why partial:
+--  * `assessment_type='follow_up'` (or others) can have multiple rows per
+--    session by design — unique only applies to `closure`.
+--  * `superseded` and `rejected` rows are intentionally history kept for
+--    audit. The Plan 5 versioning flow creates a new row + marks the old as
+--    `superseded` when the clinician edits a draft, so we must allow N
+--    superseded rows per session. Same for clinician rejection (followed by
+--    a regenerated draft via T-B).
+--
+-- The result: at most ONE "live" closure row per session at any time
+-- (draft_ai | reviewed_confirmed | reviewed_modified | requires_manual_review
+-- | pending_clinician_review).
 
-create unique index if not exists assessments_session_closure_unique
+create unique index if not exists assessments_session_closure_live_unique
   on assessments (session_id)
-  where assessment_type = 'closure';
+  where assessment_type = 'closure'
+    and status not in ('superseded', 'rejected');
