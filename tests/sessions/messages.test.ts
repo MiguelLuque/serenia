@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { saveUserMessage, saveAssistantMessage, saveMessage } from '@/lib/sessions/messages'
+import { safeValidateUIMessages, type UIMessage } from 'ai'
+import {
+  saveUserMessage,
+  saveAssistantMessage,
+  saveMessage,
+} from '@/lib/sessions/messages'
+import type { MessagePart } from '@/lib/types/messages'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,7 +50,7 @@ function makeSupabaseMock(result: { data: unknown; error: unknown }): ChainedMoc
 // ---------------------------------------------------------------------------
 
 describe('saveUserMessage', () => {
-  it('inserts role=user, single text part, visible_to_user=true', async () => {
+  it('inserts role=user, single text part, visible_to_user=true (text overload)', async () => {
     const row = makeMessageRow({ role: 'user', parts: [{ type: 'text', text: 'Hello' }] })
     const supabase = makeSupabaseMock({ data: row, error: null })
 
@@ -64,32 +70,97 @@ describe('saveUserMessage', () => {
     expect(insertCall.session_id).toBe('session-1')
     expect(result).toEqual(row)
   })
+
+  it('accepts a pre-built parts array via the parts overload', async () => {
+    const parts: MessagePart[] = [{ type: 'text', text: 'Hi' }]
+    const row = makeMessageRow({ role: 'user', parts })
+    const supabase = makeSupabaseMock({ data: row, error: null })
+
+    await saveUserMessage(supabase as never, {
+      conversationId: 'conv-1',
+      sessionId: 'session-1',
+      parts,
+    })
+
+    const insertCall = (supabase.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(insertCall.role).toBe('user')
+    expect(insertCall.parts).toEqual(parts)
+  })
 })
 
 describe('saveAssistantMessage', () => {
-  it('inserts role=assistant, single text part, visible_to_user=true', async () => {
-    const row = makeMessageRow({ role: 'assistant', parts: [{ type: 'text', text: 'Hi there' }] })
+  it('persists the full parts array (text + tool call + tool result)', async () => {
+    const parts: MessagePart[] = [
+      { type: 'text', text: '¿Quieres que cerremos la sesión?', state: 'done' },
+      {
+        type: 'tool-propose_close_session',
+        toolCallId: 'call_1',
+        state: 'output-available',
+        input: { reason: 'user_request' },
+        output: { proposed: true, reason: 'user_request' },
+      },
+    ]
+    const row = makeMessageRow({ role: 'assistant', parts })
     const supabase = makeSupabaseMock({ data: row, error: null })
 
     const result = await saveAssistantMessage(supabase as never, {
       conversationId: 'conv-1',
       sessionId: 'session-1',
-      text: 'Hi there',
+      parts,
     })
 
     const insertCall = (supabase.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(insertCall.role).toBe('assistant')
-    expect(insertCall.parts).toEqual([{ type: 'text', text: 'Hi there' }])
+    expect(insertCall.parts).toEqual(parts)
     expect(insertCall.visible_to_user).toBe(true)
     expect(result).toEqual(row)
+  })
+
+  it('round-trips mixed parts through safeValidateUIMessages', async () => {
+    // Simulate the journey: persist mixed parts → read them back from the
+    // JSONB column → validate with AI SDK → reconstruct the UIMessage.
+    const original: MessagePart[] = [
+      { type: 'text', text: 'Vamos a cerrar.', state: 'done' },
+      {
+        type: 'tool-confirm_close_session',
+        toolCallId: 'call_42',
+        state: 'output-available',
+        input: { reason: 'user_request' },
+        output: { closed: true, reason: 'user_request' },
+      },
+    ]
+
+    const row = makeMessageRow({ role: 'assistant', parts: original })
+    const supabase = makeSupabaseMock({ data: row, error: null })
+
+    await saveAssistantMessage(supabase as never, {
+      conversationId: 'conv-1',
+      sessionId: 'session-1',
+      parts: original,
+    })
+
+    const insertCall = (supabase.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    // Round-trip through JSON to mirror what JSONB does to the payload.
+    const persisted = JSON.parse(JSON.stringify(insertCall.parts))
+
+    const candidate: UIMessage = {
+      id: 'msg-1',
+      role: 'assistant',
+      parts: persisted,
+    }
+    const validated = await safeValidateUIMessages({ messages: [candidate] })
+    expect(validated.success).toBe(true)
+    if (validated.success) {
+      expect(validated.data[0].parts).toEqual(original)
+    }
   })
 })
 
 describe('saveMessage', () => {
   it('inserts multi-part payload with visibleToUser=false', async () => {
-    const parts = [
-      { type: 'text' as const, text: 'Evaluating...' },
-      { type: 'text' as const, text: 'Risk: moderate' },
+    const parts: MessagePart[] = [
+      { type: 'text', text: 'Evaluating...' },
+      { type: 'text', text: 'Risk: moderate' },
     ]
     const row = makeMessageRow({ role: 'tool', parts, visible_to_user: false })
     const supabase = makeSupabaseMock({ data: row, error: null })

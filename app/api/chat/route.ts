@@ -245,18 +245,23 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
 
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
-    onFinish: async ({ messages: finalMessages }) => {
-      const lastAssistant = [...finalMessages]
-        .reverse()
-        .find((m) => m.role === 'assistant')
-      const text = extractText(lastAssistant)
-      if (text.trim()) {
-        await saveAssistantMessage(supabase, {
-          conversationId: session.conversation_id,
-          sessionId,
-          text,
-        })
+    onFinish: async ({ responseMessage }) => {
+      // Persist the FULL UIMessage parts payload — text, tool calls, tool
+      // results, reasoning, etc. Without this, reloads or rehydration drop
+      // every tool part and `detectServerClose(messages)` (and any other
+      // tool-call-aware logic) breaks. See plan-7 T1.
+      if (
+        responseMessage.role !== 'assistant' ||
+        !Array.isArray(responseMessage.parts) ||
+        responseMessage.parts.length === 0
+      ) {
+        return
       }
+      await saveAssistantMessage(supabase, {
+        conversationId: session.conversation_id,
+        sessionId,
+        parts: responseMessage.parts,
+      })
     },
   })
 }

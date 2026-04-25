@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import type { UIMessage } from 'ai'
+import { safeValidateUIMessages, type UIMessage } from 'ai'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import {
   closeSession,
@@ -9,16 +9,61 @@ import {
 import { getActiveInstanceForSession } from '@/lib/questionnaires/service'
 import { ChatView } from '@/components/chat/chat-view'
 
-function rowToUIMessage(row: {
-  id: string
-  role: string
-  parts: unknown
-}): UIMessage {
+type MessageRow = { id: string; role: string; parts: unknown }
+
+function rowToCandidate(row: MessageRow): UIMessage {
+  // Build a candidate UIMessage that we will validate before handing to the
+  // client. If `parts` is missing or malformed we fall back to an empty array
+  // so `safeValidateUIMessages` produces a clear error instead of crashing.
   return {
     id: row.id,
-    role: row.role as 'user' | 'assistant' | 'system',
+    role: row.role as UIMessage['role'],
     parts: Array.isArray(row.parts) ? (row.parts as UIMessage['parts']) : [],
   }
+}
+
+const FALLBACK_TEXT = '<mensaje no recuperable>'
+
+function fallbackMessage(row: MessageRow): UIMessage {
+  return {
+    id: row.id,
+    role: row.role as UIMessage['role'],
+    parts: [{ type: 'text', text: FALLBACK_TEXT }],
+  }
+}
+
+/**
+ * Validate persisted `messages.parts` against the AI SDK v6 `UIMessage`
+ * schema. Each row is validated independently so a single malformed message
+ * never crashes the page — instead we log a warning and substitute a
+ * placeholder text part. This protects rehydration of `initialMessages`
+ * after T1 widened persistence to include tool parts (see plan-7 T1).
+ */
+async function rehydrateMessages(rows: MessageRow[]): Promise<UIMessage[]> {
+  const candidates = rows.map(rowToCandidate)
+  const validated = await safeValidateUIMessages({ messages: candidates })
+  if (validated.success) return validated.data
+
+  // Fall back to per-row validation so we can isolate the bad row(s).
+  console.warn(
+    '[session-page] safeValidateUIMessages failed for batch; falling back per-row',
+    validated.error,
+  )
+
+  const out: UIMessage[] = []
+  for (const row of rows) {
+    const candidate = rowToCandidate(row)
+    const single = await safeValidateUIMessages({ messages: [candidate] })
+    if (single.success) {
+      out.push(single.data[0])
+    } else {
+      console.warn(
+        `[session-page] dropping invalid message ${row.id}: ${single.error.message}`,
+      )
+      out.push(fallbackMessage(row))
+    }
+  }
+  return out
 }
 
 export default async function SessionPage({
@@ -55,7 +100,7 @@ export default async function SessionPage({
     .eq('visible_to_user', true)
     .order('created_at', { ascending: true })
 
-  const initialMessages: UIMessage[] = (rows ?? []).map(rowToUIMessage)
+  const initialMessages: UIMessage[] = await rehydrateMessages(rows ?? [])
   const expiresAt = new Date(
     new Date(session.opened_at).getTime() + SESSION_MAX_DURATION_MS,
   )
