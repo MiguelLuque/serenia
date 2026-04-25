@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { SAFETY_RESOURCES } from '@/lib/clinical/safety-resources'
 
 const closureLabels: Record<string, string> = {
   user_request: 'Cerrada por ti',
@@ -95,7 +96,7 @@ export default async function SesionesPage() {
                   {isCrisis && (
                     <CardDescription className="text-red-900">
                       Tu psicólogo la está revisando. Si necesitas ayuda ahora,
-                      llama a la <strong>Línea 024</strong>.
+                      llama a la <strong>{SAFETY_RESOURCES.suicide.name}</strong>.
                     </CardDescription>
                   )}
                 </CardHeader>

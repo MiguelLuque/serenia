@@ -89,13 +89,7 @@ describe('saveMessage', () => {
   it('inserts multi-part payload with visibleToUser=false', async () => {
     const parts = [
       { type: 'text' as const, text: 'Evaluating...' },
-      {
-        type: 'tool_invocation' as const,
-        toolName: 'assess_risk',
-        state: 'result' as const,
-        input: { score: 5 },
-        output: { band: 'moderate' },
-      },
+      { type: 'text' as const, text: 'Risk: moderate' },
     ]
     const row = makeMessageRow({ role: 'tool', parts, visible_to_user: false })
     const supabase = makeSupabaseMock({ data: row, error: null })

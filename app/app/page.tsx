@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { SAFETY_RESOURCES } from '@/lib/clinical/safety-resources'
 import { startSessionAction } from './actions'
 
 function formatMinutesAgo(from: string): string {
@@ -175,7 +176,7 @@ export default async function AppHome() {
                 <CardTitle>Tu última sesión se cerró por seguridad.</CardTitle>
                 <CardDescription>
                   Tu psicólogo la está revisando hoy. Si necesitas ayuda ahora,
-                  llama a la <strong>Línea 024</strong>.
+                  llama a la <strong>{SAFETY_RESOURCES.suicide.name}</strong>.
                 </CardDescription>
               </CardHeader>
             </Card>

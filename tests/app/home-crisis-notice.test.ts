@@ -49,10 +49,14 @@ describe('home crisis notice — copy clínicamente crítica de crisis', () => {
     expect(pageSrc).toContain(SIGNED_DESCRIPTION_FRAGMENT_2)
   })
 
-  it('directs the patient to Línea 024 (exact string) in the crisis branch', () => {
-    // La Línea 024 debe aparecer en el source. Se exige el string literal
-    // exacto: "Línea 024" con acento en la í — es la ruta de seguridad.
-    expect(pageSrc).toContain(SIGNED_LINE_024_MENTION)
+  it('directs the patient to Línea 024 via SAFETY_RESOURCES (centralised)', () => {
+    // La Línea 024 ya no está hardcodeada en page.tsx — vive en
+    // `lib/clinical/safety-resources.ts`. Verificamos dos cosas: (a) page.tsx
+    // referencia `SAFETY_RESOURCES.suicide.name` para mostrar el número,
+    // (b) la constante centralizada sigue siendo exactamente "Línea 024".
+    expect(pageSrc).toContain('SAFETY_RESOURCES.suicide.name')
+    const safetySrc = read('lib/clinical/safety-resources.ts')
+    expect(safetySrc).toContain(`name: '${SIGNED_LINE_024_MENTION}'`)
   })
 
   it('renders the crisis branch only when closureReason === "crisis_detected"', () => {
