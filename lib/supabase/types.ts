@@ -17,6 +17,7 @@ export type Database = {
       assessments: {
         Row: {
           assessment_type: Database["public"]["Enums"]["assessment_type"]
+          clinical_notes: string | null
           created_at: string
           generated_by: Database["public"]["Enums"]["generated_by_source"]
           id: string
@@ -33,6 +34,7 @@ export type Database = {
         }
         Insert: {
           assessment_type?: Database["public"]["Enums"]["assessment_type"]
+          clinical_notes?: string | null
           created_at?: string
           generated_by?: Database["public"]["Enums"]["generated_by_source"]
           id?: string
@@ -49,6 +51,7 @@ export type Database = {
         }
         Update: {
           assessment_type?: Database["public"]["Enums"]["assessment_type"]
+          clinical_notes?: string | null
           created_at?: string
           generated_by?: Database["public"]["Enums"]["generated_by_source"]
           id?: string
