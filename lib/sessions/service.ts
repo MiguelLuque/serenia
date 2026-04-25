@@ -1,9 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
-import {
-  generateAssessment,
-  AssessmentSkippedError,
-} from '@/lib/assessments/generator'
+import { enqueueAssessmentGeneration } from '@/lib/workflows'
 
 type Supabase = SupabaseClient<Database>
 
@@ -18,7 +15,7 @@ export type CloseReason = 'user_request' | 'time_limit' | 'crisis_detected' | 'i
 /**
  * Return the user's currently active session if still valid.
  * If the active session has been inactive >= 30 min, mark it 'closed' with
- * closure_reason='inactivity' and return null.
+ * closure_reason='inactivity', enqueue the assessment workflow, and return null.
  * If no open session exists, return null.
  */
 export async function getOrResolveActiveSession(
@@ -52,6 +49,20 @@ export async function getOrResolveActiveSession(
       .eq('status', 'open')
 
     if (updateError) throw updateError
+
+    // Plan 7 T6: lazy-close path used to drop the assessment entirely. Now
+    // we enqueue the same async generator so abandoned sessions still surface
+    // in the clinician inbox. Failures here are non-fatal — getOrResolve must
+    // not throw if the workflow enqueue fails (e.g. WDK misconfigured); the
+    // primary contract is "return null after marking the session closed".
+    try {
+      await enqueueAssessmentGeneration({ sessionId: session.id })
+    } catch (err) {
+      console.error('[getOrResolveActiveSession] enqueue failed', {
+        sessionId: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
     return null
   }
 
@@ -109,6 +120,10 @@ export async function touchSession(
  * Mark session as closed with the given reason. Sets status='closed',
  * closed_at=now(), closure_reason=reason. Also sets conversations.ended_at
  * and status='closed' on the parent conversation.
+ *
+ * After the close commits, enqueues the background `generateAssessmentWorkflow`
+ * (Vercel WDK). The workflow is idempotent — duplicate fires from the cron or
+ * lazy-close path become no-ops via the closure assessment unique check.
  */
 export async function closeSession(
   supabase: Supabase,
@@ -144,20 +159,17 @@ export async function closeSession(
 
   if (convError) throw convError
 
+  // Plan 7 T6 — fire-and-forget enqueue. Errors here MUST NOT bubble up:
+  // the session is already closed in BD, and the user-facing response should
+  // not 500 because Vercel Workflow is unreachable. The cron stale-session
+  // sweep will eventually re-enqueue any session whose workflow never started.
   try {
-    await generateAssessment(supabase, sessionId)
+    await enqueueAssessmentGeneration({ sessionId })
   } catch (err) {
-    if (err instanceof AssessmentSkippedError) {
-      console.info('[closeSession] assessment skipped', {
-        sessionId,
-        reason: err.reason,
-      })
-    } else {
-      console.error('[closeSession] assessment failed', {
-        sessionId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
+    console.error('[closeSession] workflow enqueue failed', {
+      sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }
 
