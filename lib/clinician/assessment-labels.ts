@@ -26,6 +26,8 @@ export function assessmentStatusLabel(
       return { label: 'Revisado', variant: 'secondary' }
     case 'rejected':
       return { label: 'Rechazado', variant: 'outline' }
+    case 'requires_manual_review':
+      return { label: 'Regenerar manualmente', variant: 'destructive' }
     case 'superseded':
       return { label: 'Sustituido', variant: 'outline' }
   }

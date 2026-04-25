@@ -1010,6 +1010,7 @@ export type Database = {
         | "reviewed_modified"
         | "rejected"
         | "superseded"
+        | "requires_manual_review"
       assessment_type: "intake" | "follow_up" | "closure" | "review"
       conversation_status: "active" | "closed" | "archived"
       generated_by_source: "ai" | "clinician" | "system"
@@ -1184,6 +1185,7 @@ export const Constants = {
         "reviewed_modified",
         "rejected",
         "superseded",
+        "requires_manual_review",
       ],
       assessment_type: ["intake", "follow_up", "closure", "review"],
       conversation_status: ["active", "closed", "archived"],
