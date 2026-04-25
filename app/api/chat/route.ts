@@ -257,11 +257,21 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
       ) {
         return
       }
-      await saveAssistantMessage(supabase, {
-        conversationId: session.conversation_id,
-        sessionId,
-        parts: responseMessage.parts,
-      })
+      try {
+        await saveAssistantMessage(supabase, {
+          conversationId: session.conversation_id,
+          sessionId,
+          parts: responseMessage.parts,
+        })
+      } catch (err) {
+        // onFinish runs in the stream flush; throwing here swallows silently
+        // and produces a "ghost" turn (cliente ve la respuesta, BD no la
+        // tiene). Log loud so we notice in stderr / observability.
+        console.error('[chat-onfinish-persist]', {
+          sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     },
   })
 }
