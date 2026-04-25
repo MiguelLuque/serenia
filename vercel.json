@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/close-stale-sessions",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}
