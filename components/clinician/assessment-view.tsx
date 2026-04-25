@@ -7,6 +7,7 @@ import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
 import { AssessmentEditor } from '@/components/clinician/assessment-editor'
 import {
   markReviewedAction,
+  regenerateAssessmentAction,
   rejectAssessmentAction,
 } from '@/app/app/clinica/sesion/[sessionId]/actions'
 import { Badge } from '@/components/ui/badge'
@@ -156,6 +157,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
             sessionId={session.id}
             userId={session.userId}
             initial={assessment.summary}
+            initialClinicalNotes={assessment.clinicalNotes}
             inheritedTasks={detail.inheritedTasks}
             onCancel={() => setIsEditing(false)}
             onSaved={() => setIsEditing(false)}
@@ -285,6 +287,23 @@ function AssessmentSections({
     setRejectReason('')
     setRejectError(null)
   }
+
+  function handleRegenerate() {
+    startTransition(async () => {
+      const result = await regenerateAssessmentAction({
+        assessmentId: assessment.id,
+      })
+      if (result.ok) {
+        toast.success(
+          'Regeneración encolada — el nuevo informe aparecerá en unos minutos.',
+        )
+      } else {
+        toast.error(`Error: ${result.error}`)
+      }
+    })
+  }
+
+  const isRejected = assessment.status === 'rejected'
 
   return (
     <>
@@ -531,6 +550,39 @@ function AssessmentSections({
         </Card>
       )}
 
+      {/* Notas del clínico — read-only, separadas del rejection_reason */}
+      {assessment.clinicalNotes && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Notas del clínico</CardTitle>
+            <CardDescription>
+              Notas internas para el equipo y el agente en próximas sesiones.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap text-sm">
+              {assessment.clinicalNotes}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Motivo del rechazo — solo cuando status='rejected' */}
+      {isRejected && assessment.rejectionReason && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-base text-red-900">
+              Motivo del rechazo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap text-sm text-red-900">
+              {assessment.rejectionReason}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Resumen para el paciente — muted card para diferenciarlo */}
       <Card className="bg-slate-50">
         <CardHeader>
@@ -553,25 +605,36 @@ function AssessmentSections({
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
-            <Button onClick={onEdit} disabled={isPending || rejectOpen}>
-              Editar informe
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleMarkReviewed}
-              disabled={isPending || rejectOpen}
-            >
-              {isPending && !rejectOpen
-                ? 'Guardando…'
-                : 'Marcar como revisado sin cambios'}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => setRejectOpen(true)}
-              disabled={isPending || rejectOpen}
-            >
-              Rechazar informe
-            </Button>
+            {isRejected ? (
+              <Button
+                onClick={handleRegenerate}
+                disabled={isPending}
+              >
+                {isPending ? 'Encolando…' : 'Regenerar el informe'}
+              </Button>
+            ) : (
+              <>
+                <Button onClick={onEdit} disabled={isPending || rejectOpen}>
+                  Editar informe
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleMarkReviewed}
+                  disabled={isPending || rejectOpen}
+                >
+                  {isPending && !rejectOpen
+                    ? 'Guardando…'
+                    : 'Marcar como revisado sin cambios'}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setRejectOpen(true)}
+                  disabled={isPending || rejectOpen}
+                >
+                  Rechazar informe
+                </Button>
+              </>
+            )}
           </div>
 
           {rejectOpen && (

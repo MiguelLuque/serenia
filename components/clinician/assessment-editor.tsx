@@ -74,6 +74,7 @@ export function AssessmentEditor({
   sessionId,
   userId,
   initial,
+  initialClinicalNotes,
   inheritedTasks,
   onCancel,
   onSaved,
@@ -82,11 +83,19 @@ export function AssessmentEditor({
   sessionId: string
   userId: string
   initial: AssessmentSummary
+  /**
+   * Existing `clinical_notes` for this revision (T-B). May be null if the
+   * clinician hasn't added notes yet.
+   */
+  initialClinicalNotes: string | null
   inheritedTasks: SessionDetail['inheritedTasks']
   onCancel: () => void
   onSaved: () => void
 }) {
   const [draft, setDraft] = useState<AssessmentSummary>(initial)
+  const [clinicalNotes, setClinicalNotes] = useState<string>(
+    initialClinicalNotes ?? '',
+  )
   const [inheritedEdits, setInheritedEdits] = useState<
     Record<string, InheritedTaskEdit>
   >({})
@@ -209,12 +218,16 @@ export function AssessmentEditor({
           : { id: original.id, estado: edit.estado }
       })
 
+    const trimmedNotes = clinicalNotes.trim()
+    const notesPayload = trimmedNotes.length > 0 ? trimmedNotes : null
+
     startTransition(async () => {
       const result = await saveAssessmentAction({
         assessmentId,
         sessionId,
         userId,
         summary: cleaned,
+        clinical_notes: notesPayload,
         inherited_task_updates,
       })
       if (result.ok) {
@@ -582,6 +595,26 @@ export function AssessmentEditor({
               updateField('patient_facing_summary', e.target.value)
             }
             rows={4}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Notas del clínico — campo libre, separado del rejection_reason */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Notas del clínico</CardTitle>
+          <CardDescription>
+            Notas internas para tu equipo y para el agente en próximas
+            sesiones. No se muestran al paciente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            id="clinical-notes"
+            value={clinicalNotes}
+            onChange={(e) => setClinicalNotes(e.target.value)}
+            rows={4}
+            placeholder="Observaciones, matices del cierre, ajustes para próximas sesiones…"
           />
         </CardContent>
       </Card>
