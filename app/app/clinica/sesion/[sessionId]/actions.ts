@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { AssessmentSchema } from '@/lib/assessments/generator'
+import { prepareRegeneration } from '@/lib/assessments/regenerate'
+import { enqueueAssessmentGeneration } from '@/lib/workflows'
 import type { Json } from '@/lib/supabase/types'
 
 const InheritedTaskUpdateSchema = z.object({
@@ -18,6 +20,13 @@ type SaveAssessmentInput = {
   sessionId: string
   userId: string
   summary: unknown
+  /**
+   * Free-text clinician notes attached to the new revision. Persisted in
+   * `assessments.clinical_notes` (T-B). Independent from `rejection_reason`
+   * — these are notes the clinician adds while reviewing/editing, NOT a
+   * rejection justification. May be null/empty to clear or skip.
+   */
+  clinical_notes?: string | null
   inherited_task_updates?: Array<{
     id: string
     estado: 'pendiente' | 'cumplida' | 'parcial' | 'no_realizada' | 'no_abordada'
@@ -73,6 +82,13 @@ export async function saveAssessmentAction(
 
   const now = new Date().toISOString()
 
+  // Normalize clinical_notes: trim, collapse empty → null. We store null
+  // for "no note" rather than empty string so the agent's context-injection
+  // tier (Plan 7 T-1) can do simple truthy checks.
+  const trimmedNotes =
+    typeof input.clinical_notes === 'string' ? input.clinical_notes.trim() : ''
+  const clinicalNotes = trimmedNotes.length > 0 ? trimmedNotes : null
+
   const { data: inserted, error: insertError } = await supabase
     .from('assessments')
     .insert({
@@ -85,6 +101,7 @@ export async function saveAssessmentAction(
       supersedes_assessment_id: input.assessmentId,
       reviewed_by: reviewerId,
       reviewed_at: now,
+      clinical_notes: clinicalNotes,
     })
     .select('id')
     .single()
@@ -323,4 +340,76 @@ export async function rejectAssessmentAction(input: {
   revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
 
   return { ok: true }
+}
+
+type RegenerateActionResult =
+  | { ok: true; runId: string }
+  | { ok: false; error: string }
+
+/**
+ * Regenerate a rejected closure assessment.
+ *
+ * Pipeline:
+ *   1. Authenticate the caller (RLS handles role enforcement — only
+ *      clinicians can UPDATE assessments per migration
+ *      20260423000001_rls_clinician_write).
+ *   2. `prepareRegeneration` fetches the rejected row, captures
+ *      `rejection_reason` + `clinical_notes`, and marks the row as
+ *      `superseded` so the next `assessmentExistsStep` check sees no live
+ *      row.
+ *   3. Enqueue `generateAssessmentWorkflow` with a `rejectionContext` so
+ *      the LLM has the clinician's reasons + notes when producing the
+ *      new draft.
+ *
+ * The new draft starts with `clinical_notes=null`. The clinician can add
+ * notes again in the new revision — notes apply to the specific assessment
+ * version, not the session globally. Decision recorded in T-B spec.
+ *
+ * Idempotency: `prepareRegeneration` + the live-status filter +
+ * `assessments_session_closure_live_unique` together guarantee at most one
+ * live draft per session even under concurrent regenerate requests. See
+ * `prepareRegeneration` JSDoc for the atomicity contract.
+ */
+export async function regenerateAssessmentAction(input: {
+  assessmentId: string
+}): Promise<RegenerateActionResult> {
+  const supabase = await createAuthenticatedClient()
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData?.user) {
+    return { ok: false, error: 'No autenticado' }
+  }
+
+  let prepared
+  try {
+    prepared = await prepareRegeneration(supabase, input.assessmentId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: message }
+  }
+
+  let runId: string
+  try {
+    const result = await enqueueAssessmentGeneration({
+      sessionId: prepared.sessionId,
+      rejectionContext: prepared.rejectionContext,
+    })
+    runId = result.runId
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // The rejected row is now `superseded` but the workflow never started.
+    // The clinician sees the row marked as superseded with no live draft;
+    // they can retry — `prepareRegeneration` will reject because status is
+    // no longer 'rejected'. Surface the original error so the UI hints at
+    // a retry-from-scratch path (manual close-session, etc).
+    return {
+      ok: false,
+      error: `No se pudo encolar la regeneración: ${message}`,
+    }
+  }
+
+  revalidatePath('/app')
+  revalidatePath(`/app/clinica/sesion/${prepared.sessionId}`)
+
+  return { ok: true, runId }
 }

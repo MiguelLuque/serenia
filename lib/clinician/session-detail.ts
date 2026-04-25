@@ -28,6 +28,18 @@ export type SessionDetail = {
     summary: AssessmentSummary
     generatedBy: GeneratedBy
     createdAt: string
+    /**
+     * Free-text clinician notes attached to this revision (Plan 7 T-B).
+     * Distinct from `rejectionReason`. Visible to the AI agent in future
+     * sessions per Plan 7 T-1 (context Tier A).
+     */
+    clinicalNotes: string | null
+    /**
+     * Reason captured when this row was rejected (status='rejected'). Null
+     * for any other status. Used by the regenerate flow to seed the LLM's
+     * `rejectionContext`.
+     */
+    rejectionReason: string | null
   } | null
   messages: Array<{
     id: string
@@ -103,7 +115,9 @@ export async function getSessionDetail(
     // views elsewhere in the codebase.
     supabase
       .from('assessments')
-      .select('id, status, summary_json, generated_by, created_at')
+      .select(
+        'id, status, summary_json, generated_by, created_at, clinical_notes, rejection_reason',
+      )
       .eq('session_id', sessionId)
       .eq('assessment_type', 'closure')
       .neq('status', 'superseded')
@@ -184,6 +198,8 @@ export async function getSessionDetail(
           summary: AssessmentSchema.parse(assessmentRes.data.summary_json),
           generatedBy: assessmentRes.data.generated_by,
           createdAt: assessmentRes.data.created_at,
+          clinicalNotes: assessmentRes.data.clinical_notes ?? null,
+          rejectionReason: assessmentRes.data.rejection_reason ?? null,
         }
       : null,
     messages,

@@ -149,9 +149,24 @@ export async function loadClosedSessionStep(
 }
 
 /**
- * Idempotency check: returns true if a closure assessment already exists for
- * this session. The `assessments` table has a unique constraint that enforces
- * this, so the persist step also catches duplicates as a safety net.
+ * Idempotency check: returns true if a "live" closure assessment already
+ * exists for this session.
+ *
+ * "Live" means status NOT IN ('superseded', 'rejected') — i.e. only rows
+ * that should block a regeneration. This MUST stay in sync with the partial
+ * unique index `assessments_session_closure_live_unique` defined in
+ * migration 20260424000004, which enforces at-most-one-live row per session
+ * at the BD level. The persist step traps 23505 as a safety net.
+ *
+ * Why filter out `rejected` and `superseded`:
+ *  - When a clinician rejects a draft, T-B's regenerate flow marks it as
+ *    `superseded` and enqueues this workflow. If we counted rejected /
+ *    superseded rows here, the workflow would short-circuit on
+ *    `already_exists` and never produce the new draft — bug that closes the
+ *    rejection-regeneration loop.
+ *  - Plan 5's edit flow already uses `superseded` as the audit-history
+ *    marker for prior versions; we never want a superseded row to block a
+ *    new live draft.
  */
 export async function assessmentExistsStep(
   sessionId: string,
@@ -164,6 +179,7 @@ export async function assessmentExistsStep(
     .select('id')
     .eq('session_id', sessionId)
     .eq('assessment_type', 'closure')
+    .not('status', 'in', '("superseded","rejected")')
     .maybeSingle()
 
   if (error) throw error
