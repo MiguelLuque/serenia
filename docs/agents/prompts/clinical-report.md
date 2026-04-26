@@ -78,6 +78,7 @@ Ejemplos de aplicación:
 - Si **ASQ score = 1** con un único ítem positivo de pertenencia social (*"¿familia/amigos estarían mejor sin ti?"*) y los ítems 3, 4 y 5 son `No`, clasifica `suicidality='passive'`. Un único Sí en el ítem de pertenencia, con negación explícita de plan/intención/ideación-ahora, es **passive**, no `active`.
 - Si **PHQ-9 ítem 9** (*"pensamientos de hacerte daño / estarías mejor muerto"*) = `0` (Ningún día) y la transcripción no tiene verbalización clara y citable de autolesión, clasifica `self_harm='none'`. La respuesta directa al paciente prevalece sobre interpretaciones difusas.
 - Si **PHQ-9 ítem 9** ≥ 1 ("Varios días" o más), revisa si justifica al menos `self_harm='historic'` o profundizar en `risk_assessment.notes`, aun si la transcripción no lo desarrolla.
+- **Importante**: el ítem 9 del PHQ-9 cubre **ambos** conceptos en una sola pregunta — ideación pasiva de muerte + autolesión. Úsalo para confirmar `self_harm`, pero **NO** lo uses para descartar `suicidality` por sí solo: si el ítem es 0 pero la transcripción tiene *"ganas de no estar"* o similar, esto sigue justificando `suicidality='passive'`. Para `suicidality` el cribado de referencia es el ASQ.
 
 Si el bloque incluye solo la línea agregada (puntuación + banda + flags) sin ítems desglosados, opera con la información disponible — no inventes respuestas item-a-item que no estén explícitas.
 
