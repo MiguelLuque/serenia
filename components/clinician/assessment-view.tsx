@@ -150,7 +150,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
         </CardHeader>
       </Card>
 
-      {assessment ? (
+      {assessment && assessment.summary ? (
         isEditing ? (
           <AssessmentEditor
             assessmentId={assessment.id}
@@ -164,12 +164,16 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
           />
         ) : (
           <AssessmentSections
-            assessment={assessment}
+            assessment={assessment as AssessmentWithSummary}
             sessionId={session.id}
             inheritedTasks={detail.inheritedTasks}
             onEdit={() => setIsEditing(true)}
           />
         )
+      ) : assessment && assessment.status === 'requires_manual_review' ? (
+        <ManualReviewState assessmentId={assessment.id} />
+      ) : detail.regenerationInProgress ? (
+        <RegenerationInProgressState />
       ) : (
         <Card>
           <CardHeader>
@@ -231,13 +235,17 @@ const TASK_STATUS_LABEL: Record<
   no_abordada: 'No abordada',
 }
 
+type AssessmentWithSummary = NonNullable<SessionDetail['assessment']> & {
+  summary: NonNullable<NonNullable<SessionDetail['assessment']>['summary']>
+}
+
 function AssessmentSections({
   assessment,
   sessionId,
   inheritedTasks,
   onEdit,
 }: {
-  assessment: NonNullable<SessionDetail['assessment']>
+  assessment: AssessmentWithSummary
   sessionId: string
   inheritedTasks: SessionDetail['inheritedTasks']
   onEdit: () => void
@@ -295,7 +303,7 @@ function AssessmentSections({
       })
       if (result.ok) {
         toast.success(
-          'Regeneración encolada — el nuevo informe aparecerá en unos minutos.',
+          'Regeneración encolada. El nuevo informe aparecerá en breve.',
         )
       } else {
         toast.error(`Error: ${result.error}`)
@@ -609,6 +617,7 @@ function AssessmentSections({
               <Button
                 onClick={handleRegenerate}
                 disabled={isPending}
+                className="rounded-full"
               >
                 {isPending ? 'Encolando…' : 'Regenerar el informe'}
               </Button>
@@ -676,5 +685,73 @@ function AssessmentSections({
         </CardContent>
       </Card>
     </>
+  )
+}
+
+/**
+ * Render state for `assessment.status === 'requires_manual_review'`. The
+ * row's `summary_json` carries a `{ generation_failure }` payload that we
+ * deliberately do NOT show to the clinician — it's technical noise. They
+ * get a friendly explanation and a single regenerate CTA. The handler is
+ * the same server action used by the rejected branch.
+ */
+function ManualReviewState({ assessmentId }: { assessmentId: string }) {
+  const [isPending, startTransition] = useTransition()
+
+  function handleRegenerate() {
+    startTransition(async () => {
+      const result = await regenerateAssessmentAction({ assessmentId })
+      if (result.ok) {
+        toast.success(
+          'Regeneración encolada. El nuevo informe aparecerá en breve.',
+        )
+      } else {
+        toast.error(`Error: ${result.error}`)
+      }
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">
+          El informe no se pudo generar automáticamente
+        </CardTitle>
+        <CardDescription>
+          Hubo un fallo al generar el informe clínico. Puedes intentar
+          regenerarlo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button
+          onClick={handleRegenerate}
+          disabled={isPending}
+          className="rounded-full"
+        >
+          {isPending ? 'Encolando…' : 'Regenerar el informe'}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Render state for "the clinician just clicked Regenerate and the new draft
+ * isn't persisted yet". Detected upstream by `getSessionDetail` via the
+ * recent-superseded heuristic. Intentionally NO polling and NO progress
+ * animation — a calm explicit message is enough at the realistic LLM
+ * latency.
+ */
+function RegenerationInProgressState() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Regenerando el informe…</CardTitle>
+        <CardDescription>
+          Este proceso tarda unos segundos. Vuelve en un momento o recarga la
+          página.
+        </CardDescription>
+      </CardHeader>
+    </Card>
   )
 }

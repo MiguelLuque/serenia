@@ -105,6 +105,38 @@ describe('prepareRegeneration', () => {
     expect(updateEntry.eqArgs[0]).toEqual(['id', 'a-1'])
   })
 
+  // Blocker 1c — `requires_manual_review` is now a regenerable status.
+  // The row carries no rejection_reason / clinical_notes, but
+  // prepareRegeneration must still flip it to `superseded` so the next
+  // assessmentExistsStep run sees no live row.
+  it('accepts requires_manual_review and marks the row as superseded', async () => {
+    const calls = makeCalls()
+    const supabase = makeSupabase({
+      calls,
+      fetch: {
+        data: {
+          id: 'a-mr-1',
+          session_id: 'session-mr-1',
+          status: 'requires_manual_review',
+          rejection_reason: null,
+          clinical_notes: null,
+        },
+        error: null,
+      },
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await prepareRegeneration(supabase as any, 'a-mr-1')
+
+    expect(result.sessionId).toBe('session-mr-1')
+    expect(result.rejectionContext).toEqual({
+      rejectionReason: '',
+      clinicalNotes: null,
+    })
+    expect(calls.updates).toHaveLength(1)
+    expect(calls.updates[0].payload).toEqual({ status: 'superseded' })
+  })
+
   it('passes through null clinical_notes when the row has none', async () => {
     const calls = makeCalls()
     const supabase = makeSupabase({
@@ -145,7 +177,7 @@ describe('prepareRegeneration', () => {
     expect(calls.updates).toHaveLength(0)
   })
 
-  it("throws when status is not 'rejected' and does not UPDATE", async () => {
+  it('throws when status is not regenerable and does not UPDATE', async () => {
     const calls = makeCalls()
     const supabase = makeSupabase({
       calls,
@@ -164,12 +196,12 @@ describe('prepareRegeneration', () => {
     await expect(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       prepareRegeneration(supabase as any, 'a-3'),
-    ).rejects.toThrow(/rejected/)
+    ).rejects.toThrow(/rejected.*requires_manual_review/)
 
     expect(calls.updates).toHaveLength(0)
   })
 
-  it('throws when the row is rejected but session_id is null', async () => {
+  it("throws when the row is regenerable but session_id is null", async () => {
     const calls = makeCalls()
     const supabase = makeSupabase({
       calls,

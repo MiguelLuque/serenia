@@ -397,10 +397,10 @@ export async function regenerateAssessmentAction(input: {
     runId = result.runId
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    // The rejected row is now `superseded` but the workflow never started.
+    // The row is now `superseded` but the workflow never started.
     // The clinician sees the row marked as superseded with no live draft;
     // they can retry — `prepareRegeneration` will reject because status is
-    // no longer 'rejected'. Surface the original error so the UI hints at
+    // no longer regenerable. Surface the original error so the UI hints at
     // a retry-from-scratch path (manual close-session, etc).
     return {
       ok: false,

@@ -103,14 +103,16 @@ describe('regenerateAssessmentAction', () => {
     createAuthenticatedClientMock.mockResolvedValue(supabase)
 
     prepareRegenerationMock.mockRejectedValue(
-      new Error("Solo se pueden regenerar informes con estado 'rejected' (actual: 'draft_ai')."),
+      new Error(
+        "Solo se puede regenerar un informe con estado 'rejected' o 'requires_manual_review' (actual: 'draft_ai').",
+      ),
     )
 
     const result = await regenerateAssessmentAction({ assessmentId: 'a-1' })
 
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('unreachable')
-    expect(result.error).toMatch(/rejected/)
+    expect(result.error).toMatch(/rejected.*requires_manual_review/)
     expect(enqueueAssessmentGenerationMock).not.toHaveBeenCalled()
     expect(revalidatePathMock).not.toHaveBeenCalled()
   })

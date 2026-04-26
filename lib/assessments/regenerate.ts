@@ -3,6 +3,18 @@ import type { Database } from '@/lib/supabase/types'
 import type { RejectionContext } from '@/lib/workflows/generate-assessment'
 
 type Supabase = SupabaseClient<Database>
+type AssessmentStatus = Database['public']['Enums']['assessment_status']
+
+/**
+ * Statuses from which an assessment can be regenerated:
+ *   - `rejected`: clinician explicitly rejected the AI draft.
+ *   - `requires_manual_review`: workflow exhausted retries and persisted
+ *     a placeholder row (T6). The clinician needs an explicit retry path.
+ */
+const REGENERABLE_STATUSES: readonly AssessmentStatus[] = [
+  'rejected',
+  'requires_manual_review',
+]
 
 export type PrepareRegenerationResult = {
   sessionId: string
@@ -10,20 +22,22 @@ export type PrepareRegenerationResult = {
 }
 
 /**
- * Prepare a rejected closure assessment for regeneration.
+ * Prepare a regenerable closure assessment for regeneration.
  *
  * Steps:
  *   1. Read the assessment by id.
- *   2. Validate that it exists and `status='rejected'`. Any other status is
- *      a programmer error — the UI only exposes "Regenerar" on rejected
- *      drafts — so we throw with a clear message instead of silently
- *      no-op'ing.
+ *   2. Validate that it exists and is in a regenerable status (`rejected`
+ *      or `requires_manual_review`). Any other status is a programmer
+ *      error — the UI only exposes "Regenerar" on those statuses — so we
+ *      throw with a clear message instead of silently no-op'ing.
  *   3. Capture `rejection_reason` and `clinical_notes` for the workflow's
- *      `rejectionContext`.
- *   4. UPDATE the rejected row to `status='superseded'` so the next
+ *      `rejectionContext`. (Both may be empty/null on
+ *      `requires_manual_review`; that's expected.)
+ *   4. UPDATE the row to `status='superseded'` so the next
  *      `assessmentExistsStep` check (filtered by NOT IN
  *      ('superseded','rejected')) sees no live row and lets the regenerated
- *      draft persist.
+ *      draft persist. NB: a `requires_manual_review` row is "live" by that
+ *      filter, so the flip-to-superseded is what unblocks the workflow.
  *
  * The caller is expected to then enqueue the workflow with the returned
  * `rejectionContext`. This split exists so the action layer can stay thin
@@ -62,9 +76,9 @@ export async function prepareRegeneration(
     throw new Error('El informe a regenerar no existe.')
   }
 
-  if (row.status !== 'rejected') {
+  if (!REGENERABLE_STATUSES.includes(row.status)) {
     throw new Error(
-      `Solo se pueden regenerar informes con estado 'rejected' (actual: '${row.status}').`,
+      `Solo se puede regenerar un informe con estado 'rejected' o 'requires_manual_review' (actual: '${row.status}').`,
     )
   }
 
@@ -73,7 +87,7 @@ export async function prepareRegeneration(
     // is nullable in the schema (assessments_session_id_fkey ON DELETE SET
     // NULL) so we guard against the orphaned case explicitly.
     throw new Error(
-      'El informe rechazado no está vinculado a una sesión; no se puede regenerar.',
+      'El informe a regenerar no está vinculado a una sesión; no se puede regenerar.',
     )
   }
 
@@ -84,7 +98,7 @@ export async function prepareRegeneration(
 
   if (updateError) {
     throw new Error(
-      `No se pudo marcar el informe rechazado como superseded: ${updateError.message}`,
+      `No se pudo marcar el informe a regenerar como superseded: ${updateError.message}`,
     )
   }
 

@@ -230,6 +230,60 @@ describe('generateAssessmentWorkflow', () => {
     expect(generateObjectMock).not.toHaveBeenCalled()
   })
 
+  // T-B blocker 1d: a `requires_manual_review` row is "live" — it must block
+  // a SPONTANEOUS spawn of the workflow (e.g. cron retry firing on the same
+  // session). The explicit regenerate path (`prepareRegeneration`) handles
+  // it correctly because it flips the row to `superseded` BEFORE enqueueing
+  // the workflow, so by the time `assessmentExistsStep` runs there is no
+  // live row left. This test pins both sides of that contract.
+  it('T-B: requires_manual_review row blocks a spontaneous workflow run', async () => {
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() },
+      // The assessmentExistsStep query filters status NOT IN
+      // (superseded,rejected); a requires_manual_review row PASSES that
+      // filter and so the existence check returns truthy.
+      assessments: { rows: { id: 'manual-review-row' } },
+    })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+
+    const result = await generateAssessmentWorkflow({ sessionId: 'session-1' })
+
+    expect(result).toEqual({ status: 'skipped', reason: 'already_exists' })
+    expect(generateObjectMock).not.toHaveBeenCalled()
+  })
+
+  it('T-B: explicit regenerate from requires_manual_review proceeds (row was flipped to superseded by prepareRegeneration)', async () => {
+    // Simulate the post-prepareRegeneration state: the manual-review row is
+    // now superseded, so the live-status filter excludes it and the
+    // existence check returns null. This is the contract that makes the
+    // regenerate-from-manual-review path work end-to-end.
+    generateObjectMock.mockResolvedValue({
+      object: summaryResult,
+      usage: { inputTokens: 5, outputTokens: 5 },
+    })
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() },
+      assessments: { rows: null }, // post-flip: no live row
+      messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [] },
+      risk_events: { rows: [] },
+    })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+
+    const result = await generateAssessmentWorkflow({
+      sessionId: 'session-1',
+      rejectionContext: {
+        // requires_manual_review rows have no rejection_reason; pass empty
+        // string + null clinical_notes — the prompt section is still added.
+        rejectionReason: '',
+        clinicalNotes: null,
+      },
+    })
+
+    expect(result).toEqual({ status: 'completed' })
+    expect(generateObjectMock).toHaveBeenCalledOnce()
+  })
+
   it('skips with no_session when the session is missing or still open', async () => {
     const supabase = makeSupabase({
       clinical_sessions: { rows: null },
