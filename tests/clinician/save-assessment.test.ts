@@ -339,6 +339,55 @@ describe('saveAssessmentAction', () => {
     expect(result.error).toBeTruthy()
   })
 
+  it('T-B: persists clinical_notes (trimmed) when provided', async () => {
+    const calls = makeAllCalls()
+    const supabase = makeSupabase({ calls, reviewerId: 'reviewer-1' })
+    createAuthenticatedClientMock.mockResolvedValue(supabase)
+
+    const result = await saveAssessmentAction({
+      assessmentId: 'prev-assessment',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+      clinical_notes: '   Profundizar en duelo reciente.   ',
+    })
+
+    expect(result.ok).toBe(true)
+    const insertPayload = calls.assessments.inserts[0] as Record<string, unknown>
+    expect(insertPayload.clinical_notes).toBe('Profundizar en duelo reciente.')
+  })
+
+  it('T-B: stores null when clinical_notes is whitespace-only or omitted', async () => {
+    const calls = makeAllCalls()
+    const supabase = makeSupabase({ calls, reviewerId: 'reviewer-1' })
+    createAuthenticatedClientMock.mockResolvedValue(supabase)
+
+    // Whitespace → null
+    await saveAssessmentAction({
+      assessmentId: 'prev-1',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+      clinical_notes: '   ',
+    })
+    const wsPayload = calls.assessments.inserts[0] as Record<string, unknown>
+    expect(wsPayload.clinical_notes).toBeNull()
+
+    // Omitted → null
+    const calls2 = makeAllCalls()
+    const supabase2 = makeSupabase({ calls: calls2, reviewerId: 'reviewer-1' })
+    createAuthenticatedClientMock.mockResolvedValue(supabase2)
+
+    await saveAssessmentAction({
+      assessmentId: 'prev-2',
+      sessionId: 'session-1',
+      userId: 'user-1',
+      summary: validSummary,
+    })
+    const omittedPayload = calls2.assessments.inserts[0] as Record<string, unknown>
+    expect(omittedPayload.clinical_notes).toBeNull()
+  })
+
   it('preserves proposed_tasks in the inserted summary_json', async () => {
     const calls = makeAllCalls()
     const supabase = makeSupabase({ calls, reviewerId: 'reviewer-1' })

@@ -102,6 +102,9 @@ function makeSupabase(tables: Record<string, TableSpec>) {
         return chain
       })
       chain.eq = vi.fn(passthrough)
+      chain.neq = vi.fn(passthrough)
+      chain.in = vi.fn(passthrough)
+      chain.not = vi.fn(passthrough)
       chain.maybeSingle = vi.fn(() =>
         Promise.resolve({ data: spec.rows ?? null, error: spec.error ?? null }),
       )
@@ -320,6 +323,87 @@ describe('generateAssessmentWorkflow', () => {
       generation_failure: { error: string }
     }
     expect(failure.generation_failure.error).toMatch(/only 1 user messages/)
+  })
+
+  // ── T-B: assessmentExistsStep filters by live status ──────────────────────
+  // The existence check must IGNORE rows with status in ('superseded',
+  // 'rejected'); otherwise rejecting a draft + enqueueing regeneration would
+  // hit `already_exists` and the new draft would never persist. This test
+  // asserts the filter is in the query (the supabase mock records `.not(…)`
+  // calls) AND that when the stub returns null for the live-row check the
+  // workflow proceeds to generation.
+  it('T-B: assessmentExistsStep filters by status NOT IN (superseded, rejected) and proceeds to generation when only rejected/superseded rows exist', async () => {
+    generateObjectMock.mockResolvedValue({
+      object: summaryResult,
+      usage: { inputTokens: 10, outputTokens: 20 },
+    })
+
+    // The mock returns null because the live-status filter excludes the
+    // pre-existing rejected row. If the filter were missing, the test
+    // setup would have to choose between simulating the rejected row
+    // (causing `already_exists`) or hiding it (passing trivially).
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() },
+      assessments: { rows: null },
+      messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [] },
+      risk_events: { rows: [] },
+    })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+
+    const result = await generateAssessmentWorkflow({
+      sessionId: 'session-1',
+      rejectionContext: {
+        rejectionReason: 'No refleja la transcripción',
+        clinicalNotes: 'Profundizar en duelo reciente',
+      },
+    })
+
+    expect(result).toEqual({ status: 'completed' })
+
+    // Confirm the filter was actually applied — the existence-check chain
+    // must have called `.not('status', 'in', …)` with the live-row exclusion.
+    const assessmentChains = supabase.from.mock.results
+      .filter((_r, i) => supabase.from.mock.calls[i][0] === 'assessments')
+      .map((r) => r.value as { not?: ReturnType<typeof vi.fn> })
+    const notCalls = assessmentChains.flatMap((c) => c.not?.mock.calls ?? [])
+    expect(notCalls.length).toBeGreaterThanOrEqual(1)
+    const [column, op, value] = notCalls[0] as [string, string, string]
+    expect(column).toBe('status')
+    expect(op).toBe('in')
+    expect(value).toContain('superseded')
+    expect(value).toContain('rejected')
+  })
+
+  it('T-B: passes rejectionContext into the user prompt of generateObject', async () => {
+    generateObjectMock.mockResolvedValue({
+      object: summaryResult,
+      usage: { inputTokens: 10, outputTokens: 20 },
+    })
+
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() },
+      assessments: { rows: null },
+      messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [] },
+      risk_events: { rows: [] },
+    })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+
+    await generateAssessmentWorkflow({
+      sessionId: 'session-1',
+      rejectionContext: {
+        rejectionReason: 'Falta detalle del riesgo de autolesión',
+        clinicalNotes: 'Paciente reporta cortes superficiales recientes',
+      },
+    })
+
+    const promptArg = generateObjectMock.mock.calls[0][0] as { prompt: string }
+    expect(promptArg.prompt).toContain('Contexto de regeneración')
+    expect(promptArg.prompt).toContain('Falta detalle del riesgo de autolesión')
+    expect(promptArg.prompt).toContain(
+      'Paciente reporta cortes superficiales recientes',
+    )
   })
 
   it('manual_review insert idempotency: unique-violation (23505) is treated as success', async () => {

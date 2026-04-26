@@ -97,8 +97,8 @@ Estas decisiones gobiernan todo lo demás. Si futuras peticiones las contradicen
 | Confirmar sin cambios | `reviewed_confirmed` | Informe queda firme. Sus campos llegan al agente en próximas sesiones. |
 | Editar y guardar | `reviewed_modified` | El draft anterior pasa a `superseded`. La versión editada queda firme. |
 | Añadir notas (campo separado) | (no cambia status) | Las notas se persisten en `assessments.clinical_notes` (campo nuevo). **Visibles al agente en sesiones futuras** (ver Fase 5). |
-| Rechazar con motivo | `rejected` | El informe se deshecha. Se puede regenerar (ver siguiente). |
-| **Regenerar tras rechazo** | nuevo `draft_ai` | Se invoca `generateAssessment()` pasando como entrada extra el `rejection_reason` y las `clinical_notes`. El generator ajusta su output según esas indicaciones. El nuevo draft supersedea al rechazado. |
+| Rechazar con motivo | `rejected` | `rejectAssessmentAction` actualiza `status='rejected'` y persiste `rejection_reason`. La fila queda con `status=rejected` (no se borra) — la unique-index parcial `assessments_session_closure_live_unique` excluye `rejected` y `superseded`, así que no bloquea la regeneración. |
+| **Regenerar tras rechazo** | nuevo `draft_ai` | `regenerateAssessmentAction` llama a `prepareRegeneration`: marca el rechazado como `superseded` y encola `generateAssessmentWorkflow` (Plan 7 T6) con `rejectionContext = { rejectionReason, clinicalNotes }`. El step `assessmentExistsStep` filtra rows `superseded` / `rejected`, así que la regeneración procede. El step `generateAssessmentStep` añade el rejectionContext al user prompt para que el LLM ajuste el nuevo draft. La operación BD↔WDK no es transaccional; la unique-index parcial cubre el race-de-doble-encolar. |
 
 **Acciones específicas del clínico durante revisión:**
 - Marcar manualmente como crisis (override de la clasificación de IA) — Plan 7 T11.
