@@ -20,16 +20,38 @@ export const ProposedTaskSchema = z.object({
 })
 export type ProposedTask = z.infer<typeof ProposedTaskSchema>
 
-const AssessmentCore = z.object({
+// Risk assessment used by `generateObject` (OpenAI strict). Every property
+// must appear in `required`, so the new fields use `nullable()` (not
+// `nullable().default(null)`) to keep them required at the schema level — the
+// LLM must explicitly emit a value. `substance_use_acute` is nullable so the
+// LLM can mark the topic as not relevant in this session (`null`).
+const RiskAssessmentGenerationSchema = z.object({
+  suicidality: z.enum(['none', 'passive', 'active', 'acute']),
+  self_harm: z.enum(['none', 'historic', 'current']),
+  heteroaggression: z.enum(['none', 'verbal', 'plan']),
+  substance_use_acute: z.enum(['none', 'suspected', 'confirmed']).nullable(),
+  notes: z.string(),
+})
+
+// Risk assessment used at the load boundary (parsing stored `summary_json`).
+// Legacy rows generated before T4 lack `heteroaggression` and
+// `substance_use_acute` entirely; defaults preserve their parseability.
+const RiskAssessmentLoadSchema = z.object({
+  suicidality: z.enum(['none', 'passive', 'active', 'acute']),
+  self_harm: z.enum(['none', 'historic', 'current']),
+  heteroaggression: z.enum(['none', 'verbal', 'plan']).default('none'),
+  substance_use_acute: z
+    .enum(['none', 'suspected', 'confirmed'])
+    .nullable()
+    .default(null),
+  notes: z.string(),
+})
+
+const AssessmentCoreFields = {
   chief_complaint: z.string(),
   presenting_issues: z.array(z.string()),
   mood_affect: z.string(),
   cognitive_patterns: z.array(z.string()),
-  risk_assessment: z.object({
-    suicidality: z.enum(['none', 'passive', 'active', 'acute']),
-    self_harm: z.enum(['none', 'historic', 'current']),
-    notes: z.string(),
-  }),
   questionnaires: z.array(
     z.object({
       code: z.string(),
@@ -44,19 +66,25 @@ const AssessmentCore = z.object({
   preliminary_impression: z.string(),
   recommended_actions_for_clinician: z.array(z.string()),
   patient_facing_summary: z.string(),
-})
+} as const
 
 // Schema used by `generateObject` for OpenAI strict structured outputs: every
-// property must appear in `required`, so `proposed_tasks` has NO default here.
-// The LLM is instructed to emit an empty array when no tasks are proposed.
-export const AssessmentGenerationSchema = AssessmentCore.extend({
+// property must appear in `required`, so `proposed_tasks` and the new
+// risk_assessment fields have NO defaults here. The LLM is instructed to emit
+// an empty array / explicit null when not applicable.
+export const AssessmentGenerationSchema = z.object({
+  ...AssessmentCoreFields,
+  risk_assessment: RiskAssessmentGenerationSchema,
   proposed_tasks: z.array(ProposedTaskSchema),
 })
 
 // Schema used at load boundaries (parsing stored `summary_json`). Legacy rows
-// that predate Plan 6 lack `proposed_tasks`; default to [] so those rows
-// continue to parse.
-export const AssessmentSchema = AssessmentCore.extend({
+// that predate Plan 6 lack `proposed_tasks`; legacy rows that predate Plan 7
+// T4 lack `heteroaggression` and `substance_use_acute`. Defaults keep those
+// rows parseable without a BD migration (summary_json is jsonb).
+export const AssessmentSchema = z.object({
+  ...AssessmentCoreFields,
+  risk_assessment: RiskAssessmentLoadSchema,
   proposed_tasks: z.array(ProposedTaskSchema).default([]),
 })
 

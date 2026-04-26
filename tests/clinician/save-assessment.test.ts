@@ -224,7 +224,18 @@ describe('saveAssessmentAction', () => {
       supersedes_assessment_id: 'prev-assessment',
       reviewed_by: 'reviewer-42',
     })
-    expect(insertPayload.summary_json).toEqual(validSummary)
+    // saveAssessmentAction validates with AssessmentSchema, which applies
+    // defaults for the Plan 7 T4 fields (heteroaggression, substance_use_acute)
+    // when legacy callers omit them. So the stored payload is the validated /
+    // defaulted shape, not the raw input.
+    expect(insertPayload.summary_json).toEqual({
+      ...validSummary,
+      risk_assessment: {
+        ...validSummary.risk_assessment,
+        heteroaggression: 'none',
+        substance_use_acute: null,
+      },
+    })
     expect(typeof insertPayload.reviewed_at).toBe('string')
     expect((insertPayload.reviewed_at as string) >= before).toBe(true)
     expect((insertPayload.reviewed_at as string) <= after).toBe(true)

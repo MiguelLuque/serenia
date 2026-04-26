@@ -12,7 +12,13 @@ function daysAgo(n: number, base = '2026-04-22T12:00:00Z'): string {
   return new Date(new Date(base).getTime() - n * 24 * 60 * 60 * 1000).toISOString()
 }
 
-const baseRisk = { suicidality: 'none' as const, self_harm: 'none' as const, notes: '' }
+const baseRisk = {
+  suicidality: 'none' as const,
+  self_harm: 'none' as const,
+  heteroaggression: 'none' as const,
+  substance_use_acute: null,
+  notes: '',
+}
 
 /** Minimal valid PatientContext for tier A */
 function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
@@ -392,7 +398,13 @@ describe('renderPatientContextBlock — truncation', () => {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,
           areas_for_exploration: hugeAreas,
-          risk_assessment: { suicidality: 'passive', self_harm: 'historic', notes: '' },
+          risk_assessment: {
+            suicidality: 'passive',
+            self_harm: 'historic',
+            heteroaggression: 'none',
+            substance_use_acute: null,
+            notes: '',
+          },
           questionnaires: [],
         },
         ageInDays: 10,
@@ -565,7 +577,13 @@ describe('renderPatientContextBlock — additional edge cases', () => {
           chief_complaint: 'Test',
           presenting_issues: [],
           areas_for_exploration: [],
-          risk_assessment: { suicidality: 'passive', self_harm: 'current', notes: '' },
+          risk_assessment: {
+            suicidality: 'passive',
+            self_harm: 'current',
+            heteroaggression: 'none',
+            substance_use_acute: null,
+            notes: '',
+          },
           questionnaires: [],
         },
         ageInDays: 10,
@@ -696,7 +714,13 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,
           areas_for_exploration: hugeAreas,
-          risk_assessment: { suicidality: 'passive', self_harm: 'historic', notes: '' },
+          risk_assessment: {
+            suicidality: 'passive',
+            self_harm: 'historic',
+            heteroaggression: 'none',
+            substance_use_acute: null,
+            notes: '',
+          },
           questionnaires: [],
         },
         ageInDays: 10,
@@ -740,7 +764,13 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,
           areas_for_exploration: hugeAreas,
-          risk_assessment: { suicidality: 'passive', self_harm: 'historic', notes: '' },
+          risk_assessment: {
+            suicidality: 'passive',
+            self_harm: 'historic',
+            heteroaggression: 'none',
+            substance_use_acute: null,
+            notes: '',
+          },
           questionnaires: [],
         },
         ageInDays: 10,

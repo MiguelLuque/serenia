@@ -11,7 +11,13 @@ function daysAgo(n: number): string {
   return new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000).toISOString()
 }
 
-const baseRisk = { suicidality: 'none' as const, self_harm: 'none' as const, notes: '' }
+const baseRisk = {
+  suicidality: 'none' as const,
+  self_harm: 'none' as const,
+  heteroaggression: 'none' as const,
+  substance_use_acute: null,
+  notes: '',
+}
 
 function makeNoneCtx(overrides: Partial<PatientContext> = {}): PatientContext {
   return {
