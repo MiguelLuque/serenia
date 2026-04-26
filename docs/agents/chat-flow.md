@@ -81,7 +81,7 @@ Estas decisiones gobiernan todo lo demás. Si futuras peticiones las contradicen
 **Lo que pasa al cerrar (en orden):**
 1. `clinical_sessions.status = 'closed'` con `closed_at` y `closure_reason`.
 2. Se encola un job para `generateAssessment()` (background, no bloquea el response del cliente — ver Plan 7 T6).
-3. El job lee la transcripción + cuestionarios respondidos + risk_events + (en sesiones N>1) el informe anterior + notas del clínico previo.
+3. El job lee la transcripción + cuestionarios respondidos (con respuestas item-a-item, no solo score+banda — para que el LLM pueda aplicar las reglas anti-sobreclasificación) + risk_events + (en sesiones N>1) el informe anterior + notas del clínico previo.
 4. El generator invoca al LLM con el prompt [clinical-report.md](prompts/clinical-report.md) y devuelve un `summary_json` validado contra `AssessmentSchema`.
 5. Se inserta una row en `assessments` con `status='draft_ai'`.
 6. Si la generación falla (LLM down, schema validation), se inserta una row con `status='requires_manual_review'` y el clínico la ve marcada como tal.
@@ -251,3 +251,4 @@ Cuando una decisión humana se cierre, se actualiza este documento con el result
 - **2026-04-25** — Decisión: regenerar informe rechazado tomando en cuenta `rejection_reason` + `clinical_notes`.
 - **2026-04-25** — Decisión: onboarding clínico ligero (3-4 preguntas) post-signup, contenido pendiente de validación clínica humana.
 - **2026-04-25** — T4 implementado: criterios clínicos vinculantes en [clinical-report.md](prompts/clinical-report.md) (definiciones operativas de los enums + reglas anti-sobreclasificación con ASQ + tono de `patient_facing_summary` + framework `[URGENTE]/[CONSULTA]/[SEGUIMIENTO]` + handling del Contexto de regeneración) y schema con `risk_assessment.heteroaggression` y `risk_assessment.substance_use_acute`. Pendiente firma del clínico colegiado para cerrar decisiones humanas #1 y #2.
+- **2026-04-24** — T5 implementado: el `generateAssessmentStep` del workflow ahora inyecta las respuestas item-a-item de cada cuestionario (PHQ-9 / GAD-7 / ASQ) en el bloque `## Resultados de cuestionarios` que recibe el LLM, en formato `Item N: <pregunta> — <respuesta>`. Sin esto, las reglas anti-sobreclasificación de [clinical-report.md](prompts/clinical-report.md) (en particular la regla "ASQ ítem 5 = No → no `active`") no eran verificables porque el LLM solo veía score+banda+flags. La sección "Cómo usar las respuestas item-a-item de los cuestionarios" en el prompt clínico hace explícito el contrato vinculante.
