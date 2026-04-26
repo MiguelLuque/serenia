@@ -460,6 +460,262 @@ describe('generateAssessmentWorkflow', () => {
     )
   })
 
+  // ── T5: per-item answers in the LLM transcript ───────────────────────────
+  // The score+band alone don't let the LLM apply the anti-overclassification
+  // rules in clinical-report.md (e.g. "ASQ ítem 5 = No → not 'active'"). The
+  // workflow must include each item's prompt + answer so those rules become
+  // checkable. These tests pin the exact format so a future refactor can't
+  // silently revert the contract.
+  describe('T5: questionnaire item-level lines in user prompt', () => {
+    it('ASQ instance: includes the 5 items with their prompts and labels (Paciente D regression)', async () => {
+      generateObjectMock.mockResolvedValue({
+        object: summaryResult,
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+
+      // Paciente D: ASQ score=1, only ítem 2 ("¿familia/amigos estarían
+      // mejor sin ti?") = Sí, ítems 1/3/4/5 = No. The LLM must see this so
+      // the binding rule "ítem 5 = No → not 'active'" is applicable.
+      const supabase = makeSupabase({
+        clinical_sessions: { rows: makeSession() },
+        assessments: { rows: null },
+        messages: { rows: makeMessages(4) },
+        questionnaire_instances: {
+          rows: [{ id: 'qi-asq', questionnaire_id: 'def-asq', status: 'scored' }],
+        },
+        questionnaire_definitions: {
+          rows: { code: 'ASQ', name: 'Cuestionario de Evaluación de la Conducta Suicida' },
+        },
+        questionnaire_results: {
+          rows: { total_score: 1, severity_band: 'positive', flags_json: [] },
+        },
+        questionnaire_answers: {
+          rows: [
+            {
+              answer_raw: 'No',
+              answer_numeric: 0,
+              item: { order_index: 1, prompt: '¿Ha deseado estar muerto/a o dormido/a y no volver a despertar?' },
+            },
+            {
+              answer_raw: 'Sí',
+              answer_numeric: 1,
+              item: { order_index: 2, prompt: '¿Ha tenido algún pensamiento de hacerse daño o quitarse la vida?' },
+            },
+            {
+              answer_raw: 'No',
+              answer_numeric: 0,
+              item: { order_index: 3, prompt: '¿Ha pensado en cómo podría hacerlo?' },
+            },
+            {
+              answer_raw: 'No',
+              answer_numeric: 0,
+              item: { order_index: 4, prompt: '¿Ha tenido alguna intención de actuar según esos pensamientos?' },
+            },
+            {
+              answer_raw: 'No',
+              answer_numeric: 0,
+              item: { order_index: 5, prompt: '¿Tiene pensado hacerse daño en el próximo mes? (Responda solo si ha respondido Sí a alguna pregunta anterior)' },
+            },
+          ],
+        },
+        risk_events: { rows: [] },
+      })
+      createServiceRoleClientMock.mockReturnValue(supabase)
+
+      const result = await generateAssessmentWorkflow({ sessionId: 'session-1' })
+
+      expect(result).toEqual({ status: 'completed' })
+      const promptArg = generateObjectMock.mock.calls[0][0] as { prompt: string }
+
+      // Header line still present, with the friendlier flag rendering.
+      expect(promptArg.prompt).toContain(
+        '- ASQ (Cuestionario de Evaluación de la Conducta Suicida): puntuación 1, banda positive, flags ninguno',
+      )
+
+      // All 5 items must appear, in order, with prompt and label answer.
+      expect(promptArg.prompt).toContain(
+        'Item 1: ¿Ha deseado estar muerto/a o dormido/a y no volver a despertar? — No',
+      )
+      expect(promptArg.prompt).toContain(
+        'Item 2: ¿Ha tenido algún pensamiento de hacerse daño o quitarse la vida? — Sí',
+      )
+      expect(promptArg.prompt).toContain(
+        'Item 3: ¿Ha pensado en cómo podría hacerlo? — No',
+      )
+      expect(promptArg.prompt).toContain(
+        'Item 4: ¿Ha tenido alguna intención de actuar según esos pensamientos? — No',
+      )
+      expect(promptArg.prompt).toContain(
+        'Item 5: ¿Tiene pensado hacerse daño en el próximo mes? (Responda solo si ha respondido Sí a alguna pregunta anterior) — No',
+      )
+
+      // Items must be ordered (1 before 2 before 3...). Pin the relative
+      // order so the LLM can rely on item-N positional reasoning.
+      const idx1 = promptArg.prompt.indexOf('Item 1:')
+      const idx2 = promptArg.prompt.indexOf('Item 2:')
+      const idx3 = promptArg.prompt.indexOf('Item 3:')
+      const idx5 = promptArg.prompt.indexOf('Item 5:')
+      expect(idx1).toBeGreaterThan(-1)
+      expect(idx2).toBeGreaterThan(idx1)
+      expect(idx3).toBeGreaterThan(idx2)
+      expect(idx5).toBeGreaterThan(idx3)
+    })
+
+    it('PHQ-9 instance with all-zero items: includes "Ningún día" labels', async () => {
+      generateObjectMock.mockResolvedValue({
+        object: summaryResult,
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+
+      const phq9Items = [
+        'Poco interés o placer en hacer las cosas',
+        'Sentirse desanimado/a, deprimido/a, o sin esperanza',
+        'Con problemas para dormir o para mantenerse dormido/a, o durmiendo demasiado',
+        'Sintiéndose cansado/a o con poca energía',
+        'Con poco apetito o comiendo en exceso',
+        'Sintiéndose mal consigo mismo/a, o que es un fracaso, o que ha fallado a sí mismo/a o a su familia',
+        'Con dificultad para concentrarse en cosas como leer el periódico o ver la televisión',
+        'Moviéndose o hablando tan lento que otras personas lo han notado, o lo contrario: tan inquieto/a que se ha estado moviendo mucho más de lo normal',
+        'Pensamientos de que estaría mejor muerto/a o de hacerse daño de alguna manera',
+      ]
+
+      const supabase = makeSupabase({
+        clinical_sessions: { rows: makeSession() },
+        assessments: { rows: null },
+        messages: { rows: makeMessages(4) },
+        questionnaire_instances: {
+          rows: [{ id: 'qi-phq', questionnaire_id: 'def-phq', status: 'scored' }],
+        },
+        questionnaire_definitions: {
+          rows: { code: 'PHQ9', name: 'Cuestionario de Salud del Paciente-9' },
+        },
+        questionnaire_results: {
+          rows: { total_score: 0, severity_band: 'minimal', flags_json: [] },
+        },
+        questionnaire_answers: {
+          rows: phq9Items.map((prompt, i) => ({
+            answer_raw: 'Ningún día',
+            answer_numeric: 0,
+            item: { order_index: i + 1, prompt },
+          })),
+        },
+        risk_events: { rows: [] },
+      })
+      createServiceRoleClientMock.mockReturnValue(supabase)
+
+      const result = await generateAssessmentWorkflow({ sessionId: 'session-1' })
+      expect(result).toEqual({ status: 'completed' })
+
+      const promptArg = generateObjectMock.mock.calls[0][0] as { prompt: string }
+      expect(promptArg.prompt).toContain(
+        '- PHQ9 (Cuestionario de Salud del Paciente-9): puntuación 0, banda minimal, flags ninguno',
+      )
+      expect(promptArg.prompt).toContain(
+        'Item 1: Poco interés o placer en hacer las cosas — Ningún día',
+      )
+      expect(promptArg.prompt).toContain(
+        'Item 9: Pensamientos de que estaría mejor muerto/a o de hacerse daño de alguna manera — Ningún día',
+      )
+    })
+
+    it('falls back to numeric when answer_raw is missing on a row (defensive)', async () => {
+      generateObjectMock.mockResolvedValue({
+        object: summaryResult,
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+
+      const supabase = makeSupabase({
+        clinical_sessions: { rows: makeSession() },
+        assessments: { rows: null },
+        messages: { rows: makeMessages(4) },
+        questionnaire_instances: {
+          rows: [{ id: 'qi-asq', questionnaire_id: 'def-asq', status: 'scored' }],
+        },
+        questionnaire_definitions: {
+          rows: { code: 'ASQ', name: 'ASQ test' },
+        },
+        questionnaire_results: {
+          rows: { total_score: 0, severity_band: 'negative', flags_json: [] },
+        },
+        questionnaire_answers: {
+          rows: [
+            // Edge case: answer_raw empty, only numeric present. Should
+            // render as the numeric coercion ("0") instead of being dropped.
+            {
+              answer_raw: '',
+              answer_numeric: 0,
+              item: { order_index: 1, prompt: 'Pregunta test' },
+            },
+          ],
+        },
+        risk_events: { rows: [] },
+      })
+      createServiceRoleClientMock.mockReturnValue(supabase)
+
+      await generateAssessmentWorkflow({ sessionId: 'session-1' })
+      const promptArg = generateObjectMock.mock.calls[0][0] as { prompt: string }
+      expect(promptArg.prompt).toContain('Item 1: Pregunta test — 0')
+    })
+
+    it('no questionnaires: prompt still has the (ninguno) placeholder, no items', async () => {
+      generateObjectMock.mockResolvedValue({
+        object: summaryResult,
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+
+      const supabase = makeSupabase({
+        clinical_sessions: { rows: makeSession() },
+        assessments: { rows: null },
+        messages: { rows: makeMessages(4) },
+        questionnaire_instances: { rows: [] },
+        risk_events: { rows: [] },
+      })
+      createServiceRoleClientMock.mockReturnValue(supabase)
+
+      const result = await generateAssessmentWorkflow({ sessionId: 'session-1' })
+      expect(result).toEqual({ status: 'completed' })
+      const promptArg = generateObjectMock.mock.calls[0][0] as { prompt: string }
+      expect(promptArg.prompt).toContain('(ninguno en esta sesión)')
+      expect(promptArg.prompt).not.toMatch(/Item \d+:/)
+    })
+
+    it('questionnaire instance with no answers rows: falls back to header-only line, no crash', async () => {
+      generateObjectMock.mockResolvedValue({
+        object: summaryResult,
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+
+      // Pathological: a scored result row with zero corresponding answer
+      // rows (e.g. orphan after manual cleanup). Must not crash and must
+      // still surface the aggregated line so the LLM has something.
+      const supabase = makeSupabase({
+        clinical_sessions: { rows: makeSession() },
+        assessments: { rows: null },
+        messages: { rows: makeMessages(4) },
+        questionnaire_instances: {
+          rows: [{ id: 'qi-orphan', questionnaire_id: 'def-orphan', status: 'scored' }],
+        },
+        questionnaire_definitions: {
+          rows: { code: 'ASQ', name: 'ASQ test' },
+        },
+        questionnaire_results: {
+          rows: { total_score: 0, severity_band: 'negative', flags_json: [] },
+        },
+        questionnaire_answers: { rows: [] },
+        risk_events: { rows: [] },
+      })
+      createServiceRoleClientMock.mockReturnValue(supabase)
+
+      const result = await generateAssessmentWorkflow({ sessionId: 'session-1' })
+      expect(result).toEqual({ status: 'completed' })
+      const promptArg = generateObjectMock.mock.calls[0][0] as { prompt: string }
+      expect(promptArg.prompt).toContain(
+        '- ASQ (ASQ test): puntuación 0, banda negative, flags ninguno',
+      )
+      expect(promptArg.prompt).not.toMatch(/Item \d+:/)
+    })
+  })
+
   it('manual_review insert idempotency: unique-violation (23505) is treated as success', async () => {
     generateObjectMock.mockRejectedValue(new Error('LLM unavailable'))
 

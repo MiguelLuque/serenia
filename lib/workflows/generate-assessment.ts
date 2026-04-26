@@ -237,22 +237,40 @@ export async function generateAssessmentStep(
 
   const questionnaireBlocks: string[] = []
   for (const qi of qInstances ?? []) {
-    const [{ data: def }, { data: result }] = await Promise.all([
-      supabase
-        .from('questionnaire_definitions')
-        .select('code, name')
-        .eq('id', qi.questionnaire_id)
-        .single(),
-      supabase
-        .from('questionnaire_results')
-        .select('total_score, severity_band, flags_json')
-        .eq('instance_id', qi.id)
-        .maybeSingle(),
-    ])
+    const [{ data: def }, { data: result }, { data: answerRows }] =
+      await Promise.all([
+        supabase
+          .from('questionnaire_definitions')
+          .select('code, name')
+          .eq('id', qi.questionnaire_id)
+          .single(),
+        supabase
+          .from('questionnaire_results')
+          .select('total_score, severity_band, flags_json')
+          .eq('instance_id', qi.id)
+          .maybeSingle(),
+        // T5: pull individual item-level answers so the LLM can apply the
+        // anti-overclassification rules (e.g. ASQ ítem 5 = No → not 'active').
+        // The score+band alone don't disambiguate; the per-item answer is the
+        // binding signal. Defensive on shape: if the join fails or rows are
+        // missing we fall back to the aggregated line only.
+        supabase
+          .from('questionnaire_answers')
+          .select(
+            'answer_raw, answer_numeric, item:questionnaire_items!inner(order_index, prompt)',
+          )
+          .eq('instance_id', qi.id),
+      ])
     if (!def || !result) continue
     const flags = Array.isArray(result.flags_json) ? result.flags_json : []
+    const flagsLabel = flags.length > 0 ? JSON.stringify(flags) : 'ninguno'
+    const headerLine = `- ${def.code} (${def.name}): puntuación ${result.total_score}, banda ${result.severity_band}, flags ${flagsLabel}`
+
+    const itemLines = formatItemLines(answerRows)
     questionnaireBlocks.push(
-      `- ${def.code} (${def.name}): puntuación ${result.total_score}, banda ${result.severity_band}, flags ${JSON.stringify(flags)}`,
+      itemLines.length > 0
+        ? `${headerLine}\n${itemLines.map((l) => `  ${l}`).join('\n')}`
+        : headerLine,
     )
   }
 
@@ -416,4 +434,59 @@ function isUniqueViolation(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
   const code = (err as { code?: unknown }).code
   return code === '23505'
+}
+
+/**
+ * Format the per-item answers of a questionnaire instance into one line per
+ * item, sorted by `order_index`. Defensive against the various shapes the
+ * Supabase JOIN can return (object, array, missing) and against malformed
+ * rows so a partial DB state never crashes the assessment generation.
+ *
+ * Returns an empty array when there are no usable rows; the caller falls
+ * back to the aggregated header-only line in that case.
+ *
+ * Why `answer_raw` is preferred over `answer_numeric`: the questionnaire
+ * frontend (`components/chat/questionnaire-card.tsx`) stores the human label
+ * (e.g. "Sí", "No", "Casi todos los días") in `answer_raw` and the numeric
+ * coding in `answer_numeric`. Feeding the LLM the labels makes the binding
+ * rules in `clinical-report.md` directly checkable ("ítem 5 = No"). We only
+ * fall back to the numeric if the label is missing for any reason.
+ */
+function formatItemLines(rows: unknown): string[] {
+  if (!Array.isArray(rows)) return []
+
+  type Parsed = { order: number; prompt: string; answer: string }
+  const parsed: Parsed[] = []
+
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null) continue
+    const r = row as {
+      answer_raw?: unknown
+      answer_numeric?: unknown
+      item?: unknown
+    }
+
+    // The embedded `item` shape from a !inner join is normally an object,
+    // but supabase-js sometimes wraps single rows as a 1-element array.
+    const itemRaw = Array.isArray(r.item) ? r.item[0] : r.item
+    if (typeof itemRaw !== 'object' || itemRaw === null) continue
+    const item = itemRaw as { order_index?: unknown; prompt?: unknown }
+
+    if (typeof item.order_index !== 'number') continue
+    if (typeof item.prompt !== 'string' || item.prompt.length === 0) continue
+
+    let answer: string
+    if (typeof r.answer_raw === 'string' && r.answer_raw.length > 0) {
+      answer = r.answer_raw
+    } else if (typeof r.answer_numeric === 'number') {
+      answer = String(r.answer_numeric)
+    } else {
+      continue
+    }
+
+    parsed.push({ order: item.order_index, prompt: item.prompt, answer })
+  }
+
+  parsed.sort((a, b) => a.order - b.order)
+  return parsed.map((p) => `Item ${p.order}: ${p.prompt} — ${p.answer}`)
 }
