@@ -250,3 +250,4 @@ Cuando una decisión humana se cierre, se actualiza este documento con el result
 - **2026-04-25** — Decisión: notas del clínico (`clinical_notes`) son visibles al agente en sesiones futuras.
 - **2026-04-25** — Decisión: regenerar informe rechazado tomando en cuenta `rejection_reason` + `clinical_notes`.
 - **2026-04-25** — Decisión: onboarding clínico ligero (3-4 preguntas) post-signup, contenido pendiente de validación clínica humana.
+- **2026-04-25** — T4 implementado: criterios clínicos vinculantes en [clinical-report.md](prompts/clinical-report.md) (definiciones operativas de los enums + reglas anti-sobreclasificación con ASQ + tono de `patient_facing_summary` + framework `[URGENTE]/[CONSULTA]/[SEGUIMIENTO]` + handling del Contexto de regeneración) y schema con `risk_assessment.heteroaggression` y `risk_assessment.substance_use_acute`. Pendiente firma del clínico colegiado para cerrar decisiones humanas #1 y #2.

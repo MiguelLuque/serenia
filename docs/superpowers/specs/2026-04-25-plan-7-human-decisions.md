@@ -10,7 +10,9 @@ Owner por defecto: el psicólogo clínico que supervisa Serenia (a definir). Cua
 
 ---
 
-## 1. Definiciones operativas de los enums clínicos (BLOQUEA T4)
+## 1. Definiciones operativas de los enums clínicos (BORRADOR IMPLEMENTADO EN T4 — pendiente firma clínica)
+
+**Estado:** **borrador implementado en T4 con criterios provisionales — pendiente firma clínica para versión final.** Las definiciones operativas vinculantes viven en [docs/agents/prompts/clinical-report.md](../../../docs/agents/prompts/clinical-report.md) sección "Criterios clínicos para los enums (vinculantes)". Si el clínico colegiado ajusta matices tras la revisión, será un commit puntual sobre ese mismo prompt — el borrador es razonablemente alineado con ASQ guidelines y framing fenomenológico DSM-5.
 
 **Contexto:** el Plan 7 propone reescribir [docs/agents/prompts/clinical-report.md](../../../docs/agents/prompts/clinical-report.md) con criterios verbales, exclusiones y ejemplos para cada valor de `risk_assessment.suicidality` (`none|passive|active|acute`) y `risk_assessment.self_harm` (`none|historic|current`). El equipo técnico tiene una propuesta inicial pero los matices clínicos los firma un colegiado.
 
@@ -23,11 +25,13 @@ Owner por defecto: el psicólogo clínico que supervisa Serenia (a definir). Cua
 
 **Owner:** psicólogo colegiado supervisor.
 **Output esperado:** documento adjunto al Plan 7 con definiciones firmadas.
-**Bloqueo:** T4 puede empezar con borrador, pero NO se mergea sin esta firma.
+**Bloqueo:** T4 mergeado con borrador. Antes de abrir a usuarios reales se requiere firma del clínico — si la firma no introduce cambios sustantivos, se marca esta decisión como cerrada; si introduce cambios, commit puntual sobre el prompt.
 
 ---
 
-## 2. Aprobar añadir `heteroaggression` y `substance_use_acute` al schema (BLOQUEA T4)
+## 2. Aprobar añadir `heteroaggression` y `substance_use_acute` al schema (BORRADOR IMPLEMENTADO EN T4 — pendiente firma clínica)
+
+**Estado:** **schema con los nuevos enums implementado en T4** ([lib/assessments/generator.ts](../../../lib/assessments/generator.ts)). Pendiente firma clínica de los enums propuestos antes de abrir a usuarios reales. Cualquier cambio post-firma requeriría versión nueva del schema (los rows existentes seguirán parseando vía defaults).
 
 **Contexto:** hoy [AssessmentSchema](../../../lib/assessments/generator.ts) solo tiene `suicidality` y `self_harm`. Heteroagresión (riesgo de daño a otros) y abuso de sustancias agudo se meten en `notes` libres, sin estructura, lo que hace que el LLM los clasifique mal (caso Paciente D). T4 propone añadir:
 
