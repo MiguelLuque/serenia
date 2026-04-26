@@ -4,7 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { AssessmentSchema } from '@/lib/assessments/generator'
-import { prepareRegeneration } from '@/lib/assessments/regenerate'
+import {
+  prepareRegeneration,
+  rollbackRegeneration,
+} from '@/lib/assessments/regenerate'
 import { enqueueAssessmentGeneration } from '@/lib/workflows'
 import type { Json } from '@/lib/supabase/types'
 
@@ -397,14 +400,25 @@ export async function regenerateAssessmentAction(input: {
     runId = result.runId
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    // The row is now `superseded` but the workflow never started.
-    // The clinician sees the row marked as superseded with no live draft;
-    // they can retry — `prepareRegeneration` will reject because status is
-    // no longer regenerable. Surface the original error so the UI hints at
-    // a retry-from-scratch path (manual close-session, etc).
+    // The row is now `superseded` but the workflow never started. Without
+    // rollback the row would be orphaned — `prepareRegeneration` would
+    // reject any retry because status is no longer regenerable. Restore
+    // the original status so the next click can succeed.
+    await rollbackRegeneration(
+      supabase,
+      input.assessmentId,
+      prepared.originalStatus,
+    )
+    console.error('[regenerateAssessmentAction] enqueue failed', {
+      assessmentId: input.assessmentId,
+      sessionId: prepared.sessionId,
+      originalStatus: prepared.originalStatus,
+      error: message,
+    })
     return {
       ok: false,
-      error: `No se pudo encolar la regeneración: ${message}`,
+      error:
+        'No se pudo encolar la regeneración. El informe queda como estaba; intenta de nuevo en unos segundos.',
     }
   }
 
