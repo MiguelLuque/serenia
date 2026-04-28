@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   textContainsSafetyCheck,
   hasPriorSafetyCheck,
@@ -9,21 +9,23 @@ import {
 } from '@/lib/chat/farewell-detector'
 
 // =============================================================================
-// Plan 7 T3 — anti-repetición de safety check + cierre obligatorio + identificación
-// del riesgo + memoria intra-sesión + anti-persistencia.
+// Plan 7 T3 — Tests heurísticos auxiliares.
 //
 // Este archivo cubre:
-//   3a — `hasPriorSafetyCheck` heurística sobre messages.parts.
-//   3a — variantes del crisisNotice según haya o no check previo (POST handler).
+//   3a — `textContainsSafetyCheck` regex unitario.
+//   3a — `hasPriorSafetyCheck` (heurística sobre messages.parts) — @deprecated
+//        pero conservada porque `safety-state.ts` reusa `textContainsSafetyCheck`
+//        en su fallback heurístico textual.
 //   3c — `detectFarewellWithoutCloseTool` heurística + warn en onFinish.
-//   3d — copy del crisisNotice "primera vez" sin imperativo.
 //   3b/3c/3e — el prompt de session-therapist contiene las nuevas secciones
 //              vinculantes y se carga sin errores.
+//
+// Las variantes integradas del crisisNotice (T3a v2) viven en
+// `tests/chat/safety-flow.test.ts` (POST /api/chat con `getSessionSafetyState`
+// y `buildCrisisNotice` integrados).
 // =============================================================================
 
 // ── Helpers compartidos ─────────────────────────────────────────────────────
-
-const NOW_ISO = '2026-04-28T12:00:00Z'
 
 function makeBuilder(resolvedData: unknown) {
   const builder: Record<string, unknown> = {}
@@ -226,151 +228,6 @@ describe('detectFarewellWithoutCloseTool', () => {
 
   it('devuelve false con array vacío', () => {
     expect(detectFarewellWithoutCloseTool([])).toBe(false)
-  })
-})
-
-// =============================================================================
-// 3a + 3d — POST /api/chat: variantes del crisisNotice
-// =============================================================================
-
-describe('POST /api/chat — crisisNotice variants (T3a + T3d)', () => {
-  const OLD_LLM_MODEL = process.env.LLM_CONVERSATIONAL_MODEL
-  const capturedSystemPrompts: string[] = []
-
-  beforeEach(() => {
-    process.env.LLM_CONVERSATIONAL_MODEL = 'test-model'
-    capturedSystemPrompts.length = 0
-    vi.resetModules()
-  })
-
-  afterEach(() => {
-    if (OLD_LLM_MODEL === undefined) delete process.env.LLM_CONVERSATIONAL_MODEL
-    else process.env.LLM_CONVERSATIONAL_MODEL = OLD_LLM_MODEL
-    vi.restoreAllMocks()
-    vi.doUnmock('@/lib/supabase/server')
-    vi.doUnmock('@/lib/sessions/service')
-    vi.doUnmock('@/lib/sessions/messages')
-    vi.doUnmock('@/lib/chat/crisis-detector')
-    vi.doUnmock('@/lib/chat/safety-check-history')
-    vi.doUnmock('@/lib/questionnaires/service')
-    vi.doUnmock('@/lib/patient-context/telemetry')
-    vi.doUnmock('ai')
-  })
-
-  async function runHandler({
-    crisisDetected,
-    priorSafetyCheck,
-  }: {
-    crisisDetected: boolean
-    priorSafetyCheck: boolean
-  }): Promise<string> {
-    const fakeSession = {
-      id: 'session-T3',
-      user_id: 'user-1',
-      conversation_id: 'conv-1',
-      status: 'open',
-      opened_at: NOW_ISO,
-      last_activity_at: NOW_ISO,
-    }
-
-    const supabaseStub = {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }),
-      },
-      from: vi.fn((table: string) => {
-        if (table === 'clinical_sessions') return makeBuilder(fakeSession)
-        return makeBuilder(null)
-      }),
-    }
-    vi.doMock('@/lib/supabase/server', () => ({
-      createAuthenticatedClient: async () => supabaseStub,
-    }))
-    vi.doMock('@/lib/sessions/service', () => ({
-      touchSession: vi.fn().mockResolvedValue(undefined),
-      closeSession: vi.fn().mockResolvedValue(undefined),
-      isSessionExpired: vi.fn().mockReturnValue(false),
-    }))
-    vi.doMock('@/lib/sessions/messages', () => ({
-      saveUserMessage: vi.fn().mockResolvedValue(undefined),
-      saveAssistantMessage: vi.fn().mockResolvedValue(undefined),
-    }))
-    vi.doMock('@/lib/chat/crisis-detector', () => ({
-      detectCrisis: vi.fn().mockReturnValue({
-        detected: crisisDetected,
-        matchedTerms: crisisDetected ? ['suicid'] : [],
-      }),
-    }))
-    vi.doMock('@/lib/chat/safety-check-history', () => ({
-      hasPriorSafetyCheck: vi.fn().mockResolvedValue(priorSafetyCheck),
-    }))
-    vi.doMock('@/lib/questionnaires/service', () => ({
-      createInstance: vi.fn(),
-      getActiveInstanceForSession: vi.fn().mockResolvedValue(null),
-    }))
-    vi.doMock('@/lib/patient-context/telemetry', () => ({
-      logContextInjection: vi.fn().mockResolvedValue(undefined),
-    }))
-
-    const fakeStreamResponse = new Response('streamed', {
-      status: 200,
-      headers: { 'content-type': 'text/plain' },
-    })
-    vi.doMock('ai', async (importOriginal) => {
-      const mod = await importOriginal<typeof import('ai')>()
-      return {
-        ...mod,
-        streamText: (opts: { system: string }) => {
-          capturedSystemPrompts.push(opts.system)
-          return {
-            toUIMessageStreamResponse: () => fakeStreamResponse,
-          }
-        },
-        convertToModelMessages: async (msgs: unknown) => msgs as never,
-      }
-    })
-
-    const { POST } = await import('@/app/api/chat/route')
-    const req = new Request('http://localhost/api/chat', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: '11111111-1111-4111-8111-111111111111',
-        messages: [
-          { role: 'user', parts: [{ type: 'text', text: 'me siento desbordado' }] },
-        ],
-      }),
-    })
-
-    const res = await POST(req)
-    expect(res.status).toBe(200)
-    expect(capturedSystemPrompts.length).toBe(1)
-    return capturedSystemPrompts[0]!
-  }
-
-  it('crisis detectada + sin check previo → notice contextual NO imperativo (T3d)', async () => {
-    const prompt = await runHandler({ crisisDetected: true, priorSafetyCheck: false })
-
-    expect(prompt).toContain('[AVISO DE SEGURIDAD — POSIBLE SEÑAL]')
-    expect(prompt).toContain('Lee el contexto')
-    // El imperativo viejo NO debe aparecer.
-    expect(prompt).not.toContain('Activa el protocolo de crisis AHORA')
-  })
-
-  it('crisis detectada + check previo → variante "ya hice check" (T3a)', async () => {
-    const prompt = await runHandler({ crisisDetected: true, priorSafetyCheck: true })
-
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — CHECK YA REALIZADO]')
-    expect(prompt).toContain('NO vuelvas a preguntar')
-    expect(prompt).toContain('señal NUEVA Y específica')
-    // El notice de "primera vez" NO debe aparecer.
-    expect(prompt).not.toContain('[AVISO DE SEGURIDAD — POSIBLE SEÑAL]')
-  })
-
-  it('sin crisis → no se inyecta crisisNotice', async () => {
-    const prompt = await runHandler({ crisisDetected: false, priorSafetyCheck: false })
-
-    expect(prompt).not.toContain('[AVISO DE SEGURIDAD')
-    expect(prompt).not.toContain('[CONTEXTO DE SEGURIDAD')
   })
 })
 
