@@ -66,6 +66,13 @@ export function textContainsSafetyCheck(text: string): boolean {
  * (route.ts) treats this as "no previous check" and falls back to the
  * imperative crisisNotice. This mirrors the existing buildPatientContext
  * try/catch contract: a DB hiccup must never 500 /api/chat.
+ *
+ * @deprecated Plan 7 T3a v2 — preferir `getSessionSafetyState` de
+ * `@/lib/chat/safety-state`, que devuelve un estado discriminado a partir
+ * de la BD de cuestionarios (ASQ scored, banda, flags, etc.) y solo cae
+ * a la heurística textual cuando no hay datos clínicos. La heurística
+ * regex no reconoce el ASQ vía tool call y por eso fallaba en el smoke
+ * real (el LLM volvía a preguntar por seguridad tras un ASQ negativo).
  */
 export async function hasPriorSafetyCheck(
   supabase: Supabase,
