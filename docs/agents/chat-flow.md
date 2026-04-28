@@ -1,6 +1,6 @@
 # Flujo del chat de Serenia
 
-**Última actualización:** 2026-04-24
+**Última actualización:** 2026-04-24 (T3a v2)
 **Status:** documento vivo — cualquier cambio en el flujo del chat se refleja aquí
 
 Este documento describe **el flujo exacto** del chat con Serenia (la IA) y todo lo que la rodea: qué información recibe el agente, qué tools tiene, cómo se cierra una sesión, cómo se revisa el informe y cómo se enlaza con la siguiente sesión.
@@ -23,6 +23,7 @@ Estas decisiones gobiernan todo lo demás. Si futuras peticiones las contradicen
 8. **El detector léxico de crisis es señal, no orden** (Plan 7 T3d). El `crisisNotice` "primera vez" es contextual: instruye al LLM a leer el contexto antes de decidir si activar el protocolo. Palabras como "desbordado" o "desaparecer" sin verbalización clara de plan/intención no deben disparar protocolo de suicidio.
 9. **Cierre obligatorio vía tool** (Plan 7 T3c). Despedirse conversacionalmente ("lo dejamos aquí", "cuídate", "hasta la próxima") sin haber llamado antes a `propose_close_session` / `confirm_close_session` / `close_session_crisis` deja la sesión `status='open'` en BD. El prompt lo prohíbe expresamente; el `onFinish` de `/api/chat` loguea un `console.warn` cuando lo detecta (audit no-bloqueante).
 10. **Memoria intra-sesión y anti-persistencia tras rechazo** (Plan 7 T3b + T3e). El prompt de [`session-therapist.md`](prompts/session-therapist.md) incluye dos secciones vinculantes: (a) "lee el historial antes de preguntar" + cita textual al parafrasear, (b) "tras un rechazo, valida y cede iniciativa — prohibido encadenar 2+ alternativas seguidas".
+11. **El ASQ es la fuente de verdad del cribado de seguridad** (Plan 7 T3a v2). Tras un ASQ scored, el `crisisNotice` cambia a una variante que veta repreguntar por reaparición de palabras emocionales — solo se reabre el tema con señal nueva Y específica (plan, intención, medios, verbalización directa). El detector léxico actúa como override `[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]` solo con términos de alta-señal. La derivación se hace server-side a partir de la BD (`questionnaire_instances` + `questionnaire_results` + `questionnaire_answers`) en [`lib/chat/safety-state.ts`](../../lib/chat/safety-state.ts), y la composición del bloque en [`lib/chat/crisis-notice.ts`](../../lib/chat/crisis-notice.ts). El prompt vinculante vive en [`session-therapist.md`](prompts/session-therapist.md) bajo la sección "Cribado de seguridad — cuándo (no) repetir".
 
 ---
 
@@ -248,6 +249,11 @@ Cuando una decisión humana se cierre, se actualiza este documento con el result
 
 ## Changelog
 
+- **2026-04-24** — T3a v2 implementado: el bug del smoke real (Paciente A) destapó que tras un ASQ con todos los items "No" (banda `negative`), la IA volvía a preguntar textualmente por seguridad ante reaparición de palabras emocionales como "desbordado", "desaparecer". Causa raíz: el prompt no tenía regla explícita que dijera "ASQ ya cubrió esto, no repitas", y la heurística regex de `safety-check-history.ts` no reconocía el ASQ aplicado vía tool call. Fix:
+  - **Modelo tipado** `SafetyState` (`lib/chat/safety-state.ts`) que se deriva de `questionnaire_instances` + `questionnaire_results` + `questionnaire_answers`, con fallback heurístico textual sobre `messages` solo cuando no hay datos clínicos. Variantes: `never_assessed`, `asq_proposed_pending`, `asq_negative` (con `coversAcuteIdeation`), `asq_positive_non_acute`, `asq_acute_risk`, `textual_check_completed`. PHQ-9 deliberadamente fuera (YAGNI: el bug observado es solo de ASQ).
+  - **`buildCrisisNotice`** (`lib/chat/crisis-notice.ts`) puro que traduce el `SafetyState` a una de 7 variantes del bloque, con override `[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]` cuando el cribado está completado pero el detector léxico capta un término del subgrupo "alta señal" (`suicid`, `quitarme/quitarse la vida`, `matar(me|se)`, `hacerme dano`, `autolesi(on|onarme)`, `cortarme`, `tirarme (desde|por)`).
+  - **Sección nueva en `session-therapist.md`** "Cribado de seguridad — cuándo (no) repetir" entre Protocolo de crisis y Cuándo proponer cuestionarios: regla explícita de qué cuenta como señal nueva post-cribado, qué NO cuenta, tabla de casos límite, y excepción explícita de fraseo emocional.
+  - **`hasPriorSafetyCheck`** queda `@deprecated`. `textContainsSafetyCheck` se mantiene exportado (lo reusa el fallback heurístico de `safety-state.ts`). `buildQuestionnaireResultNotice` no se toca: cubre el acknowledge inicial post-scoring, no es redundante con SafetyState.
 - **2026-04-25** — Documento creado a raíz de Plan 7 (chat polish). Refleja el flujo acordado tras 3 auditorías (arquitecto, NextJS/AI SDK, PO clínico) y la directiva del fundador "no puede haber información del paciente que el agente no conozca".
 - **2026-04-25** — Decisión: re-clasificación de campos del contexto del agente (entran `mood_affect`, `cognitive_patterns`, `preliminary_impression`, `patient_facing_summary`, `clinical_notes` nuevos; siguen excluidos `recommended_actions_for_clinician`, `rejection_reason`).
 - **2026-04-25** — Decisión: histórico de cuestionarios vía tool `get_questionnaire_history` (no inyección automática), para no inflar el contexto inicial.
