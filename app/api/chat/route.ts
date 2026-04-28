@@ -10,6 +10,8 @@ import {
 } from '@/lib/sessions/service'
 import { saveUserMessage, saveAssistantMessage } from '@/lib/sessions/messages'
 import { detectCrisis } from '@/lib/chat/crisis-detector'
+import { hasPriorSafetyCheck } from '@/lib/chat/safety-check-history'
+import { detectFarewellWithoutCloseTool } from '@/lib/chat/farewell-detector'
 import {
   createInstance,
   getActiveInstanceForSession,
@@ -98,14 +100,40 @@ Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("
       : ''
 
   const basePrompt = getSessionTherapistPrompt()
-  const crisisNotice = crisis.detected
-    ? `[AVISO DE SEGURIDAD — ALERTA ACTIVADA]
-El último mensaje del paciente contiene señales de crisis (${crisis.matchedTerms.join(', ')}). Activa el protocolo de crisis AHORA: valida, mide riesgo con calma, ofrece la Línea 024 textualmente, marca la sesión para revisión del psicólogo, y considera llamar a close_session_crisis si el riesgo es inmediato. NUNCA confirmes un cierre por crisis: es single-step.
+
+  // Plan 7 T3a + T3d — anti-repetición + degradar el imperativo del notice.
+  //
+  // Si el detector léxico matchea, comprobamos si en los últimos N mensajes
+  // de la sesión ya ha habido un check de seguridad por parte del asistente.
+  // - Sin check previo  → notice contextual (no imperativo): el LLM decide
+  //   si la verbalización justifica activar el protocolo, leyendo el
+  //   contexto. Esto evita que palabras como "desbordado" disparen el
+  //   protocolo de suicidio cuando el contexto es estrés laboral.
+  // - Con check previo  → notice "ya hice check": prohíbe re-preguntar por
+  //   reaparición de palabras emocionales; solo activar si hay señal NUEVA
+  //   y específica (plan, intención, medios).
+  //
+  // El helper `hasPriorSafetyCheck` traga errores y devuelve false → si la
+  // BD hipa, caemos al notice imperativo (failsafe seguro).
+  let crisisNotice = ''
+  if (crisis.detected) {
+    const safetyCheckAlreadyDone = await hasPriorSafetyCheck(supabase, sessionId)
+    if (safetyCheckAlreadyDone) {
+      crisisNotice = `[CONTEXTO DE SEGURIDAD — CHECK YA REALIZADO]
+Ya preguntaste por seguridad en esta sesión y tienes la respuesta del paciente en el historial. NO vuelvas a preguntar en este turno solo porque hayan reaparecido palabras como "desbordado", "desaparecer", o similares. Lee el chat para ver la respuesta del paciente y úsala. Si la respuesta fue "no riesgo", valida lo que cuenta y sigue con el tema actual. Solo vuelve a preguntar si aparece señal NUEVA Y específica de riesgo: verbalización clara de plan, intención o medios concretos. Reaparición de palabras emocionales no cuenta. (Términos detectados este turno: ${crisis.matchedTerms.join(', ')}.)
 
 ---
 
 `
-    : ''
+    } else {
+      crisisNotice = `[AVISO DE SEGURIDAD — POSIBLE SEÑAL]
+El último mensaje contiene palabras que pueden indicar riesgo emocional (${crisis.matchedTerms.join(', ')}). Lee el contexto antes de decidir si hace falta un check de seguridad: si el paciente las usa hablando de estrés laboral, conflicto relacional o sobrecarga emocional general, NO conviertas eso en check de suicidio. Solo activa el protocolo de seguridad (validar, ofrecer la Línea 024 textualmente, marcar la sesión para revisión del psicólogo, considerar close_session_crisis) si la verbalización del paciente sugiere ideación suicida directa, plan, intención o medios concretos. NUNCA confirmes un cierre por crisis: es single-step.
+
+---
+
+`
+    }
+  }
 
   const questionnaireNotice = await buildQuestionnaireResultNotice(
     supabase,
@@ -271,6 +299,20 @@ El último mensaje del paciente contiene señales de crisis (${crisis.matchedTer
           sessionId,
           error: err instanceof Error ? err.message : String(err),
         })
+      }
+
+      // Plan 7 T3c — audit: si el asistente emitió frase de despedida
+      // ("lo dejamos aquí", "cuídate", "hasta la próxima") sin haber
+      // llamado a un tool de cierre en el mismo turno, dejamos rastro.
+      // No bloquea; el primer fix es endurecer el prompt.
+      try {
+        if (detectFarewellWithoutCloseTool(responseMessage.parts)) {
+          console.warn('[chat-onfinish] assistant emitió despedida sin tool de cierre', {
+            sessionId,
+          })
+        }
+      } catch {
+        // Defensa: nunca dejar que la heurística rompa onFinish.
       }
     },
   })
