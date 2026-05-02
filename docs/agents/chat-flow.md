@@ -1,9 +1,21 @@
 # Flujo del chat de Serenia
 
-**Última actualización:** 2026-04-24 (T3a v2)
+**Última actualización:** 2026-05-02 (Plan 8 Bloque 1 — wiring intake + protocol phase)
 **Status:** documento vivo — cualquier cambio en el flujo del chat se refleja aquí
 
 Este documento describe **el flujo exacto** del chat con Serenia (la IA) y todo lo que la rodea: qué información recibe el agente, qué tools tiene, cómo se cierra una sesión, cómo se revisa el informe y cómo se enlaza con la siguiente sesión.
+
+## Estado Plan 8 (en ejecución)
+
+Plan 8 redefine Serenia como **asistente psicológica TCC/ACT supervisada con protocolo cerrado de 8 sesiones**. Cambios ya en runtime tras los merges de mayo 2026:
+
+- ✅ **Onboarding clínico de 4 campos** (informal_name, pronouns, birth_date, reason_for_consulting). El form viejo de 11 campos está retirado.
+- ✅ **Bloque `[INTAKE INICIAL DEL PACIENTE]`** se inyecta al system prompt en sesión 1 (Plan 8 T3.4 + Bloque 1).
+- ✅ **`clinical_sessions.protocol_phase`** (1-8) se calcula al crear la sesión como `min(closed_count + 1, 8)`.
+- ✅ **Bloque `[PROTOCOLO Y FASE ACTUAL]`** se inyecta al system prompt con foco/técnicas/tarea hardcoded de la fase (Plan 8 Fase 5 + Bloque 1, ADR-015).
+- ⏳ **Reescritura del prompt v2** (`session-therapist.md`) que referencie vinculantemente los 2 bloques nuevos — pendiente firma de Pablo (Plan 8 Fase 4). Hasta entonces, el prompt v1.1 actual NO los referencia explícitamente; el LLM los recibe igual y los usa organicamente.
+- ⏳ **C-SSRS sustituye al ASQ** — pendiente Plan 8 Fase 1 (copy es-ES de Pablo) + Fase 2 (rename safety-state). Hasta entonces, ASQ sigue vigente y este documento describe su flujo.
+- ⏳ **5 cuestionarios nuevos** (BDI-II, BAI, STAI, C-SSRS, HAM-D) — pendientes copy de Pablo.
 
 Cuando alguien tenga una duda sobre "qué hace el chat" o "qué sabe el agente cuando arranca una sesión", la respuesta está aquí. Si el código diverge de este documento, el documento se actualiza primero, después se cambia el código.
 
@@ -19,11 +31,15 @@ Estas decisiones gobiernan todo lo demás. Si futuras peticiones las contradicen
 4. **La IA conduce, el clínico firma.** Todo informe pasa por revisión clínica antes de mostrarse al paciente.
 5. **Crisis = safety-first.** En riesgo agudo, el agente prioriza la red de seguridad sobre cualquier otra heurística (cierre directo sin confirmación, redirect a recursos, escalada al clínico).
 6. **Pre-lanzamiento permite refactor libre.** No defendemos retrocompatibilidad gratuita.
-7. **Anti-repetición de safety check** (Plan 7 T3a). El check de seguridad no se vuelve a disparar dentro de la misma sesión solo porque reaparezcan palabras emocionales. Si el detector léxico matchea pero el asistente ya preguntó por seguridad antes en esta sesión, el `crisisNotice` cambia a la variante `[CONTEXTO DE SEGURIDAD — CHECK YA REALIZADO]` que prohíbe re-preguntar salvo señal nueva y específica (plan, intención, medios). Heurística server-side: regex sobre los `parts` de los últimos 5 mensajes assistant. La regla queda fijada en [`lib/chat/safety-check-history.ts`](../../lib/chat/safety-check-history.ts).
+7. **Anti-repetición de safety check** (Plan 7 T3a). El check de seguridad no se vuelve a disparar dentro de la misma sesión solo porque reaparezcan palabras emocionales. Si el detector léxico matchea pero el asistente ya preguntó por seguridad antes en esta sesión, el `crisisNotice` cambia a la variante `[CONTEXTO DE SEGURIDAD — CHECK YA REALIZADO]` que prohíbe re-preguntar salvo señal nueva y específica (plan, intención, medios). Heurística server-side: regex sobre los `parts` de los últimos 5 mensajes assistant. La regla queda fijada en [`lib/chat/safety-check-history.ts`](../../lib/chat/safety-check-history.ts). **Plan 8 Fase 2** reemplaza la lógica ASQ por C-SSRS en el modelo de estados — el principio anti-repetición se mantiene.
 8. **El detector léxico de crisis es señal, no orden** (Plan 7 T3d). El `crisisNotice` "primera vez" es contextual: instruye al LLM a leer el contexto antes de decidir si activar el protocolo. Palabras como "desbordado" o "desaparecer" sin verbalización clara de plan/intención no deben disparar protocolo de suicidio.
 9. **Cierre obligatorio vía tool** (Plan 7 T3c). Despedirse conversacionalmente ("lo dejamos aquí", "cuídate", "hasta la próxima") sin haber llamado antes a `propose_close_session` / `confirm_close_session` / `close_session_crisis` deja la sesión `status='open'` en BD. El prompt lo prohíbe expresamente; el `onFinish` de `/api/chat` loguea un `console.warn` cuando lo detecta (audit no-bloqueante).
 10. **Memoria intra-sesión y anti-persistencia tras rechazo** (Plan 7 T3b + T3e). El prompt de [`session-therapist.md`](prompts/session-therapist.md) incluye dos secciones vinculantes: (a) "lee el historial antes de preguntar" + cita textual al parafrasear, (b) "tras un rechazo, valida y cede iniciativa — prohibido encadenar 2+ alternativas seguidas".
-11. **El ASQ es la fuente de verdad del cribado de seguridad** (Plan 7 T3a v2). Tras un ASQ scored, el `crisisNotice` cambia a una variante que veta repreguntar por reaparición de palabras emocionales — solo se reabre el tema con señal nueva Y específica (plan, intención, medios, verbalización directa). El detector léxico actúa como override `[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]` solo con términos de alta-señal. La derivación se hace server-side a partir de la BD (`questionnaire_instances` + `questionnaire_results` + `questionnaire_answers`) en [`lib/chat/safety-state.ts`](../../lib/chat/safety-state.ts), y la composición del bloque en [`lib/chat/crisis-notice.ts`](../../lib/chat/crisis-notice.ts). El prompt vinculante vive en [`session-therapist.md`](prompts/session-therapist.md) bajo la sección "Cribado de seguridad — cuándo (no) repetir".
+11. **El ASQ es la fuente de verdad del cribado de seguridad** (Plan 7 T3a v2). **Vigente hasta Plan 8 Fase 2 — entonces C-SSRS lo sustituye con granularidad de 5 bandas (ADR-016).** Tras un ASQ scored, el `crisisNotice` cambia a una variante que veta repreguntar por reaparición de palabras emocionales — solo se reabre el tema con señal nueva Y específica (plan, intención, medios, verbalización directa). El detector léxico actúa como override `[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]` solo con términos de alta-señal. La derivación se hace server-side a partir de la BD (`questionnaire_instances` + `questionnaire_results` + `questionnaire_answers`) en [`lib/chat/safety-state.ts`](../../lib/chat/safety-state.ts), y la composición del bloque en [`lib/chat/crisis-notice.ts`](../../lib/chat/crisis-notice.ts). El prompt vinculante vive en [`session-therapist.md`](prompts/session-therapist.md) bajo la sección "Cribado de seguridad — cuándo (no) repetir".
+
+12. **Protocolo cerrado de 8 sesiones TCC/ACT** (Plan 8 ADR-015). La fase de cada sesión (`clinical_sessions.protocol_phase` 1-8) se calcula al crear la sesión como `min(closedCount + 1, 8)`. Tras la 8ª sesión cerrada, las siguientes mantienen `protocol_phase=8` y entran en estado de mantenimiento (placeholder hasta que Pablo firme el comportamiento post-8). El bloque `[PROTOCOLO Y FASE ACTUAL — Sesión N: <foco>]` se inyecta al system prompt con foco/objetivos/técnicas/tarea hardcoded en [`lib/protocol/render-phase.ts`](../../lib/protocol/render-phase.ts). El protocolo es **rígido y no configurable**: cualquier cambio al contenido clínico requiere PR.
+
+13. **Personalización vinculante con intake clínico** (Plan 8 T3.4 + Bloque 1). En sesión 1 el agente recibe un bloque `[INTAKE INICIAL DEL PACIENTE]` con nombre informal, pronombres, edad y motivo de consulta — los 4 campos del onboarding clínico nuevo. Solo se inyecta si `isFirstSession === true`; en sesiones N>1 el `[CONTEXTO DEL PACIENTE]` ya enriquece esa info con la historia clínica heredada. El prompt v2 (Fase 4 pendiente) referenciará vinculantemente que la IA debe **usar siempre el nombre informal y aplicar género gramatical correcto según pronombres** — resuelve bugs 1, 2, 3 del Plan 8.
 
 ---
 
@@ -38,39 +54,51 @@ Estas decisiones gobiernan todo lo demás. Si futuras peticiones las contradicen
 
 **Cuándo:** la primera vez que el paciente se loguea tras registrarse, antes de poder empezar a chatear.
 
-**Qué se le pide:** 3-4 preguntas estructuradas, breves y sin jerga clínica. Pendiente de validación por clínico (ver doc humano #13 + #16).
+**Cómo lo dispara la app:** el middleware (`lib/supabase/middleware.ts`) redirige a `/onboarding` cuando `user_profiles.onboarding_status !== 'complete'`. Form en [`components/onboarding/profile-form.tsx`](../../components/onboarding/profile-form.tsx); server action en [`app/onboarding/actions.ts`](../../app/onboarding/actions.ts); validación zod en [`lib/onboarding/schema.ts`](../../lib/onboarding/schema.ts).
 
-**Borrador propuesto** (a confirmar):
-- Cómo prefieres ser tratado/a (pronombres / nombre informal).
-- Edad o fecha de nacimiento.
-- ¿Qué te trae a Serenia? (texto libre, breve).
-- ¿Has hablado antes con un psicólogo? Si sí, brevemente. (opcional, texto libre).
+**Qué se pide** (Plan 8 Fase 3, 4 campos clínicamente imprescindibles):
+- **Nombre informal** (`informalName`, requerido, 1-80 chars). Cómo prefiere que se le llame.
+- **Pronombres** (`pronouns`, requerido, enum: `el | ella | elle | prefer_not_say`).
+- **Fecha de nacimiento** (`birthDate`, requerida, formato YYYY-MM-DD).
+- **Motivo de consulta** (`reasonForConsulting`, requerido, 10-2000 chars).
 
-**Qué se persiste:** estructura propuesta `user_profiles.clinical_intake` (jsonb) o tabla aparte `patient_intake_responses`. A definir en T-A del Plan 7.
+El form viejo de 11 campos (`sex`, `country`, `city`, `employment`, `relationship_status`, `living_with`, `prior_therapy`, `current_medication`, `display_name`) está retirado. Las columnas siguen en `user_profiles` como nullable y Plan 9 (Patient Profile completo) las reusará.
 
-**Qué hace Serenia con ello:** se inyecta como bloque de contexto al system prompt en sesión 1 (ver Fase 2).
+**Qué se persiste:** columnas planas en `user_profiles` (`informal_name`, `pronouns`, `birth_date`, `reason_for_consulting`). El action hace upsert por `user_id` (UNIQUE) y al éxito setea `onboarding_status='complete'` + redirect a `/app`.
+
+**Qué hace Serenia con ello:** se inyecta como bloque `[INTAKE INICIAL DEL PACIENTE]` al system prompt en sesión 1 vía [`lib/patient-context/render.ts:renderIntakeBlock`](../../lib/patient-context/render.ts) — solo si `isFirstSession === true`. Renderiza nombre informal + pronombres mapeados (`el → él`, `ella → ella`, `elle → elle`, `prefer_not_say → prefiere no decirlo`) + edad calculada con [`lib/patient-context/age.ts:computeAge`](../../lib/patient-context/age.ts) + motivo. La línea de edad se omite si `birthDate` es inválida.
 
 ---
 
 ### Fase 2 — Sesión 1 (la primera; aún sin historia clínica)
 
-**Contexto que recibe el agente al arranque:**
+**Contexto que recibe el agente al arranque** (orden vinculante en `lib/chat/system-prompt.ts:buildChatSystemPrompt`):
 
-- System prompt principal ([session-therapist.md](prompts/session-therapist.md)).
-- Bloque `[CONTEXTO INICIAL DEL PACIENTE]` derivado del onboarding clínico:
-  - Pronombres / cómo tratarle.
-  - Edad.
-  - Motivo de consulta inicial declarado.
-  - Antecedente psicológico breve si lo declaró.
-- Marco explícito en el prompt: "es la primera sesión del paciente, no inventes historia, conócele".
+1. **System prompt base** ([prompts/session-therapist.md](prompts/session-therapist.md), v1.1 hasta que entre la v2 firmada por Pablo en Fase 4).
+2. **Risk opening notice** (si hay riesgo declarado en assessments previos — vacío en sesión 1).
+3. **Crisis notice** (si hay señal léxica de crisis en el último mensaje — vacío en condiciones normales).
+4. **Questionnaire notice** (si el último mensaje resolvió un cuestionario, su resultado).
+5. **Time notice** (cuando quedan ≤10 min para el time limit).
+6. **Bloque `[INTAKE INICIAL DEL PACIENTE]`** (Plan 8 Bloque 1, solo en sesión 1):
+   ```
+   [INTAKE INICIAL DEL PACIENTE]
+   - Nombre informal: <X>
+   - Pronombres: <él / ella / elle / prefiere no decirlo>
+   - Edad: <calculada>
+   - Motivo de consulta: <Y>
+   ```
+   Se omite si el paciente NO completó onboarding (campos vacíos). La línea de edad se omite si birthDate inválida.
+7. **Bloque `[CONTEXTO DEL PACIENTE]`** — vacío en sesión 1 (no hay historia clínica). En sesiones N>1 contiene el snapshot del último assessment validado.
+8. **Bloque `[PROTOCOLO Y FASE ACTUAL — Sesión 1: Evaluación, alianza y psicoeducación]`** (Plan 8 Fase 5 + Bloque 1, ADR-015) — foco/objetivos/técnicas previstas/tarea esperada/racional clínico hardcoded para fase 1. Si la sesión es la primera del protocolo, este bloque dirige el comportamiento clínico aunque la v1 del prompt no lo referencie explícitamente (Fase 4 pendiente).
 
-**Comportamiento esperado del agente:**
-- Saludo personalizado usando los pronombres correctos.
-- No se asume nada que no esté en el bloque.
-- Se permite (y es deseable) hacer preguntas de anamnesis para profundizar lo que el paciente declaró.
-- Si surgen señales clínicas claras, puede proponer un cuestionario apropiado (PHQ-9, GAD-7, o ASQ si hay señal de riesgo).
+**Comportamiento esperado del agente en sesión 1:**
+- Saludo personalizado usando el **nombre informal** + género gramatical correcto según `pronouns` (cubre bugs 1-3 del Plan 8).
+- Trabajo del foco de la fase 1: análisis funcional 1-2 situaciones recientes, mapa pensamiento-emoción-conducta, distinción dolor vs lucha-con-dolor (ACT).
+- No se asume nada que no esté en `[INTAKE INICIAL]`. Se permite (y es deseable) hacer preguntas de anamnesis para profundizar.
+- Si surgen señales clínicas claras, puede proponer un cuestionario apropiado: PHQ-9 / GAD-7 (primarios) / ASQ (cribado seguridad — sustituido por C-SSRS en Plan 8 Fase 1+2).
+- Tarea esperada de cierre: autoregistro 3 columnas (situación / pensamiento / emoción-conducta) durante la semana.
 
-**Tools disponibles:** todas las del catálogo de tools (ver sección "Tools" abajo).
+**Tools disponibles:** todas las del catálogo (ver sección "Tools" abajo).
 
 ---
 
