@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { enqueueAssessmentGeneration } from '@/lib/workflows'
+import type { ProtocolPhase } from '@/lib/protocol/render-phase'
 
 type Supabase = SupabaseClient<Database>
 
@@ -83,9 +84,14 @@ export const PROTOCOL_MAX_PHASE = 8
  * - 1 cerrada → 2
  * - 7 cerradas → 8
  * - ≥ 8 cerradas → 8 (cap; mantenimiento)
+ *
+ * Retorna `ProtocolPhase` (literal `1|...|8`): el cap superior está garantizado
+ * por `Math.min(..., PROTOCOL_MAX_PHASE=8)` y el inferior por `closedCount + 1`
+ * con `closedCount ≥ 0`. El narrow-cast es seguro y sella el contrato con el
+ * renderer de `lib/protocol/render-phase.ts`.
  */
-export function computeProtocolPhase(closedCount: number): number {
-  return Math.min(closedCount + 1, PROTOCOL_MAX_PHASE)
+export function computeProtocolPhase(closedCount: number): ProtocolPhase {
+  return Math.min(closedCount + 1, PROTOCOL_MAX_PHASE) as ProtocolPhase
 }
 
 /**
