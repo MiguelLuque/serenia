@@ -23,6 +23,7 @@ function makeCtx(
     tier: 'none',
     isFirstSession: false,
     patient: { displayName: null, age: null },
+    intake: null,
     validated: null,
     tierBDraft: null,
     recentQuestionnaires: questionnaires,
@@ -31,6 +32,8 @@ function makeCtx(
     pendingTasks: [],
     sessionNumber: 1,
     riskState: 'none',
+    protocolPhase: 1,
+    protocolCompleted: false,
   }
 }
 

@@ -3,8 +3,10 @@ import {
   renderPatientContextBlock,
   renderPatientContextBlockWithMeta,
   computeRiskOpeningNotice,
+  renderIntakeBlock,
+  renderProtocolPhaseSection,
 } from '@/lib/patient-context/render'
-import type { PatientContext } from '@/lib/patient-context/builder'
+import type { PatientContext, PatientIntake } from '@/lib/patient-context/builder'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,7 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     tier: 'tierA',
     isFirstSession: false,
     patient: { displayName: 'Ana López', age: 30 },
+    intake: null,
     validated: {
       id: 'assessment-tierA-fixture',
       reviewedAt: daysAgo(10),
@@ -45,6 +48,8 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     pendingTasks: [],
     sessionNumber: 3,
     riskState: 'none',
+    protocolPhase: 3,
+    protocolCompleted: false,
     ...overrides,
   }
 }
@@ -54,6 +59,7 @@ function makeTierBCtx(overrides: Partial<PatientContext> = {}): PatientContext {
     tier: 'tierB',
     isFirstSession: false,
     patient: { displayName: 'Luis Martín', age: 25 },
+    intake: null,
     validated: null,
     tierBDraft: {
       closedAt: daysAgo(5),
@@ -69,6 +75,8 @@ function makeTierBCtx(overrides: Partial<PatientContext> = {}): PatientContext {
     pendingTasks: [],
     sessionNumber: 2,
     riskState: 'none',
+    protocolPhase: 2,
+    protocolCompleted: false,
     ...overrides,
   }
 }
@@ -78,6 +86,7 @@ function makeHistoricCtx(overrides: Partial<PatientContext> = {}): PatientContex
     tier: 'historic',
     isFirstSession: false,
     patient: { displayName: 'Pedro Ruiz', age: 45 },
+    intake: null,
     validated: {
       id: 'assessment-historic-fixture',
       reviewedAt: daysAgo(120),
@@ -97,6 +106,8 @@ function makeHistoricCtx(overrides: Partial<PatientContext> = {}): PatientContex
     pendingTasks: [],
     sessionNumber: 5,
     riskState: 'none',
+    protocolPhase: 5,
+    protocolCompleted: false,
     ...overrides,
   }
 }
@@ -106,6 +117,7 @@ function makeNoneCtx(overrides: Partial<PatientContext> = {}): PatientContext {
     tier: 'none',
     isFirstSession: true,
     patient: { displayName: null, age: null },
+    intake: null,
     validated: null,
     tierBDraft: null,
     recentQuestionnaires: [],
@@ -114,6 +126,8 @@ function makeNoneCtx(overrides: Partial<PatientContext> = {}): PatientContext {
     pendingTasks: [],
     sessionNumber: 1,
     riskState: 'none',
+    protocolPhase: 1,
+    protocolCompleted: false,
     ...overrides,
   }
 }
@@ -858,5 +872,124 @@ describe('renderPatientContextBlockWithMeta — retakeHint option', () => {
 
     expect(block).not.toContain(hint)
     expect(block).toContain('postura de intake habitual')
+  })
+})
+
+// ── Plan 8 T3.4 — renderIntakeBlock ──────────────────────────────────────────
+
+describe('renderIntakeBlock', () => {
+  const NOW = new Date('2026-04-22T12:00:00Z')
+
+  function makeIntake(overrides: Partial<PatientIntake> = {}): PatientIntake {
+    return {
+      informalName: 'Lu',
+      pronouns: 'ella',
+      birthDate: '1995-04-22',
+      reasonForConsulting: 'Ansiedad sostenida desde hace 3 meses.',
+      ...overrides,
+    }
+  }
+
+  it('returns "" when intake is null (paciente sin onboarding completado)', () => {
+    expect(renderIntakeBlock(null, NOW)).toBe('')
+  })
+
+  it('renders the header [INTAKE INICIAL DEL PACIENTE]', () => {
+    const out = renderIntakeBlock(makeIntake(), NOW)
+    expect(out).toContain('[INTAKE INICIAL DEL PACIENTE]')
+  })
+
+  it('maps pronouns "el" → "él"', () => {
+    const out = renderIntakeBlock(makeIntake({ pronouns: 'el' }), NOW)
+    expect(out).toContain('Pronombres: él')
+  })
+
+  it('maps pronouns "ella" → "ella"', () => {
+    const out = renderIntakeBlock(makeIntake({ pronouns: 'ella' }), NOW)
+    expect(out).toContain('Pronombres: ella')
+  })
+
+  it('maps pronouns "elle" → "elle"', () => {
+    const out = renderIntakeBlock(makeIntake({ pronouns: 'elle' }), NOW)
+    expect(out).toContain('Pronombres: elle')
+  })
+
+  it('maps pronouns "prefer_not_say" → "prefiere no decirlo"', () => {
+    const out = renderIntakeBlock(makeIntake({ pronouns: 'prefer_not_say' }), NOW)
+    expect(out).toContain('Pronombres: prefiere no decirlo')
+  })
+
+  it('omits the pronouns line when pronouns is null', () => {
+    const out = renderIntakeBlock(makeIntake({ pronouns: null }), NOW)
+    expect(out).not.toContain('Pronombres')
+  })
+
+  it('renders age computed from birthDate (not the raw date)', () => {
+    // Born 1995-04-22, NOW = 2026-04-22 → exactly 31
+    const out = renderIntakeBlock(makeIntake({ birthDate: '1995-04-22' }), NOW)
+    expect(out).toContain('Edad: 31')
+    // Should NOT contain the raw ISO date
+    expect(out).not.toContain('1995-04-22')
+  })
+
+  it('omits the age line when birthDate is null', () => {
+    const out = renderIntakeBlock(makeIntake({ birthDate: null }), NOW)
+    expect(out).not.toContain('Edad:')
+  })
+
+  it('omits the motivo line when reasonForConsulting is null', () => {
+    const out = renderIntakeBlock(makeIntake({ reasonForConsulting: null }), NOW)
+    expect(out).not.toContain('Motivo de consulta:')
+  })
+
+  it('renders informalName, pronouns, age, and motivo together for a complete intake', () => {
+    const out = renderIntakeBlock(
+      makeIntake({
+        informalName: 'Marta',
+        pronouns: 'ella',
+        birthDate: '2000-04-22',
+        reasonForConsulting: 'Estrés laboral.',
+      }),
+      NOW,
+    )
+    expect(out).toContain('Nombre informal: Marta')
+    expect(out).toContain('Pronombres: ella')
+    expect(out).toContain('Edad: 26')
+    expect(out).toContain('Motivo de consulta: Estrés laboral.')
+  })
+
+  it('ends with the project separator so adjacent blocks do not glue', () => {
+    const out = renderIntakeBlock(makeIntake(), NOW)
+    expect(out.endsWith('---\n')).toBe(true)
+  })
+})
+
+// ── Plan 8 T5.2-bis — renderProtocolPhaseSection ─────────────────────────────
+
+describe('renderProtocolPhaseSection', () => {
+  it('returns the phase-1 block when completed=false and phase=1', () => {
+    const out = renderProtocolPhaseSection(1, false)
+    expect(out).toContain('[PROTOCOLO Y FASE ACTUAL — Sesión 1')
+    expect(out).toContain('Evaluación')
+  })
+
+  it('returns the phase-4 block when completed=false and phase=4', () => {
+    const out = renderProtocolPhaseSection(4, false)
+    expect(out).toContain('[PROTOCOLO Y FASE ACTUAL — Sesión 4')
+    expect(out).toContain('autobús')
+  })
+
+  it('returns the phase-8 block when completed=false and phase=8', () => {
+    const out = renderProtocolPhaseSection(8, false)
+    expect(out).toContain('[PROTOCOLO Y FASE ACTUAL — Sesión 8')
+    expect(out).toContain('recaídas')
+  })
+
+  it('returns the maintenance block when completed=true regardless of phase', () => {
+    const out = renderProtocolPhaseSection(8, true)
+    expect(out).toContain('[PROTOCOLO COMPLETADO — MANTENIMIENTO]')
+    expect(out).toContain('NO reinicies el protocolo')
+    // The phase-8 block should NOT appear in the maintenance output
+    expect(out).not.toContain('[PROTOCOLO Y FASE ACTUAL — Sesión 8')
   })
 })

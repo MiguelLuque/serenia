@@ -24,6 +24,7 @@ function makeNoneCtx(overrides: Partial<PatientContext> = {}): PatientContext {
     tier: 'none',
     isFirstSession: true,
     patient: { displayName: null, age: null },
+    intake: null,
     validated: null,
     tierBDraft: null,
     recentQuestionnaires: [],
@@ -32,6 +33,8 @@ function makeNoneCtx(overrides: Partial<PatientContext> = {}): PatientContext {
     pendingTasks: [],
     sessionNumber: 1,
     riskState: 'none',
+    protocolPhase: 1,
+    protocolCompleted: false,
     ...overrides,
   }
 }
@@ -41,6 +44,7 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     tier: 'tierA',
     isFirstSession: false,
     patient: { displayName: 'Ana López', age: 30 },
+    intake: null,
     validated: {
       id: 'assessment-tierA',
       reviewedAt: daysAgo(10),
@@ -63,6 +67,8 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     ],
     sessionNumber: 3,
     riskState: 'none',
+    protocolPhase: 3,
+    protocolCompleted: false,
     ...overrides,
   }
 }
@@ -211,16 +217,20 @@ describe('buildChatSystemPrompt — plan-mandated system-prompt ordering', () =>
   const CRISIS = '[AVISO DE SEGURIDAD — ALERTA ACTIVADA]\nCRISIS_BODY\n\n---\n\n'
   const QNAIRE = '[RESULTADO DE CUESTIONARIO — PHQ9]\nQ_BODY\n\n---\n\n'
   const TIME = '[AVISO DE TIEMPO]\nTIME_BODY\n\n---\n\n'
+  const INTAKE = '[INTAKE INICIAL DEL PACIENTE]\nINTAKE_BODY\n\n---\n\n'
   const BLOCK = '[CONTEXTO DEL PACIENTE — primera sesión]\nBLOCK_BODY\n\n---'
+  const PROTOCOL = '[PROTOCOLO Y FASE ACTUAL — Sesión 1]\nPROTOCOL_BODY\n\n---\n'
 
-  it('concatenates in the exact plan order: base → risk → crisis → questionnaire → time → block', () => {
+  it('concatenates in the exact plan order: base → risk → crisis → questionnaire → time → intake → block → protocol', () => {
     const prompt = buildChatSystemPrompt({
       basePrompt: BASE,
       riskOpeningNotice: RISK,
       crisisNotice: CRISIS,
       questionnaireNotice: QNAIRE,
       timeNotice: TIME,
+      intakeBlock: INTAKE,
       patientContextBlock: BLOCK,
+      protocolPhaseBlock: PROTOCOL,
     })
 
     const baseIdx = prompt.indexOf('BASE_PROMPT_TOKEN')
@@ -228,31 +238,40 @@ describe('buildChatSystemPrompt — plan-mandated system-prompt ordering', () =>
     const crisisIdx = prompt.indexOf('CRISIS_BODY')
     const qnaireIdx = prompt.indexOf('Q_BODY')
     const timeIdx = prompt.indexOf('TIME_BODY')
+    const intakeIdx = prompt.indexOf('INTAKE_BODY')
     const blockIdx = prompt.indexOf('BLOCK_BODY')
+    const protocolIdx = prompt.indexOf('PROTOCOL_BODY')
 
     expect(baseIdx).toBeLessThan(riskIdx)
     expect(riskIdx).toBeLessThan(crisisIdx)
     expect(crisisIdx).toBeLessThan(qnaireIdx)
     expect(qnaireIdx).toBeLessThan(timeIdx)
-    expect(timeIdx).toBeLessThan(blockIdx)
+    expect(timeIdx).toBeLessThan(intakeIdx)
+    expect(intakeIdx).toBeLessThan(blockIdx)
+    expect(blockIdx).toBeLessThan(protocolIdx)
   })
 
-  it('flag-off semantics: empty block + empty risk → prompt is basePrompt + per-turn notices, no Plan-6 artifacts', () => {
-    // Plan line 583: "Flag off → system prompt idéntico al pre-Plan-6."
-    // The pre-Plan-6 assembly was basePrompt concatenated with crisisNotice, questionnaireNotice, timeNotice.
-    // With Plan-6 pieces empty, buildChatSystemPrompt must produce a string byte-equal to the pre-Plan-6 assembly.
+  it('flag-off semantics: empty Plan-6/Plan-8 pieces → prompt is basePrompt + per-turn notices, no cross-session artifacts', () => {
+    // Plan line 583 (Plan 6): "Flag off → system prompt idéntico al pre-Plan-6."
+    // Plan 8 T3.4 + T5.2-bis: same contract — the new pieces are empty when
+    // FEATURE_CROSS_SESSION_CONTEXT is off (the route's catch path zeroes them
+    // alongside patientContextBlock and riskOpeningNotice).
     const flagOff = buildChatSystemPrompt({
       basePrompt: BASE,
       riskOpeningNotice: '',
       crisisNotice: CRISIS,
       questionnaireNotice: QNAIRE,
       timeNotice: TIME,
+      intakeBlock: '',
       patientContextBlock: '',
+      protocolPhaseBlock: '',
     })
 
     expect(flagOff).toBe(BASE + CRISIS + QNAIRE + TIME)
     expect(flagOff).not.toContain('[AVISO DE CONTINUIDAD')
     expect(flagOff).not.toContain('[CONTEXTO DEL PACIENTE')
+    expect(flagOff).not.toContain('[INTAKE INICIAL DEL PACIENTE')
+    expect(flagOff).not.toContain('[PROTOCOLO Y FASE ACTUAL')
   })
 
   it('risk + crisis adjacent do not glue onto the same line (separator fix)', () => {
@@ -266,7 +285,9 @@ describe('buildChatSystemPrompt — plan-mandated system-prompt ordering', () =>
       crisisNotice: CRISIS,
       questionnaireNotice: '',
       timeNotice: '',
+      intakeBlock: '',
       patientContextBlock: '',
+      protocolPhaseBlock: '',
     })
 
     expect(prompt).not.toMatch(/riesgo\.\[AVISO DE SEGURIDAD/)
