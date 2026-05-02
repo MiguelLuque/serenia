@@ -101,3 +101,14 @@ export function listPatientCodes(): QuestionnaireCode[] {
     (c) => !QUESTIONNAIRE_REGISTRY[c].isClinicianRated,
   )
 }
+
+/**
+ * Codes que se siguen longitudinalmente (trends del inbox y patient view).
+ * Hoy: PHQ-9 (depresión) + GAD-7 (ansiedad). ASQ es un cribado binario, no
+ * un trend. Plan 8 Fase 1 evaluará si BDI-II/BAI/STAI también van aquí.
+ *
+ * Tipados como tupla `as const satisfies` para que un rename de código en
+ * el registry rompa al compilar.
+ */
+export const LONGITUDINAL_CODES = ['PHQ9', 'GAD7'] as const satisfies readonly QuestionnaireCode[]
+export type LongitudinalCode = (typeof LONGITUDINAL_CODES)[number]
