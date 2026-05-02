@@ -1,11 +1,24 @@
 import type { ScoringResult, QuestionnaireFlag } from './types'
 
 /**
+ * Common shape for all questionnaire scoring functions.
+ *
+ * Plan 8 T0.3 (ADR-017): every scorer registered in `registry.ts` must
+ * conform to this signature so the registry can call them uniformly. The
+ * caller is responsible for sorting answers by `order_index` and projecting
+ * them to a numeric array before invoking the scorer.
+ *
+ * If a future scorer needs contextual data (e.g. a definition id), it must
+ * be supplied via closure at registration time, not as an extra parameter.
+ */
+export type ScoringStrategy = (answers: number[]) => ScoringResult
+
+/**
  * Score a PHQ-9 questionnaire.
  * Expects exactly 9 answers, each in range 0–3.
  * Item 9 (index 8) >= 1 triggers a suicidality flag.
  */
-export function scorePHQ9(answers: number[]): ScoringResult {
+export const scorePHQ9: ScoringStrategy = (answers) => {
   if (answers.length !== 9) {
     throw new Error(`PHQ-9 requires exactly 9 answers, got ${answers.length}`)
   }
@@ -44,7 +57,7 @@ export function scorePHQ9(answers: number[]): ScoringResult {
  * Expects exactly 7 answers, each in range 0–3.
  * No flags defined for this scale.
  */
-export function scoreGAD7(answers: number[]): ScoringResult {
+export const scoreGAD7: ScoringStrategy = (answers) => {
   if (answers.length !== 7) {
     throw new Error(`GAD-7 requires exactly 7 answers, got ${answers.length}`)
   }
@@ -79,7 +92,7 @@ export function scoreGAD7(answers: number[]): ScoringResult {
  * If positive and item 5 (index 4) is 1, push acute_risk flag.
  * If negative (all items 1–4 are 0), item 5 is ignored even if present.
  */
-export function scoreASQ(answers: number[]): ScoringResult {
+export const scoreASQ: ScoringStrategy = (answers) => {
   if (answers.length < 4 || answers.length > 5) {
     throw new Error(`ASQ requires 4 or 5 answers, got ${answers.length}`)
   }
