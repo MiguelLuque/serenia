@@ -1,5 +1,10 @@
 import 'server-only'
-import type { PatientContext } from '@/lib/patient-context/builder'
+import type { PatientContext, PatientIntake } from '@/lib/patient-context/builder'
+import {
+  renderProtocolPhaseBlock,
+  renderProtocolMaintenanceBlock,
+  type ProtocolPhase,
+} from '@/lib/protocol/render-phase'
 
 // ── Date formatting ──────────────────────────────────────────────────────────
 
@@ -408,4 +413,88 @@ export function computeRiskOpeningNotice(ctx: PatientContext): string | null {
     case 'watch':
       return '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.\n\n---\n\n'
   }
+}
+
+// ── Plan 8 T3.4 — Intake clínico (primera sesión) ────────────────────────────
+
+const PRONOUN_LABELS: Record<NonNullable<PatientIntake['pronouns']>, string> = {
+  el: 'él',
+  ella: 'ella',
+  elle: 'elle',
+  prefer_not_say: 'prefiere no decirlo',
+}
+
+/**
+ * Renderiza el bloque [INTAKE INICIAL DEL PACIENTE] usado en la primera
+ * sesión. La copy es lenguaje clínico (ADR-020): no es tono coach, es la
+ * presentación del paciente al asistente psicológica.
+ *
+ * Devuelve `''` si `intake === null` (paciente sin onboarding completado),
+ * de modo que el caller pueda concatenarlo sin condicionales.
+ */
+export function renderIntakeBlock(
+  intake: PatientIntake | null,
+  now: Date = new Date(),
+): string {
+  if (intake === null) return ''
+
+  const lines: string[] = ['[INTAKE INICIAL DEL PACIENTE]']
+  lines.push(`- Nombre informal: ${intake.informalName}`)
+
+  if (intake.pronouns !== null) {
+    lines.push(`- Pronombres: ${PRONOUN_LABELS[intake.pronouns]}`)
+  }
+
+  // Edad calculada (no la fecha cruda) — más útil clínicamente y consistente
+  // con `patient.age` que aparece en el bloque de contexto del paciente.
+  if (intake.birthDate !== null) {
+    const age = computeAge(intake.birthDate, now)
+    if (age !== null) {
+      lines.push(`- Edad: ${age}`)
+    }
+  }
+
+  if (intake.reasonForConsulting !== null) {
+    lines.push(`- Motivo de consulta: ${intake.reasonForConsulting}`)
+  }
+
+  lines.push('')
+  lines.push('---')
+  lines.push('')
+
+  return lines.join('\n')
+}
+
+// Pequeño duplicate-free `computeAge` local — la regla de cumpleaños es la
+// misma que en `lib/patient-context/builder.ts`. Lo replicamos aquí porque
+// importar desde el builder generaría un ciclo de imports (builder importa
+// types desde aquí — no, en realidad render importa de builder; queda en
+// inline-helper para mantener `render.ts` autocontenida sobre intake).
+function computeAge(birthDate: string, now: Date): number | null {
+  const birth = new Date(birthDate)
+  if (Number.isNaN(birth.getTime())) return null
+  let age = now.getFullYear() - birth.getFullYear()
+  const hadBirthday =
+    now.getMonth() > birth.getMonth() ||
+    (now.getMonth() === birth.getMonth() && now.getDate() >= birth.getDate())
+  if (!hadBirthday) age -= 1
+  return age
+}
+
+// ── Plan 8 T5.2-bis — Sección de fase del protocolo ─────────────────────────
+
+/**
+ * Devuelve el bloque [PROTOCOLO Y FASE ACTUAL] correcto según el estado:
+ * - `completed = true` → bloque de mantenimiento (post-sesión 8).
+ * - `completed = false` → bloque de la fase 1-8 indicada.
+ *
+ * Mantengo el nombre en español ("section") porque el caller lo trata como
+ * una pieza más del system prompt (paralela a `patientContextBlock`).
+ */
+export function renderProtocolPhaseSection(
+  phase: ProtocolPhase,
+  completed: boolean,
+): string {
+  if (completed) return renderProtocolMaintenanceBlock()
+  return renderProtocolPhaseBlock(phase)
 }

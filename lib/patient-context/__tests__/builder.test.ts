@@ -81,7 +81,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.tier).toBe('none')
     expect(ctx.isFirstSession).toBe(true)
@@ -130,7 +130,7 @@ describe('buildPatientContext', () => {
     })
 
     const supabase2 = { from: customFrom }
-    const ctx = await buildPatientContext(supabase2 as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase2 as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.tier).toBe('tierB')
     expect(ctx.isFirstSession).toBe(false)
@@ -152,7 +152,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.tier).toBe('tierA')
     expect(ctx.validated).not.toBeNull()
@@ -173,7 +173,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.tier).toBe('historic')
     expect(ctx.validated!.ageInDays).toBe(120)
@@ -203,7 +203,7 @@ describe('buildPatientContext', () => {
     })
 
     const supabase = { from: customFrom }
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.tier).toBe('tierA')
     expect(ctx.tierBDraft).toBeNull()
@@ -231,7 +231,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.recentQuestionnaires).toHaveLength(1)
     const phq9 = ctx.recentQuestionnaires[0]!
@@ -246,7 +246,7 @@ describe('buildPatientContext', () => {
       if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
       return noRows()
     })
-    const ctx2 = await buildPatientContext(supabase2 as never, 'user-1', NOW)
+    const ctx2 = await buildPatientContext({ supabase: supabase2 as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
     expect(ctx2.recentQuestionnaires[0]!.deltaVsPrevious).toBe(6)
   })
 
@@ -264,7 +264,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.openRiskEvents).toHaveLength(1)
     expect(ctx.openRiskEvents[0]).toMatchObject({
@@ -300,7 +300,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.tier).toBe('tierA')
     expect(ctx.riskState).toBe('none')
@@ -341,7 +341,7 @@ describe('buildPatientContext', () => {
     })
 
     const supabase = { from: customFrom }
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(consoleSpy).toHaveBeenCalled()
     const firstCall = consoleSpy.mock.calls[0]!
@@ -375,7 +375,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.recentQuestionnaires[0]!.deltaVsPrevious).toBeNull()
   })
@@ -395,7 +395,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.previousSession).not.toBeNull()
     expect(ctx.previousSession!.daysAgo).toBe(7)
@@ -428,7 +428,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.recentQuestionnaires).toHaveLength(3)
 
@@ -480,7 +480,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.pendingTasks).toHaveLength(2)
     const ids = ctx.pendingTasks.map((t) => t.id)
@@ -514,7 +514,7 @@ describe('buildPatientContext', () => {
       return noRows()
     })
 
-    const ctx = await buildPatientContext(supabase as never, 'user-1', NOW)
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
 
     expect(ctx.patient.displayName).toBe('María García')
     expect(ctx.patient.age).toBe(25)
@@ -526,7 +526,7 @@ describe('buildPatientContext', () => {
       if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
       return noRows()
     })
-    const ctx2 = await buildPatientContext(supabase2 as never, 'user-1', NOW)
+    const ctx2 = await buildPatientContext({ supabase: supabase2 as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
     expect(ctx2.patient.age).toBe(26)
 
     // Birthday TODAY (NOW = 2026-04-22, born 2000-04-22 → age=26 exactly).
@@ -537,7 +537,7 @@ describe('buildPatientContext', () => {
       if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
       return noRows()
     })
-    const ctxToday = await buildPatientContext(supabaseToday as never, 'user-1', NOW)
+    const ctxToday = await buildPatientContext({ supabase: supabaseToday as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
     expect(ctxToday.patient.age).toBe(26)
 
     // Null birth_date → null age
@@ -547,8 +547,199 @@ describe('buildPatientContext', () => {
       if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
       return noRows()
     })
-    const ctx3 = await buildPatientContext(supabase3 as never, 'user-1', NOW)
+    const ctx3 = await buildPatientContext({ supabase: supabase3 as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
     expect(ctx3.patient.displayName).toBe('Sin fecha')
     expect(ctx3.patient.age).toBeNull()
+  })
+
+  // ── Plan 8 T5.2-bis — protocolPhase + protocolCompleted ────────────────────
+
+  describe('Plan 8 T5.2-bis: protocolPhase + protocolCompleted', () => {
+    it('passes protocolPhase from caller through unchanged', async () => {
+      const supabase = makeSupabase((table) => {
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 2 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 4,
+        now: NOW,
+      })
+
+      expect(ctx.protocolPhase).toBe(4)
+    })
+
+    it('protocolCompleted=false when closedCount=7 (next session is the 8th, still in protocol)', async () => {
+      const supabase = makeSupabase((table) => {
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 7 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 8,
+        now: NOW,
+      })
+
+      expect(ctx.protocolCompleted).toBe(false)
+      expect(ctx.sessionNumber).toBe(8)
+    })
+
+    it('protocolCompleted=true when closedCount=8 (the 9th session is maintenance)', async () => {
+      const supabase = makeSupabase((table) => {
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 8 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 8,
+        now: NOW,
+      })
+
+      expect(ctx.protocolCompleted).toBe(true)
+      expect(ctx.sessionNumber).toBe(9)
+    })
+
+    it('protocolCompleted=true when closedCount=12 (deep maintenance)', async () => {
+      const supabase = makeSupabase((table) => {
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 12 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 8,
+        now: NOW,
+      })
+
+      expect(ctx.protocolCompleted).toBe(true)
+    })
+  })
+
+  // ── Plan 8 T3.4 — intake clínico ────────────────────────────────────────────
+
+  describe('Plan 8 T3.4: intake clínico', () => {
+    it('intake=null when onboarding not completed (informal_name="" + pronouns=null)', async () => {
+      const profile = {
+        display_name: null,
+        birth_date: null,
+        informal_name: '',
+        pronouns: null,
+        reason_for_consulting: null,
+      }
+
+      const supabase = makeSupabase((table) => {
+        if (table === 'user_profiles') return ok(profile)
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 1,
+        now: NOW,
+      })
+
+      expect(ctx.intake).toBeNull()
+    })
+
+    it('intake populated when onboarding fields are present', async () => {
+      const profile = {
+        display_name: 'Lucía Fernández',
+        birth_date: '1995-07-12',
+        informal_name: 'Lu',
+        pronouns: 'ella',
+        reason_for_consulting: 'Ansiedad y problemas de sueño desde hace 3 meses.',
+      }
+
+      const supabase = makeSupabase((table) => {
+        if (table === 'user_profiles') return ok(profile)
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 1,
+        now: NOW,
+      })
+
+      expect(ctx.intake).not.toBeNull()
+      expect(ctx.intake!.informalName).toBe('Lu')
+      expect(ctx.intake!.pronouns).toBe('ella')
+      expect(ctx.intake!.birthDate).toBe('1995-07-12')
+      expect(ctx.intake!.reasonForConsulting).toBe('Ansiedad y problemas de sueño desde hace 3 meses.')
+    })
+
+    it('intake.pronouns is null when DB has an unknown enum value (defensive parse)', async () => {
+      const profile = {
+        display_name: 'Test',
+        birth_date: null,
+        informal_name: 'T',
+        pronouns: 'they', // not in PronounsSchema
+        reason_for_consulting: null,
+      }
+
+      const supabase = makeSupabase((table) => {
+        if (table === 'user_profiles') return ok(profile)
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 1,
+        now: NOW,
+      })
+
+      // intake is non-null (informal_name is set) but pronouns parsed to null.
+      expect(ctx.intake).not.toBeNull()
+      expect(ctx.intake!.pronouns).toBeNull()
+      expect(ctx.intake!.informalName).toBe('T')
+    })
+
+    it('intake populated even when birth_date is null (partial onboarding shouldn\'t happen, but renderer must handle it)', async () => {
+      const profile = {
+        display_name: 'Test',
+        birth_date: null,
+        informal_name: 'T',
+        pronouns: 'el',
+        reason_for_consulting: 'Motivo X.',
+      }
+
+      const supabase = makeSupabase((table) => {
+        if (table === 'user_profiles') return ok(profile)
+        if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+        return noRows()
+      })
+
+      const ctx = await buildPatientContext({
+        supabase: supabase as never,
+        userId: 'user-1',
+        sessionId: 'session-test',
+        protocolPhase: 1,
+        now: NOW,
+      })
+
+      expect(ctx.intake).not.toBeNull()
+      expect(ctx.intake!.birthDate).toBeNull()
+      expect(ctx.intake!.pronouns).toBe('el')
+    })
   })
 })

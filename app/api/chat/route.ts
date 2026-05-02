@@ -23,6 +23,7 @@ import { buildPatientContext } from '@/lib/patient-context/builder'
 import { assemblePlan6ContextPieces } from '@/lib/chat/assemble-plan6-prompt'
 import { buildChatSystemPrompt } from '@/lib/chat/system-prompt'
 import { logContextInjection } from '@/lib/patient-context/telemetry'
+import type { ProtocolPhase } from '@/lib/protocol/render-phase'
 
 export const maxDuration = 60
 
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
 
   const { data: session, error } = await supabase
     .from('clinical_sessions')
-    .select('id, user_id, conversation_id, status, opened_at, last_activity_at')
+    .select('id, user_id, conversation_id, status, opened_at, last_activity_at, protocol_phase')
     .eq('id', sessionId)
     .eq('user_id', user.id)
     .single()
@@ -147,12 +148,30 @@ Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("
   const featureOn = process.env.FEATURE_CROSS_SESSION_CONTEXT === 'on'
   let patientContextBlock = ''
   let riskOpeningNotice = ''
+  let intakeBlock = ''
+  let protocolPhaseBlock = ''
   if (featureOn) {
     try {
-      const ctx = await buildPatientContext(supabase, user.id)
+      // Plan 8 T5.2-bis — protocol_phase del SessionRow ya cargado.
+      // Narrow-cast a `ProtocolPhase`: la columna BD tiene CHECK
+      // (protocol_phase BETWEEN 1 AND 8), así que cualquier valor que
+      // llegue de la BD ya está dentro del rango. Si por algún motivo
+      // (race con migración futura, manual edit) llega fuera, el renderer
+      // lanzará en `assertNeverPhase` y el `catch` de abajo degradará a
+      // bloque vacío como con cualquier otro fallo.
+      const protocolPhase = session.protocol_phase as ProtocolPhase
+
+      const ctx = await buildPatientContext({
+        supabase,
+        userId: user.id,
+        sessionId: session.id,
+        protocolPhase,
+      })
       const pieces = assemblePlan6ContextPieces(ctx)
       patientContextBlock = pieces.patientContextBlock
       riskOpeningNotice = pieces.riskOpeningNotice
+      intakeBlock = pieces.intakeBlock
+      protocolPhaseBlock = pieces.protocolPhaseBlock
 
       void logContextInjection({
         userId: user.id,
@@ -165,6 +184,8 @@ Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("
       console.error('[patient-context]', err)
       patientContextBlock = ''
       riskOpeningNotice = ''
+      intakeBlock = ''
+      protocolPhaseBlock = ''
     }
   }
 
@@ -174,7 +195,9 @@ Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("
     crisisNotice,
     questionnaireNotice,
     timeNotice,
+    intakeBlock,
     patientContextBlock,
+    protocolPhaseBlock,
   })
 
   // Plan 8 ADR-017: enum derivado del registry (solo cuestionarios paciente-rated).

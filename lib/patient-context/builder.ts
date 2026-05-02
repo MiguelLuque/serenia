@@ -5,13 +5,28 @@ import { AssessmentSchema, type AssessmentSummary } from '@/lib/assessments/gene
 import { type PatientRiskState, derivePatientRiskState } from '@/lib/clinical/risk-rules'
 import { listCodes } from '@/lib/questionnaires/registry'
 import type { QuestionnaireCode } from '@/lib/questionnaires/types'
+import type { ProtocolPhase } from '@/lib/protocol/render-phase'
+import { PronounsSchema, type Pronouns } from '@/lib/onboarding/schema'
 
 export type PatientContextTier = 'none' | 'historic' | 'tierB' | 'tierA'
+
+/**
+ * Plan 8 T3.4 — intake clínico mínimo del paciente, capturado en el
+ * onboarding (Fase 3). `null` si el paciente todavía no completó el
+ * onboarding (informalName vacío y pronouns null en la BD).
+ */
+export type PatientIntake = {
+  informalName: string
+  pronouns: Pronouns | null
+  birthDate: string | null
+  reasonForConsulting: string | null
+}
 
 export type PatientContext = {
   tier: PatientContextTier
   isFirstSession: boolean
   patient: { displayName: string | null; age: number | null }
+  intake: PatientIntake | null
   validated: {
     id: string
     reviewedAt: string
@@ -42,6 +57,20 @@ export type PatientContext = {
   }>
   sessionNumber: number
   riskState: PatientRiskState
+  /**
+   * Fase actual del protocolo TCC/ACT (1-8). Se pasa explícitamente desde
+   * el caller (chat route) — tomada de la `SessionRow.protocol_phase` ya
+   * cargada — en lugar de derivarse del session count, para evitar
+   * duplicar lógica y mantener al builder testeable.
+   */
+  protocolPhase: ProtocolPhase
+  /**
+   * `true` cuando el paciente ya cerró ≥ 8 sesiones (es decir, completó el
+   * protocolo y está en fase de mantenimiento). El renderer usa este flag
+   * para decidir entre `renderProtocolPhaseBlock(phase)` y
+   * `renderProtocolMaintenanceBlock()`.
+   */
+  protocolCompleted: boolean
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -49,6 +78,21 @@ const TIER_A_WINDOW_DAYS = 90
 
 function floorDays(nowMs: number, dateStr: string): number {
   return Math.floor((nowMs - new Date(dateStr).getTime()) / MS_PER_DAY)
+}
+
+/**
+ * Parse the raw `pronouns` value from `user_profiles` (typed as
+ * `string | null` in the generated supabase types because the column is
+ * a free-form text in BD) through the canonical `PronounsSchema`. Returns
+ * `null` if the value isn't one of the four allowed enum members.
+ *
+ * Defensive: a typo or a manual edit in the DB shouldn't break the chat
+ * stream — the worst case is the intake block omits the line "Pronombres".
+ */
+function parsePronouns(raw: string | null): Pronouns | null {
+  if (raw === null) return null
+  const result = PronounsSchema.safeParse(raw)
+  return result.success ? result.data : null
 }
 
 function computeAge(birthDate: string | null, now: Date): number | null {
@@ -84,11 +128,33 @@ function computeAge(birthDate: string | null, now: Date): number | null {
  * `tier` — instead, they should re-read fresh rows from the DB (tasks,
  * assessments) at the point they're needed.
  */
+export type BuildPatientContextOptions = {
+  supabase: SupabaseClient<Database>
+  userId: string
+  /**
+   * ID de la sesión activa. El builder no lo usa hoy en las queries
+   * (todas son por `userId`) pero forma parte del contrato Plan 8 T5.2-bis
+   * para que el caller pase un snapshot consistente y los logs tengan
+   * trazabilidad por sesión.
+   */
+  sessionId: string
+  /**
+   * Plan 8 T5.2-bis — la fase del protocolo TCC/ACT viene del caller a
+   * partir de `SessionRow.protocol_phase` (ya cargada en el chat route)
+   * en lugar de derivarse aquí. Decisión explícita: aísla el cálculo,
+   * facilita los tests y evita un `Math.min(closedCount + 1, 8)` duplicado
+   * que se desincronizaría con `lib/sessions/service.ts#computeProtocolPhase`.
+   */
+  protocolPhase: ProtocolPhase
+  now?: Date
+}
+
 export async function buildPatientContext(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-  now: Date = new Date(),
+  options: BuildPatientContextOptions,
 ): Promise<PatientContext> {
+  const { supabase, userId, protocolPhase, now = new Date() } = options
+  // sessionId is part of the contract; reserved for future per-session queries.
+  void options.sessionId
   const nowMs = now.getTime()
 
   const [
@@ -168,10 +234,10 @@ export async function buildPatientContext(
       .eq('user_id', userId)
       .eq('status', 'closed'),
 
-    // Patient profile (displayName, birth_date)
+    // Patient profile (displayName, birth_date, intake fields)
     supabase
       .from('user_profiles')
-      .select('display_name, birth_date')
+      .select('display_name, birth_date, informal_name, pronouns, reason_for_consulting')
       .eq('user_id', userId)
       .maybeSingle(),
   ])
@@ -188,6 +254,25 @@ export async function buildPatientContext(
   // ── Patient profile ──────────────────────────────────────────────────────
   const displayName = profileRow.data?.display_name ?? null
   const age = computeAge(profileRow.data?.birth_date ?? null, now)
+
+  // ── Intake (Plan 8 T3.4) ─────────────────────────────────────────────────
+  // El intake clínico se completa en el onboarding (Plan 8 Fase 3). Los
+  // campos `informal_name` / `pronouns` / `reason_for_consulting` viven en
+  // `user_profiles`. Si el paciente todavía no completó onboarding,
+  // `informal_name` queda como '' (NOT NULL con default '') y `pronouns`
+  // como NULL. En ese caso devolvemos `intake = null` y el renderer omite
+  // el bloque entero — sin lógica de fallback que tape la ausencia.
+  const informalNameRaw = profileRow.data?.informal_name ?? ''
+  const pronounsRaw = profileRow.data?.pronouns ?? null
+  const intake: PatientIntake | null =
+    informalNameRaw === '' && pronounsRaw === null
+      ? null
+      : {
+          informalName: informalNameRaw,
+          pronouns: parsePronouns(pronounsRaw),
+          birthDate: profileRow.data?.birth_date ?? null,
+          reasonForConsulting: profileRow.data?.reason_for_consulting ?? null,
+        }
 
   // ── Tier + validated assessment ──────────────────────────────────────────
   let tier: PatientContextTier = 'none'
@@ -331,6 +416,12 @@ export async function buildPatientContext(
   // is returning, not first-time.
   const isFirstSession = tier === 'none' && sessionNumber === 1
 
+  // ── Protocolo TCC/ACT (Plan 8 T5.2-bis) ──────────────────────────────────
+  // `protocolPhase` viene del caller (chat route), tomado de la SessionRow
+  // ya cargada — único punto de verdad. `protocolCompleted` se deriva del
+  // closedCount: tras 8 sesiones cerradas el paciente entra en mantenimiento.
+  const protocolCompleted = closedCount >= 8
+
   // ── Risk state ───────────────────────────────────────────────────────────
   // Only tier-A validated assessments feed the risk derivation. Historic
   // assessments are too old to represent current clinician judgment.
@@ -350,6 +441,7 @@ export async function buildPatientContext(
     tier,
     isFirstSession,
     patient: { displayName, age },
+    intake,
     validated,
     tierBDraft,
     recentQuestionnaires,
@@ -358,5 +450,7 @@ export async function buildPatientContext(
     pendingTasks,
     sessionNumber,
     riskState,
+    protocolPhase,
+    protocolCompleted,
   }
 }
