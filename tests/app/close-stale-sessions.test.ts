@@ -278,8 +278,16 @@ describe('POST /api/internal/close-stale-sessions — parallel enqueue (Plan 8 B
     })
 
     const pending = POST(authedRequest('POST'))
-    // Yield so all three enqueue() calls fire (Promise.allSettled fans out).
-    await new Promise((r) => setTimeout(r, 0))
+    // Wait until all three enqueue() calls have fired. With sequential
+    // `await` only one would start; with Promise.allSettled all three are
+    // kicked off synchronously inside `ids.map(...)`. We wait for `started`
+    // to reach 3 (with a generous spin cap to keep the test deterministic
+    // under load) instead of relying on a single setTimeout(0) tick.
+    for (let i = 0; i < 50 && started < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    expect(started).toBe(3)
+    // The key invariant: nothing finished before all three started.
     expect(observedStartedBeforeAnyFinish).toBe(3)
 
     // Now release each and let the handler complete.
