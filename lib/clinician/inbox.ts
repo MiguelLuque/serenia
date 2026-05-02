@@ -6,6 +6,14 @@ import {
   type PatientRiskState,
 } from '@/lib/clinical/risk-rules'
 import { AssessmentSchema } from '@/lib/assessments/generator'
+import type { QuestionnaireCode } from '@/lib/questionnaires/registry'
+
+// Codes shown as longitudinal trends in the inbox (PHQ-9 + GAD-7 only).
+// ASQ is a binary risk screener, not a mood trend, so it stays excluded.
+// Typed via QuestionnaireCode so a renamed code in the registry breaks
+// here at compile time.
+const INBOX_TREND_CODES = ['PHQ9', 'GAD7'] as const satisfies readonly QuestionnaireCode[]
+type InboxTrendCode = (typeof INBOX_TREND_CODES)[number]
 
 type AssessmentStatus = Database['public']['Enums']['assessment_status']
 type RiskSeverity = Database['public']['Enums']['risk_severity']
@@ -142,7 +150,7 @@ export async function getClinicianInbox(
       )
       .in('user_id', userIds)
       .eq('status', 'scored')
-      .in('questionnaire_definitions.code', ['PHQ9', 'GAD7'])
+      .in('questionnaire_definitions.code', INBOX_TREND_CODES as unknown as string[])
       .order('scored_at', { ascending: false })
       .limit(100),
   ])
@@ -273,8 +281,12 @@ export async function getClinicianInbox(
       ? resRaw[0]?.total_score
       : resRaw?.total_score
     if (code === undefined || score === undefined) continue
-    const target = code === 'PHQ9' ? phqByUser : code === 'GAD7' ? gadByUser : null
+    // Route the score to the right per-user trend bucket. Adding a new
+    // trend code = update INBOX_TREND_CODES + add a Map here.
+    const target: Map<string, number[]> | null =
+      code === 'PHQ9' ? phqByUser : code === 'GAD7' ? gadByUser : null
     if (!target) continue
+    void (code as InboxTrendCode) // exhaustiveness anchor for INBOX_TREND_CODES
     const list = target.get(row.user_id) ?? []
     if (list.length < 3) {
       list.push(score)

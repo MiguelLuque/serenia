@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/supabase/types'
 import type { QuestionnaireCode, AnswerInput, ScoringResult } from './types'
-import { scorePHQ9, scoreGAD7, scoreASQ } from './scoring'
+import { getDefinition } from './registry'
 
 type Supabase = SupabaseClient<Database>
 
@@ -191,21 +191,18 @@ export async function submitAnswers(
 
   if (answersError) throw answersError
 
-  // 3. Sort answers by order_index and run scoring
+  // 3. Sort answers by order_index and run scoring via the registry.
+  // Plan 8 ADR-017: no per-code if/else; getDefinition() resolves the
+  // scorer or throws fast for unknown codes.
   const sorted = [...input.answers].sort((a, b) => a.itemOrder - b.itemOrder)
   const numericValues = sorted.map((a) => a.valueNumeric)
   const code = definition.code as QuestionnaireCode
 
-  let scoringResult: ScoringResult
-  if (code === 'PHQ9') {
-    scoringResult = scorePHQ9(numericValues)
-  } else if (code === 'GAD7') {
-    scoringResult = scoreGAD7(numericValues)
-  } else if (code === 'ASQ') {
-    scoringResult = scoreASQ(numericValues)
-  } else {
+  const def = getDefinition(code)
+  if (!def) {
     throw new Error(`Unknown questionnaire code: ${code}`)
   }
+  const scoringResult: ScoringResult = def.scorer(numericValues)
 
   // 4. Insert questionnaire_results
   const { error: resultError } = await supabase

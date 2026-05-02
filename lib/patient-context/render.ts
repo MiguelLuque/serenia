@@ -12,11 +12,25 @@ function formatDate(iso: string): string {
 
 // ── Questionnaire helpers ────────────────────────────────────────────────────
 
-const CODE_LABELS: Record<string, string> = {
-  PHQ9: 'PHQ-9',
-  GAD7: 'GAD-7',
-  ASQ: 'ASQ',
+import { listCodes } from '@/lib/questionnaires/registry'
+
+/**
+ * Short, instrument-style labels (e.g. "PHQ-9", "GAD-7", "ASQ") used in the
+ * inline patient context block. Plan 8 ADR-017: derived from the registry
+ * so a new code added there shows up here automatically. The transformation
+ * is purely lexical (split letters / digits) — sufficient for the current
+ * roster (PHQ9, GAD7, ASQ) and the upcoming Plan 8 codes (BDI-II, BAI,
+ * STAI, C-SSRS, HAM-D); if an exotic code ever needs a custom short label,
+ * surface it via the registry rather than reintroducing a literal map.
+ */
+function shortLabelForCode(code: string): string {
+  // Insert a hyphen between contiguous letters and digits: "PHQ9" → "PHQ-9".
+  return code.replace(/([A-Za-z])(\d)/g, '$1-$2')
 }
+
+const CODE_LABELS: Record<string, string> = Object.fromEntries(
+  listCodes().map((c) => [c, shortLabelForCode(c)]),
+)
 
 function formatDelta(delta: number): string {
   if (delta > 0) return `+${delta}`

@@ -18,6 +18,7 @@ import {
   getActiveInstanceForSession,
 } from '@/lib/questionnaires/service'
 import type { QuestionnaireCode } from '@/lib/questionnaires/types'
+import { listPatientCodes } from '@/lib/questionnaires/registry'
 import { buildPatientContext } from '@/lib/patient-context/builder'
 import { assemblePlan6ContextPieces } from '@/lib/chat/assemble-plan6-prompt'
 import { buildChatSystemPrompt } from '@/lib/chat/system-prompt'
@@ -176,11 +177,14 @@ Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("
     patientContextBlock,
   })
 
+  // Plan 8 ADR-017: enum derivado del registry (solo cuestionarios paciente-rated).
+  // listPatientCodes() excluye los clinician-rated (HAM-D, en Plan 8 Fase 7).
+  const patientCodes = listPatientCodes()
   const proposeQuestionnaireTool = tool({
     description:
       'Propone un cuestionario clínico validado cuando la conversación lo justifica. Usa solo si hay señales claras: ánimo bajo sostenido => PHQ9, ansiedad sostenida => GAD7, ideación suicida (directa o indirecta) => ASQ. Nunca más de uno por sesión.',
     inputSchema: z.object({
-      code: z.enum(['PHQ9', 'GAD7', 'ASQ']),
+      code: z.enum(patientCodes as [QuestionnaireCode, ...QuestionnaireCode[]]),
       reason: z.string().min(10).max(300),
     }),
     execute: async ({ code, reason }) => {

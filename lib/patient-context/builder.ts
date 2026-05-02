@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { AssessmentSchema, type AssessmentSummary } from '@/lib/assessments/generator'
 import { type PatientRiskState, derivePatientRiskState } from '@/lib/clinical/risk-rules'
+import { listCodes } from '@/lib/questionnaires/registry'
+import type { QuestionnaireCode } from '@/lib/questionnaires/types'
 
 export type PatientContextTier = 'none' | 'historic' | 'tierB' | 'tierA'
 
@@ -24,7 +26,7 @@ export type PatientContext = {
     summary: Pick<AssessmentSummary, 'chief_complaint' | 'presenting_issues' | 'questionnaires'>
   } | null
   recentQuestionnaires: Array<{
-    code: 'PHQ9' | 'GAD7' | 'ASQ'
+    code: QuestionnaireCode
     score: number
     band: string
     scoredAt: string
@@ -127,7 +129,7 @@ export async function buildPatientContext(
         'total_score, severity_band, created_at, questionnaire_instances!inner(user_id, questionnaire_definitions!inner(code))',
       )
       .eq('questionnaire_instances.user_id', userId)
-      .in('questionnaire_instances.questionnaire_definitions.code', ['PHQ9', 'GAD7', 'ASQ'])
+      .in('questionnaire_instances.questionnaire_definitions.code', listCodes() as unknown as string[])
       .order('created_at', { ascending: false })
       .limit(18),
 
@@ -260,7 +262,7 @@ export async function buildPatientContext(
     } | null
   }
 
-  const allowedCodes = new Set(['PHQ9', 'GAD7', 'ASQ'])
+  const allowedCodes = new Set<string>(listCodes())
   const byCode = new Map<string, Array<{ score: number; band: string; scoredAt: string }>>()
 
   for (const row of (questionnaireRows.data ?? []) as QRow[]) {
@@ -281,7 +283,7 @@ export async function buildPatientContext(
     const latest = entries[0]!
     const previous = entries[1] ?? null
     recentQuestionnaires.push({
-      code: code as 'PHQ9' | 'GAD7' | 'ASQ',
+      code: code as QuestionnaireCode,
       score: latest.score,
       band: latest.band,
       scoredAt: latest.scoredAt,
