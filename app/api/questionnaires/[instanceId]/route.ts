@@ -1,5 +1,4 @@
 import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { getActiveInstanceForSession } from '@/lib/questionnaires/service'
 
 export async function GET(
   _req: Request,
@@ -51,6 +50,3 @@ export async function GET(
     result,
   })
 }
-
-// Re-exported helper for tests and chat route
-export { getActiveInstanceForSession }

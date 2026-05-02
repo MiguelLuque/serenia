@@ -23,7 +23,7 @@ type Supabase = SupabaseClient<Database>
  *
  * Failsafe: cualquier error de BD se traga (console.error) y devuelve
  * `never_assessed`. La función NUNCA lanza — el chat no se rompe por un
- * fallo aquí. Mismo contrato que `hasPriorSafetyCheck`.
+ * fallo aquí.
  */
 export type SafetyState =
   | { kind: 'never_assessed' }
