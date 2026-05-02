@@ -210,3 +210,19 @@ Plan 8 T4.1 incluye 8+ frases prohibidas con sustitutos.
 - Cuando los bugs se acumulan en un dominio (clínico, conversacional, etc.), considerar reescritura estructural en lugar de parches.
 - Plan 8 ataca la identidad: "Serenia es psicóloga TCC/ACT con protocolo de 8 sesiones". Los bugs caen como subproducto.
 - Reescritura ≠ hacer todo de cero — reusar foundational (BD schema, registry, workflow WDK, persistencia íntegra), reescribir lo identitario (prompts, modelo terapéutico).
+
+---
+
+## L-013 — `TRUNCATE … CASCADE` también vacía tablas que apuntan A las truncadas
+
+**Síntoma:** Plan 8 T0.1. La migration `20260502000004_wipe_legacy_test_data.sql` truncaba `assessments`, `care_plans`, etc. con la intención de **conservar** `user_profiles` y luego hacer un `UPDATE` para resetear los campos clínicos de Miguel + Pablo. El UPDATE corrió sobre 0 rows porque `user_profiles` se vació antes.
+
+**Causa raíz:** `user_profiles` tiene FKs **salientes** hacia `assessments` (`last_reviewed_assessment_id`) y hacia `care_plans` (`active_care_plan_id`). En Postgres, `TRUNCATE … CASCADE` no solo se propaga a tablas que **dependen** de la truncada, sino también a las que tienen FK **hacia** ella si el FK no permite quedar con `null` o si Postgres considera necesario evitar inconsistencia. El NOTICE del log lo deja explícito: `truncate cascades to table "user_profiles"`.
+
+**Lección:**
+- Antes de un `TRUNCATE … CASCADE` masivo, listar **todas** las FKs entrantes y salientes de las tablas implicadas. La salida del NOTICE de Postgres es el primer chivato: lee siempre los warnings.
+- Si quieres preservar filas de una tabla X mientras truncas otras que X referencia, primero **disocia** los FKs (`update X set fk_col = null where fk_col is not null`) y luego trunca. O usa `DELETE FROM` en lugar de `TRUNCATE` para tener control fino.
+- Para wipes en pre-launch, cuando un trigger `on auth.users insert` recrea `user_profiles` automáticamente, **no aplica** a usuarios preexistentes (el trigger solo se dispara en INSERT nuevo). Recrear filas manualmente con `INSERT … ON CONFLICT DO NOTHING` es la red de seguridad.
+- Migrations que dejan estado inconsistente requieren migration de reparación (no editar la migration aplicada). La 04 quedó "fiel a lo que se aplicó" y la 05 reparó.
+
+**ADR vinculado:** ADR-013, ADR-021.
