@@ -1,7 +1,18 @@
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { submitAnswers } from '@/lib/questionnaires/service'
-import type { AnswerInput } from '@/lib/questionnaires/types'
+import { SubmitAnswersSchema } from '@/lib/questionnaires/schema'
 
+// Plan 8 Bloque 2 Fix 4 — validación zod + no-leak de errores técnicos.
+// El handler antes:
+//   - solo chequeaba Array.isArray(body.answers): un cliente podía enviar
+//     answers con shape inválido (itemOrder string, valueNumeric null) y el
+//     payload llegaba sin filtrado al insert.
+//   - el catch devolvía err.message crudo al cliente, filtrando texto
+//     interno como "ASQ item 5 value must be 0 or 1".
+// Ahora:
+//   - safeParse con SubmitAnswersSchema (lib/questionnaires/schema.ts).
+//   - mensaje de error genérico "No se pudo procesar el cuestionario";
+//     detalle técnico se loggea server-side para ops.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ instanceId: string }> },
@@ -29,25 +40,43 @@ export async function POST(
     return new Response('Instance already closed', { status: 409 })
   }
 
-  const body = (await req.json()) as { answers?: AnswerInput[] }
-  if (!body.answers || !Array.isArray(body.answers) || body.answers.length === 0) {
-    return new Response('Invalid answers', { status: 400 })
+  let rawBody: unknown
+  try {
+    rawBody = await req.json()
+  } catch (err) {
+    console.warn('[answers POST] invalid JSON body', {
+      instanceId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
+  }
+
+  const parsed = SubmitAnswersSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    console.warn('[answers POST] schema validation failed', {
+      instanceId,
+      issues: parsed.error.issues,
+    })
+    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
   }
 
   try {
     const result = await submitAnswers(supabase, {
       instanceId,
-      answers: body.answers,
+      answers: parsed.data.answers,
     })
     return Response.json({ result })
   } catch (err) {
-    console.error('[answers POST] failed', { instanceId, err })
-    const message =
-      err instanceof Error
-        ? err.message
-        : typeof err === 'object' && err !== null && 'message' in err
-          ? String((err as { message: unknown }).message)
-          : 'Unknown error'
-    return new Response(message, { status: 400 })
+    // No filtrar el mensaje técnico al cliente — el detalle (ej. "ASQ item 5
+    // value must be 0 or 1") es información de implementación útil sólo
+    // para ops/observabilidad. El cliente recibe un mensaje genérico.
+    console.error('[answers POST] failed', {
+      instanceId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return Response.json(
+      { error: 'No se pudo procesar el cuestionario' },
+      { status: 400 },
+    )
   }
 }
