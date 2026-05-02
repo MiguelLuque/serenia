@@ -1034,6 +1034,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      close_session_atomic: {
+        Args: {
+          p_session_id: string
+          p_user_id: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
       close_stale_sessions: {
         Args: { threshold_minutes?: number }
         Returns: number
