@@ -433,6 +433,7 @@ describe('POST /api/chat — graceful degradation when buildPatientContext rejec
       status: 'open',
       opened_at: nowIso,
       last_activity_at: nowIso,
+      protocol_phase: 1,
     }
 
     function makeBuilder(resolvedData: unknown) {

@@ -1,5 +1,6 @@
 import 'server-only'
 import type { PatientContext, PatientIntake } from '@/lib/patient-context/builder'
+import { computeAge } from '@/lib/patient-context/age'
 import {
   renderProtocolPhaseBlock,
   renderProtocolMaintenanceBlock,
@@ -463,22 +464,6 @@ export function renderIntakeBlock(
   lines.push('')
 
   return lines.join('\n')
-}
-
-// Pequeño duplicate-free `computeAge` local — la regla de cumpleaños es la
-// misma que en `lib/patient-context/builder.ts`. Lo replicamos aquí porque
-// importar desde el builder generaría un ciclo de imports (builder importa
-// types desde aquí — no, en realidad render importa de builder; queda en
-// inline-helper para mantener `render.ts` autocontenida sobre intake).
-function computeAge(birthDate: string, now: Date): number | null {
-  const birth = new Date(birthDate)
-  if (Number.isNaN(birth.getTime())) return null
-  let age = now.getFullYear() - birth.getFullYear()
-  const hadBirthday =
-    now.getMonth() > birth.getMonth() ||
-    (now.getMonth() === birth.getMonth() && now.getDate() >= birth.getDate())
-  if (!hadBirthday) age -= 1
-  return age
 }
 
 // ── Plan 8 T5.2-bis — Sección de fase del protocolo ─────────────────────────

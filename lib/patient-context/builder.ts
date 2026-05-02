@@ -6,6 +6,7 @@ import { type PatientRiskState, derivePatientRiskState } from '@/lib/clinical/ri
 import { listCodes } from '@/lib/questionnaires/registry'
 import type { QuestionnaireCode } from '@/lib/questionnaires/types'
 import type { ProtocolPhase } from '@/lib/protocol/render-phase'
+import { computeAge } from '@/lib/patient-context/age'
 import { PronounsSchema, type Pronouns } from '@/lib/onboarding/schema'
 
 export type PatientContextTier = 'none' | 'historic' | 'tierB' | 'tierA'
@@ -93,17 +94,6 @@ function parsePronouns(raw: string | null): Pronouns | null {
   if (raw === null) return null
   const result = PronounsSchema.safeParse(raw)
   return result.success ? result.data : null
-}
-
-function computeAge(birthDate: string | null, now: Date): number | null {
-  if (!birthDate) return null
-  const birth = new Date(birthDate)
-  let age = now.getFullYear() - birth.getFullYear()
-  const hadBirthday =
-    now.getMonth() > birth.getMonth() ||
-    (now.getMonth() === birth.getMonth() && now.getDate() >= birth.getDate())
-  if (!hadBirthday) age -= 1
-  return age
 }
 
 /**
