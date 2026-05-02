@@ -396,3 +396,33 @@ Reglas duras: ningún componente escribe a BD directo. Ningún módulo `lib/` im
 - Cuando Pablo o Miguel entren en `/app`, el middleware los redirige a `/onboarding` para completar los 4 campos del intake nuevo (Fase 3). Validación práctica del flow Plan 8 Fase 3 sin necesidad de re-signup.
 - **Patrón vinculante** para futuros wipes: antes de un `TRUNCATE … CASCADE` masivo, listar las FKs **entrantes Y salientes** de las tablas implicadas. Si una tabla X tiene FK saliente hacia Y y se trunca Y, X también se vacía. Mejor disociar primero (`UPDATE X SET fk_col = NULL`) o usar `DELETE FROM X WHERE …` con control fino.
 - En pre-launch un trigger `on auth.users insert` recrea `user_profiles` automáticamente, pero **no aplica** a usuarios preexistentes — solo on-INSERT. Recrear filas manualmente es la red de seguridad.
+
+---
+
+## ADR-023 — `lib/shared/` vs `lib/server/`: separación interna preparada para multi-app (Expo)
+
+**Fecha:** 2026-05-02
+**Estado:** vigente
+
+**Contexto:** a futuro existirá una app móvil con Expo. La lógica clínica (scorers de cuestionarios, schemas zod, registro de fases, heurísticas de seguridad, render del bloque de protocolo, etc.) DEBE poder ejecutarse tanto en el server de Next.js como en un cliente React Native. Hoy todo vive en `lib/` mezclado: archivos puramente puros conviven con archivos que importan `'server-only'` o `next/*` o consumen Supabase como cliente server.
+
+ADR-019 ya fija la separación lógica/UI (lib/ pura). Este ADR refina la separación dentro de `lib/`: dentro de la lógica, qué es portable vs qué es server-side.
+
+**Decisión:** dividir `lib/` en dos subcarpetas:
+
+| Carpeta | Contenido | Restricciones |
+|---|---|---|
+| `lib/shared/` | Lógica pura: tipos, schemas zod, scorers, registry, renderers hardcoded, heurísticas regex, validators, constantes, design tokens. | NO `import 'server-only'`. NO `import 'next/*'`. NO `import '@supabase/...'` que consume BD (los tipos generados sí, son shape pasivo). |
+| `lib/server/` | Lógica server-side: builders que consultan BD vía Supabase, RPC wrappers, server actions internos, workflows Vercel WDK, system prompt assembly. | Permite `server-only`, `next/*`, queries Supabase. Nadie en cliente RN debe poder importar de aquí. |
+
+Cuando arranque la app Expo, `lib/shared/` se promueve a `packages/shared/` con un cambio de path (`@/lib/shared/...` → `@serenia/shared/...`). El monorepo se decide entonces, no antes.
+
+**Consecuencias:**
+
+- **Inmediatas**: refactor de paths en todos los consumers de `lib/`. ~200+ imports a actualizar. Cero cambio funcional.
+- **Disciplina nueva**: cualquier archivo nuevo en `lib/shared/` debe ser portable. Si necesita BD o `server-only`, va a `lib/server/`. El arquitecto bloquea PRs que mezclen.
+- **Duda futura**: `lib/shared/llm/{models,config}.ts` exporta IDs de modelos LLM. Hoy son constantes puras. Si en el futuro se carga config de env vars, va a `server/`.
+- **Test layout**: `tests/` raíz se reordena en `tests/shared/` y `tests/server/` para reflejar la separación; los `__tests__/` colocalizados se mantienen donde están.
+- **Beneficio cuando arranque Expo**: el cliente RN importa `lib/shared/...` directamente. Cero código duplicado. Cero risk de meter por error un `server-only` en el bundle del móvil.
+
+**No incluido en este ADR:** la conversión a monorepo formal con pnpm workspaces. Esa decisión se toma cuando arranque mobile y se sepa el calendario.
