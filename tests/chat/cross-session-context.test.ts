@@ -528,7 +528,11 @@ describe('POST /api/chat — graceful degradation when buildPatientContext rejec
       body: JSON.stringify({
         sessionId: '11111111-1111-4111-8111-111111111111',
         messages: [
-          { role: 'user', parts: [{ type: 'text', text: 'hola' }] },
+          {
+            id: 'msg-user-1',
+            role: 'user',
+            parts: [{ type: 'text', text: 'hola' }],
+          },
         ],
       }),
     })

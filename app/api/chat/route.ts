@@ -1,4 +1,10 @@
-import { convertToModelMessages, streamText, tool, type UIMessage } from 'ai'
+import {
+  convertToModelMessages,
+  safeValidateUIMessages,
+  streamText,
+  tool,
+  type UIMessage,
+} from 'ai'
 import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
 import { llm } from '@/lib/llm/models'
@@ -39,8 +45,43 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
 
-  const body = BodySchema.parse(await req.json())
-  const { sessionId, messages } = body as { sessionId: string; messages: UIMessage[] }
+  // Body validation (defensive). Previously `BodySchema.parse(...)` would
+  // throw on malformed input, leaking 500s + stack traces to clients. Now we
+  // safeParse and answer 400 with a generic message; the technical detail is
+  // logged server-side for ops. We also run `safeValidateUIMessages` so a
+  // malicious or malformed `messages` array can't blow up `convertToModelMessages`
+  // or `streamText` further down. The same validator is used by the session
+  // page for rehydration (see app/app/sesion/[id]/page.tsx).
+  let rawBody: unknown
+  try {
+    rawBody = await req.json()
+  } catch (err) {
+    console.warn('[chat] invalid JSON body', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
+  }
+
+  const parsed = BodySchema.safeParse(rawBody)
+  if (!parsed.success) {
+    console.warn('[chat] body schema rejected', {
+      issues: parsed.error.issues,
+    })
+    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
+  }
+
+  const validatedMessages = await safeValidateUIMessages({
+    messages: parsed.data.messages,
+  })
+  if (!validatedMessages.success) {
+    console.warn('[chat] messages failed UIMessage validation', {
+      error: validatedMessages.error.message,
+    })
+    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
+  }
+
+  const sessionId = parsed.data.sessionId
+  const messages: UIMessage[] = validatedMessages.data
 
   const { data: session, error } = await supabase
     .from('clinical_sessions')

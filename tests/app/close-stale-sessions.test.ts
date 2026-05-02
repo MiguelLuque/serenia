@@ -163,7 +163,7 @@ describe('POST /api/internal/close-stale-sessions — happy paths', () => {
     const res = await POST(authedRequest('POST'))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 3, enqueued: 3 })
+    expect(body).toEqual({ ok: true, closed: 3, enqueued: 3, failed: 0 })
 
     expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(3)
     expect(enqueueAssessmentGenerationMock).toHaveBeenNthCalledWith(1, {
@@ -228,6 +228,93 @@ describe('POST /api/internal/close-stale-sessions — happy paths', () => {
   })
 })
 
+describe('POST /api/internal/close-stale-sessions — parallel enqueue (Plan 8 Bloque 2 Fix 2)', () => {
+  it('reports partial work when some enqueues fail (allSettled, no abort)', async () => {
+    // Three sessions: enqueue resolves for the first two and rejects for
+    // the third. The handler MUST NOT abort — the work for sess-a/sess-b
+    // is the whole point. We track `failed: 1` so ops sees the loss.
+    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }, { id: 'sess-c' }]
+    const supabase = makeSupabase({ data: stale, error: null })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+    enqueueAssessmentGenerationMock.mockImplementation(
+      async ({ sessionId }: { sessionId: string }) => {
+        if (sessionId === 'sess-c') {
+          throw new Error('workflow service unavailable')
+        }
+        return { runId: `run-${sessionId}` }
+      },
+    )
+
+    const res = await POST(authedRequest('POST'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual({ ok: true, closed: 3, enqueued: 2, failed: 1 })
+    expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('runs enqueues in parallel (not sequentially)', async () => {
+    // Sequential `await` would resolve enqueues in serial order; with
+    // Promise.allSettled all three are kicked off before any completes,
+    // so the `started` count reaches 3 before any `finished` does. We
+    // observe this by holding all three pending until we explicitly let
+    // them resolve.
+    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }, { id: 'sess-c' }]
+    const supabase = makeSupabase({ data: stale, error: null })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+
+    let started = 0
+    let observedStartedBeforeAnyFinish = 0
+    let firstFinish = false
+    const releasers: Array<() => void> = []
+    enqueueAssessmentGenerationMock.mockImplementation(() => {
+      started += 1
+      if (!firstFinish) observedStartedBeforeAnyFinish = started
+      return new Promise<{ runId: string }>((resolve) => {
+        releasers.push(() => {
+          firstFinish = true
+          resolve({ runId: 'r' })
+        })
+      })
+    })
+
+    const pending = POST(authedRequest('POST'))
+    // Wait until all three enqueue() calls have fired. With sequential
+    // `await` only one would start; with Promise.allSettled all three are
+    // kicked off synchronously inside `ids.map(...)`. We wait for `started`
+    // to reach 3 (with a generous spin cap to keep the test deterministic
+    // under load) instead of relying on a single setTimeout(0) tick.
+    for (let i = 0; i < 50 && started < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    expect(started).toBe(3)
+    // The key invariant: nothing finished before all three started.
+    expect(observedStartedBeforeAnyFinish).toBe(3)
+
+    // Now release each and let the handler complete.
+    for (const release of releasers) release()
+    const res = await pending
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual({ ok: true, closed: 3, enqueued: 3, failed: 0 })
+  })
+
+  it('still returns 200 with failed=N when ALL enqueues reject', async () => {
+    // Edge: every enqueue fails. We still close the sessions and return
+    // 200 — the next cron tick cannot recover them because they are no
+    // longer `status='open'`, so reporting `failed=N` to ops is the
+    // primary obs hook.
+    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }]
+    const supabase = makeSupabase({ data: stale, error: null })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+    enqueueAssessmentGenerationMock.mockRejectedValue(new Error('boom'))
+
+    const res = await POST(authedRequest('POST'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual({ ok: true, closed: 2, enqueued: 0, failed: 2 })
+  })
+})
+
 describe('GET /api/internal/close-stale-sessions', () => {
   it('GET also runs the same close-and-enqueue flow (Vercel Cron uses GET)', async () => {
     const stale = [{ id: 'sess-a' }, { id: 'sess-b' }]
@@ -238,7 +325,7 @@ describe('GET /api/internal/close-stale-sessions', () => {
     const res = await GET(authedRequest('GET'))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 2, enqueued: 2 })
+    expect(body).toEqual({ ok: true, closed: 2, enqueued: 2, failed: 0 })
     expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(2)
   })
 

@@ -168,6 +168,15 @@ export async function touchSession(
  * closed_at=now(), closure_reason=reason. Also sets conversations.ended_at
  * and status='closed' on the parent conversation.
  *
+ * Plan 8 Bloque 2 Fix 3 — atomicidad: antes hacíamos 2 UPDATEs separados
+ * (clinical_sessions luego conversations). Si el segundo fallaba la BD
+ * quedaba inconsistente. Ahora delegamos a la función Postgres
+ * `close_session_atomic` que envuelve ownership-check + ambos UPDATEs en
+ * la misma transacción plpgsql. Ver migration 20260502000006.
+ *
+ * Mantiene la firma pública: si la RPC falla (incluyendo
+ * "session not found for user"), throw-ea como antes.
+ *
  * After the close commits, enqueues the background `generateAssessmentWorkflow`
  * (Vercel WDK). The workflow is idempotent — duplicate fires from the cron or
  * lazy-close path become no-ops via the closure assessment unique check.
@@ -177,34 +186,23 @@ export async function closeSession(
   sessionId: string,
   reason: CloseReason,
 ): Promise<void> {
-  const { data: session, error: fetchError } = await supabase
-    .from('clinical_sessions')
-    .select('conversation_id, user_id')
-    .eq('id', sessionId)
-    .single()
+  // Necesitamos el user_id para pasarlo a la RPC. La RPC también valida
+  // ownership server-side (`raise exception` si no encuentra match), pero
+  // hacemos el SELECT primero para que un sessionId desconocido devuelva
+  // un mensaje específico de la auth-getUser → user.id, en línea con el
+  // contrato anterior.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('No authenticated user')
 
-  if (fetchError) throw fetchError
+  const { error: rpcError } = await supabase.rpc('close_session_atomic', {
+    p_session_id: sessionId,
+    p_user_id: user.id,
+    p_reason: reason,
+  })
 
-  const now = new Date().toISOString()
-
-  const { error: sessionError } = await supabase
-    .from('clinical_sessions')
-    .update({
-      status: 'closed',
-      closed_at: now,
-      closure_reason: reason,
-    })
-    .eq('id', sessionId)
-
-  if (sessionError) throw sessionError
-
-  const { error: convError } = await supabase
-    .from('conversations')
-    .update({ status: 'closed', ended_at: now })
-    .eq('id', session.conversation_id)
-    .eq('user_id', session.user_id)
-
-  if (convError) throw convError
+  if (rpcError) throw rpcError
 
   // Plan 7 T6 — fire-and-forget enqueue. Errors here MUST NOT bubble up:
   // the session is already closed in BD, and the user-facing response should

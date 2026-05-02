@@ -87,24 +87,38 @@ async function handle(request: Request): Promise<Response> {
   // Enqueue assessment generation per session. The workflow is idempotent,
   // so even if a user-driven close already kicked the workflow off the
   // duplicate run will short-circuit on the existence check.
+  //
+  // Plan 8 Bloque 2 Fix 2: paralelizamos con Promise.allSettled. El loop
+  // secuencial podía exceder maxDuration=60s con hasta 200 sesiones y
+  // dejar sesiones cerradas-sin-assessment permanentemente (el cron sólo
+  // recoge `status='open'`, así que el siguiente tick NO las recupera).
+  // allSettled garantiza que el work parcial se publica aunque algún
+  // enqueue falle — fulfilled cuenta como `enqueued`, rejected como
+  // `failed` con detalle en logs.
+  const results = await Promise.allSettled(
+    ids.map((sessionId) => enqueueAssessmentGeneration({ sessionId })),
+  )
+
   let enqueued = 0
-  for (const sessionId of ids) {
-    try {
-      await enqueueAssessmentGeneration({ sessionId })
+  let failed = 0
+  results.forEach((r, idx) => {
+    if (r.status === 'fulfilled') {
       enqueued += 1
-    } catch (err) {
+    } else {
+      failed += 1
       console.error('[close-stale-sessions] enqueue failed', {
-        sessionId,
-        error: err instanceof Error ? err.message : String(err),
+        sessionId: ids[idx],
+        error: r.reason instanceof Error ? r.reason.message : String(r.reason),
       })
     }
-  }
+  })
 
   console.info('[close-stale-sessions] tick complete', {
     closed: ids.length,
     enqueued,
+    failed,
   })
-  return Response.json({ ok: true, closed: ids.length, enqueued })
+  return Response.json({ ok: true, closed: ids.length, enqueued, failed })
 }
 
 function isAuthorized(request: Request): boolean {
