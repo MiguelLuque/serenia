@@ -1,8 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import {
-  textContainsSafetyCheck,
-  hasPriorSafetyCheck,
-} from '@/lib/chat/safety-check-history'
+import { describe, it, expect } from 'vitest'
+import { textContainsSafetyCheck } from '@/lib/chat/safety-check-history'
 import {
   textContainsFarewell,
   detectFarewellWithoutCloseTool,
@@ -12,10 +9,8 @@ import {
 // Plan 7 T3 — Tests heurísticos auxiliares.
 //
 // Este archivo cubre:
-//   3a — `textContainsSafetyCheck` regex unitario.
-//   3a — `hasPriorSafetyCheck` (heurística sobre messages.parts) — @deprecated
-//        pero conservada porque `safety-state.ts` reusa `textContainsSafetyCheck`
-//        en su fallback heurístico textual.
+//   3a — `textContainsSafetyCheck` regex unitario (consumido por safety-state.ts
+//        como fallback heurístico textual cuando no hay datos clínicos en BD).
 //   3c — `detectFarewellWithoutCloseTool` heurística + warn en onFinish.
 //   3b/3c/3e — el prompt de session-therapist contiene las nuevas secciones
 //              vinculantes y se carga sin errores.
@@ -24,26 +19,6 @@ import {
 // `tests/chat/safety-flow.test.ts` (POST /api/chat con `getSessionSafetyState`
 // y `buildCrisisNotice` integrados).
 // =============================================================================
-
-// ── Helpers compartidos ─────────────────────────────────────────────────────
-
-function makeBuilder(resolvedData: unknown) {
-  const builder: Record<string, unknown> = {}
-  const passthrough = () => builder
-  builder.select = passthrough
-  builder.eq = passthrough
-  builder.gt = passthrough
-  builder.gte = passthrough
-  builder.in = passthrough
-  builder.order = passthrough
-  builder.limit = passthrough
-  builder.single = vi.fn().mockResolvedValue({ data: resolvedData, error: null })
-  builder.maybeSingle = vi.fn().mockResolvedValue({ data: resolvedData, error: null })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(builder as any).then = (onFulfilled: (v: unknown) => unknown) =>
-    Promise.resolve({ data: resolvedData, error: null, count: 0 }).then(onFulfilled)
-  return builder
-}
 
 // =============================================================================
 // 3a — textContainsSafetyCheck (regex unitario)
@@ -76,84 +51,6 @@ describe('textContainsSafetyCheck', () => {
   })
 })
 
-// =============================================================================
-// 3a — hasPriorSafetyCheck (consulta a messages)
-// =============================================================================
-
-describe('hasPriorSafetyCheck', () => {
-  it('devuelve true cuando un mensaje assistant previo contiene "Línea 024"', async () => {
-    const supabase = {
-      from: vi.fn(() =>
-        makeBuilder([
-          {
-            parts: [
-              { type: 'text', text: 'Si lo necesitas, llama a la Línea 024.' },
-            ],
-          },
-        ]),
-      ),
-    } as unknown as Parameters<typeof hasPriorSafetyCheck>[0]
-
-    const result = await hasPriorSafetyCheck(supabase, 'session-1')
-    expect(result).toBe(true)
-  })
-
-  it('devuelve true cuando un mensaje assistant previo pregunta "estás a salvo"', async () => {
-    const supabase = {
-      from: vi.fn(() =>
-        makeBuilder([
-          {
-            parts: [
-              {
-                type: 'text',
-                text: 'Quiero asegurarme de que estás a salvo. ¿Estás pensando en hacerte daño?',
-              },
-            ],
-          },
-        ]),
-      ),
-    } as unknown as Parameters<typeof hasPriorSafetyCheck>[0]
-
-    const result = await hasPriorSafetyCheck(supabase, 'session-1')
-    expect(result).toBe(true)
-  })
-
-  it('devuelve false cuando ningún mensaje assistant previo contiene safety language', async () => {
-    const supabase = {
-      from: vi.fn(() =>
-        makeBuilder([
-          { parts: [{ type: 'text', text: 'cuéntame más sobre eso' }] },
-          { parts: [{ type: 'text', text: 'gracias por compartirlo' }] },
-        ]),
-      ),
-    } as unknown as Parameters<typeof hasPriorSafetyCheck>[0]
-
-    const result = await hasPriorSafetyCheck(supabase, 'session-1')
-    expect(result).toBe(false)
-  })
-
-  it('devuelve false sin assistant messages previos', async () => {
-    const supabase = {
-      from: vi.fn(() => makeBuilder([])),
-    } as unknown as Parameters<typeof hasPriorSafetyCheck>[0]
-
-    const result = await hasPriorSafetyCheck(supabase, 'session-1')
-    expect(result).toBe(false)
-  })
-
-  it('traga errores de BD y devuelve false (failsafe)', async () => {
-    const errorBuilder = makeBuilder(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(errorBuilder as any).then = (onFulfilled: (v: unknown) => unknown) =>
-      Promise.resolve({ data: null, error: new Error('DB hiccup') }).then(onFulfilled)
-    const supabase = {
-      from: vi.fn(() => errorBuilder),
-    } as unknown as Parameters<typeof hasPriorSafetyCheck>[0]
-
-    const result = await hasPriorSafetyCheck(supabase, 'session-1')
-    expect(result).toBe(false)
-  })
-})
 
 // =============================================================================
 // 3c — farewell detector
