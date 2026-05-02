@@ -933,12 +933,14 @@ export type Database = {
           display_name: string | null
           employment: string | null
           id: string
+          informal_name: string
           last_known_risk_level: Database["public"]["Enums"]["risk_profile_status"]
           last_reviewed_assessment_id: string | null
           living_with: string | null
           locale: string
           onboarding_status: Database["public"]["Enums"]["onboarding_status"]
           prior_therapy: boolean | null
+          pronouns: string | null
           reason_for_consulting: string | null
           relationship_status: string | null
           risk_profile_status: Database["public"]["Enums"]["risk_profile_status"]
@@ -962,12 +964,14 @@ export type Database = {
           display_name?: string | null
           employment?: string | null
           id?: string
+          informal_name?: string
           last_known_risk_level?: Database["public"]["Enums"]["risk_profile_status"]
           last_reviewed_assessment_id?: string | null
           living_with?: string | null
           locale?: string
           onboarding_status?: Database["public"]["Enums"]["onboarding_status"]
           prior_therapy?: boolean | null
+          pronouns?: string | null
           reason_for_consulting?: string | null
           relationship_status?: string | null
           risk_profile_status?: Database["public"]["Enums"]["risk_profile_status"]
@@ -991,12 +995,14 @@ export type Database = {
           display_name?: string | null
           employment?: string | null
           id?: string
+          informal_name?: string
           last_known_risk_level?: Database["public"]["Enums"]["risk_profile_status"]
           last_reviewed_assessment_id?: string | null
           living_with?: string | null
           locale?: string
           onboarding_status?: Database["public"]["Enums"]["onboarding_status"]
           prior_therapy?: boolean | null
+          pronouns?: string | null
           reason_for_consulting?: string | null
           relationship_status?: string | null
           risk_profile_status?: Database["public"]["Enums"]["risk_profile_status"]

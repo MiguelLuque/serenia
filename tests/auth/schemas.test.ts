@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   RegisterSchema,
   LoginSchema,
-  ProfileSchema,
   isAdult,
 } from '@/lib/auth/schemas'
 
@@ -40,23 +39,3 @@ describe('isAdult', () => {
   })
 })
 
-describe('ProfileSchema', () => {
-  it('exige adulto', () => {
-    const d = new Date()
-    d.setFullYear(d.getFullYear() - 10)
-    const r = ProfileSchema.safeParse({
-      displayName: 'Ana',
-      birthDate: d.toISOString().slice(0, 10),
-      sex: 'female',
-      country: 'ES',
-      city: 'Madrid',
-      employment: 'employed',
-      relationshipStatus: 'single',
-      livingWith: 'alone',
-      priorTherapy: false,
-      currentMedication: false,
-      reasonForConsulting: 'Ansiedad constante',
-    })
-    expect(r.success).toBe(false)
-  })
-})

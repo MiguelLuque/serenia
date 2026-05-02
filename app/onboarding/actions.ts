@@ -1,25 +1,26 @@
 'use server'
 import { redirect } from 'next/navigation'
 import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { ProfileSchema } from '@/lib/auth/schemas'
+import { ClinicalIntakeSchema } from '@/lib/onboarding/schema'
 
 type ActionState = { error?: string } | undefined
 
+/**
+ * Plan 8 Fase 3 (T3.3) / ADR-019 / ADR-020.
+ *
+ * Onboarding clínico reducido a 4 campos imprescindibles para sesión 1.
+ * Las columnas legacy (sex, country, city, employment, relationship_status,
+ * living_with, prior_therapy, current_medication) NO se tocan aquí; Plan 9
+ * (Patient Profile completo) las reusará y se mantienen nullable.
+ */
 export async function submitProfile(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const raw = {
-    displayName: formData.get('displayName'),
+    informalName: formData.get('informalName'),
+    pronouns: formData.get('pronouns'),
     birthDate: formData.get('birthDate'),
-    sex: formData.get('sex'),
-    country: formData.get('country'),
-    city: formData.get('city'),
-    employment: formData.get('employment'),
-    relationshipStatus: formData.get('relationshipStatus'),
-    livingWith: formData.get('livingWith'),
-    priorTherapy: formData.get('priorTherapy') === 'on',
-    currentMedication: formData.get('currentMedication') === 'on',
     reasonForConsulting: formData.get('reasonForConsulting'),
   }
-  const parsed = ProfileSchema.safeParse(raw)
+  const parsed = ClinicalIntakeSchema.safeParse(raw)
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
   }
@@ -30,21 +31,17 @@ export async function submitProfile(_prev: ActionState, formData: FormData): Pro
 
   const { error } = await supabase
     .from('user_profiles')
-    .update({
-      display_name: parsed.data.displayName,
-      birth_date: parsed.data.birthDate,
-      sex: parsed.data.sex,
-      country: parsed.data.country,
-      city: parsed.data.city,
-      employment: parsed.data.employment,
-      relationship_status: parsed.data.relationshipStatus,
-      living_with: parsed.data.livingWith,
-      prior_therapy: parsed.data.priorTherapy,
-      current_medication: parsed.data.currentMedication,
-      reason_for_consulting: parsed.data.reasonForConsulting,
-      onboarding_status: 'complete',
-    })
-    .eq('user_id', user.id)
+    .upsert(
+      {
+        user_id: user.id,
+        informal_name: parsed.data.informalName,
+        pronouns: parsed.data.pronouns,
+        birth_date: parsed.data.birthDate,
+        reason_for_consulting: parsed.data.reasonForConsulting,
+        onboarding_status: 'complete',
+      },
+      { onConflict: 'user_id' },
+    )
 
   if (error) return { error: 'No se pudo guardar el perfil' }
   redirect('/app')
