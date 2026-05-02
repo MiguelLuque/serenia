@@ -8,7 +8,11 @@ scoring_strategy: conditional
 source_reference: "Horowitz LM et al. Ask Suicide-Screening Questions (ASQ). NIMH"
 last_reviewed: 2026-04-21
 owner: "@psicologo"
+status: deprecated-2026-05-02
+deprecated_reason: "Plan 8 Fase 1 sustituye ASQ por C-SSRS (Columbia Suicide Severity Rating Scale, screener) con granularidad de 5 bandas (negative / low_risk / moderate_risk / high_risk / acute_risk) — ver ADR-016. La eliminación física del cuestionario ASQ + scorer + branches del safety-state ocurre en Fase 1 T1.7 + Fase 2. Mantener este doc como referencia histórica hasta entonces."
 ---
+
+> ⚠️ **DEPRECATED 2026-05-02** — ver `deprecated_reason` en frontmatter. ASQ será reemplazado por C-SSRS en Plan 8 Fase 1+2. La especificación nueva está en `docs/handoff/para-pablo-plan-8/01-cuestionarios.md` sección C-SSRS.
 
 # ASQ — Ask Suicide-Screening Questions (ES)
 

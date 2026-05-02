@@ -378,3 +378,21 @@ Reglas duras: ningún componente escribe a BD directo. Ningún módulo `lib/` im
 **Consecuencias:**
 - Cada Fase tiene un check explícito de deuda heredada que cerrar antes de mergear.
 - Si una salvedad sigue abierta tras su Fase, se promueve a su propio ADR como deuda persistente.
+
+---
+
+## ADR-022 — Plan 8 T0.1: wipe legacy + repair via second migration
+
+**Fecha:** 2026-05-02 (Plan 8 T0.1)
+**Estado:** vigente
+**Lección vinculada:** L-013 (`docs/architecture/lessons.md`)
+
+**Contexto:** el plan T0.1 listaba un `TRUNCATE … CASCADE` masivo de tablas de interacción + `DELETE FROM auth.users WHERE id NOT IN (preservados)`, y un `UPDATE` posterior para resetear los campos clínicos de los `user_profiles` preservados (Miguel + Pablo). Al ejecutar la migration `20260502000004_wipe_legacy_test_data.sql`, el `TRUNCATE` cascadeó a `user_profiles` por FKs **salientes** (`active_care_plan_id` → `care_plans`, `last_reviewed_assessment_id` → `assessments`). Resultado: `user_profiles` quedó vacío y el `UPDATE` corrió sobre 0 rows. Pablo perdería el rol `clinician` al loguearse.
+
+**Decisión:** reparar en una migration separada `20260502000005_restore_preserved_profiles.sql` con `INSERT … ON CONFLICT (user_id) DO NOTHING` para los 2 UIDs preservados, fijando `role` y `onboarding_status='pending'`. Mantener la migration 04 fiel a lo que se aplicó (no editarla); la 05 documenta la corrección.
+
+**Consecuencias:**
+- Estado actual de BD prod: `auth.users` = 2, `user_profiles` = 2 (Miguel `patient`, Pablo `clinician`, ambos `onboarding_status='pending'`), todas las tablas de interacción a 0.
+- Cuando Pablo o Miguel entren en `/app`, el middleware los redirige a `/onboarding` para completar los 4 campos del intake nuevo (Fase 3). Validación práctica del flow Plan 8 Fase 3 sin necesidad de re-signup.
+- **Patrón vinculante** para futuros wipes: antes de un `TRUNCATE … CASCADE` masivo, listar las FKs **entrantes Y salientes** de las tablas implicadas. Si una tabla X tiene FK saliente hacia Y y se trunca Y, X también se vacía. Mejor disociar primero (`UPDATE X SET fk_col = NULL`) o usar `DELETE FROM X WHERE …` con control fino.
+- En pre-launch un trigger `on auth.users insert` recrea `user_profiles` automáticamente, pero **no aplica** a usuarios preexistentes — solo on-INSERT. Recrear filas manualmente es la red de seguridad.

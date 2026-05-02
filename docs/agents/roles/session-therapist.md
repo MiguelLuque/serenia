@@ -3,7 +3,11 @@ name: session-therapist
 version: 1.0.0
 last_reviewed: 2026-04-21
 owner: "@psicologo"
+status: deprecated-2026-05-02
+deprecated_reason: "Plan 8 redefine el rol como 'asistente psicológica TCC/ACT supervisada' (ADR-020). Este doc no menciona TCC/ACT ni el protocolo de 8 sesiones. Será sustituido cuando Pablo firme la reescritura del prompt v2 (Fase 4). Hasta entonces, NO usar como referencia — leer en su lugar `docs/agents/prompts/session-therapist.draft-v2.md` o el plan en `~/.claude/plans/refactored-sparking-koala.md`."
 ---
+
+> ⚠️ **DEPRECATED 2026-05-02** — ver `deprecated_reason` en frontmatter. Documento congelado en estado Plan 4-7. No representa la identidad clínica vigente de la IA tras Plan 8.
 
 # Rol: Session Therapist
 

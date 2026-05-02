@@ -3,7 +3,11 @@ name: session-flow
 version: 1.0.0
 last_reviewed: 2026-04-21
 owner: "@psicologo"
+status: deprecated-2026-05-02
+deprecated_reason: "Plan 8 introduce protocolo cerrado de 8 sesiones TCC/ACT (ADR-015) con estructura transversal agenda → revisión tarea → foco → práctica → tarea → feedback. Este doc describe el flujo pre-Plan 8 (Apertura/Exploración/Profundización + cribado ASQ) y NO refleja la realidad vigente. Será sustituido cuando Pablo firme el prompt v2 (Fase 4)."
 ---
+
+> ⚠️ **DEPRECATED 2026-05-02** — ver `deprecated_reason` en frontmatter. Doc congelado en estructura Plan 4-7. Para el flujo vigente leer `docs/agents/chat-flow.md` (post Plan 8) o el plan en `~/.claude/plans/refactored-sparking-koala.md`.
 
 # Flujo de sesión (60 minutos)
 
