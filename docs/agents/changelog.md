@@ -12,6 +12,6 @@ Cada cambio en roles, protocolos o prompts debe registrarse aquí con motivo cl�
 | 2026-04-25 | prompts/clinical-report.md                | Reglas anti-sobreclasificación   | @psicologo    | Plan 7 T-B — disclaimers ASQ vs PHQ-9 ítem 9 |
 | 2026-05-02 | prompts/session-therapist.draft-v2.md     | Borrador v2.0 (Plan 8)           | @claude       | Pendiente firma Pablo. TCC/ACT, 8 sesiones, C-SSRS sustituye ASQ, lista negra ampliada |
 | 2026-05-02 | prompts/clinical-report.draft-v2.md       | Borrador v2.0 (Plan 8)           | @claude       | Pendiente firma Pablo. Nuevos campos protocol_phase + techniques_applied; bandas ampliadas BDI-II/BAI/STAI/HAM-D |
-| 2026-05-02 | roles/session-therapist.md                | Marcado deprecated               | @claude       | Plan 8 ADR-020 redefine rol como "asistente psicológica TCC/ACT supervisada" |
-| 2026-05-02 | protocols/session-flow.md                 | Marcado deprecated               | @claude       | Plan 8 ADR-015 introduce protocolo cerrado de 8 sesiones, sustituye estructura libre |
-| 2026-05-02 | questionnaires/asq.md                     | Marcado deprecated               | @claude       | Plan 8 Fase 1+2 sustituye ASQ por C-SSRS (ADR-016) |
+| 2026-05-02 | roles/session-therapist.md                | Borrado                          | @claude       | Plan 8 ADR-020: rol redefinido en prompts/session-therapist.md (v1.1 vivo, draft-v2 pendiente Pablo). Doc obsoleto. |
+| 2026-05-02 | protocols/session-flow.md                 | Borrado                          | @claude       | Plan 8 ADR-015: flujo migra a protocolo de 8 sesiones documentado en chat-flow.md. Doc obsoleto. |
+| 2026-05-02 | questionnaires/asq.md                     | Borrado                          | @claude       | Plan 8 Fase 1+2 sustituye ASQ por C-SSRS (ADR-016). Copy clínica del ASQ vive en BD seed hasta Fase 2. |
