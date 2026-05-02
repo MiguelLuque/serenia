@@ -23,7 +23,7 @@ import {
   createInstance,
   getActiveInstanceForSession,
 } from '@/lib/questionnaires/service'
-import type { QuestionnaireCode } from '@/lib/questionnaires/types'
+import type { QuestionnaireCode } from '@/lib/questionnaires/registry'
 import { listPatientCodes } from '@/lib/questionnaires/registry'
 import { buildPatientContext } from '@/lib/patient-context/builder'
 import { assemblePlan6ContextPieces } from '@/lib/chat/assemble-plan6-prompt'

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/supabase/types'
-import type { QuestionnaireCode, AnswerInput, ScoringResult } from './types'
-import { getDefinition } from './registry'
+import type { AnswerInput, ScoringResult } from './types'
+import { getDefinition, type QuestionnaireCode } from './registry'
 
 type Supabase = SupabaseClient<Database>
 

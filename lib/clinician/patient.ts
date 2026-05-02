@@ -2,7 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import type { AssessmentStatus } from './assessment-labels'
-import type { QuestionnaireCode } from '@/lib/questionnaires/registry'
+import { LONGITUDINAL_CODES } from '@/lib/questionnaires/registry'
 
 type RiskSeverity = Database['public']['Enums']['risk_severity']
 type RiskType = Database['public']['Enums']['risk_type']
@@ -54,12 +54,6 @@ export type PatientDetail = {
   openTasks: OpenTask[]
 }
 
-// Codes included in the "tendencias" trend table. ASQ is a risk screener,
-// not a mood trend, so it's excluded by design. Plan 8 ADR-017: typed via
-// QuestionnaireCode so a renamed code in the registry breaks here at
-// compile time instead of silently dropping rows.
-const TREND_CODES = ['PHQ9', 'GAD7'] as const satisfies readonly QuestionnaireCode[]
-
 /**
  * Fetch the full detail of a patient for the clinician panel: profile
  * header, historical PHQ-9 / GAD-7 scores, risk events and sessions with
@@ -89,7 +83,7 @@ export async function getPatientDetail(
         .eq('status', 'scored')
         .in(
           'questionnaire_definitions.code',
-          TREND_CODES as unknown as string[]
+          LONGITUDINAL_CODES as unknown as string[]
         )
         .order('scored_at', { ascending: false }),
       supabase
