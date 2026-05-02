@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getQuestionnaireCardHeader } from '@/lib/questionnaires/card-metadata'
+import { getQuestionnaireCardHeader } from '@/lib/shared/questionnaires/card-metadata'
 
 describe('getQuestionnaireCardHeader', () => {
   it('returns PHQ9 clinical title and duration', () => {

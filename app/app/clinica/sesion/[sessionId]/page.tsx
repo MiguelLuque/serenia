@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { getSessionDetail } from '@/lib/clinician/session-detail'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { getSessionDetail } from '@/lib/server/clinician/session-detail'
 import { AssessmentView } from '@/components/clinician/assessment-view'
 
 export default async function ClinicianSessionDetailPage({

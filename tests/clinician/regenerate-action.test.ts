@@ -14,7 +14,7 @@ const {
   enqueueAssessmentGenerationMock: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/lib/server/supabase/server', () => ({
   createAuthenticatedClient: createAuthenticatedClientMock,
 }))
 
@@ -22,12 +22,12 @@ vi.mock('next/cache', () => ({
   revalidatePath: revalidatePathMock,
 }))
 
-vi.mock('@/lib/assessments/regenerate', () => ({
+vi.mock('@/lib/server/assessments/regenerate', () => ({
   prepareRegeneration: prepareRegenerationMock,
   rollbackRegeneration: rollbackRegenerationMock,
 }))
 
-vi.mock('@/lib/workflows', () => ({
+vi.mock('@/lib/server/workflows', () => ({
   enqueueAssessmentGeneration: enqueueAssessmentGenerationMock,
 }))
 

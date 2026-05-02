@@ -1,6 +1,6 @@
-import { createServiceRoleClient } from '@/lib/supabase/server'
-import { enqueueAssessmentGeneration } from '@/lib/workflows'
-import { SESSION_INACTIVITY_MS } from '@/lib/sessions/service'
+import { createServiceRoleClient } from '@/lib/server/supabase/server'
+import { enqueueAssessmentGeneration } from '@/lib/server/workflows'
+import { SESSION_INACTIVITY_MS } from '@/lib/server/sessions/service'
 
 // Plan 7 T6 — Replacement for the `close_stale_sessions` Postgres function +
 // Supabase pg_cron scheduling. The SQL function (left in place as dead code

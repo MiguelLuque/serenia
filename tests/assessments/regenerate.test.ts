@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   prepareRegeneration,
   rollbackRegeneration,
-} from '@/lib/assessments/regenerate'
+} from '@/lib/server/assessments/regenerate'
 
 // ── Supabase mock helpers ──────────────────────────────────────────────────
 //

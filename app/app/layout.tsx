@@ -1,4 +1,4 @@
-import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { redirect } from 'next/navigation'
 import {
   SidebarInset,

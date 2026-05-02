@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePHQ9, scoreGAD7, scoreASQ } from '@/lib/questionnaires/scoring'
+import { scorePHQ9, scoreGAD7, scoreASQ } from '@/lib/shared/questionnaires/scoring'
 
 // ---------------------------------------------------------------------------
 // PHQ-9

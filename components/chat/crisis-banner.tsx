@@ -1,4 +1,4 @@
-import { SAFETY_RESOURCES } from '@/lib/clinical/safety-resources'
+import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
 
 export function CrisisBanner() {
   return (

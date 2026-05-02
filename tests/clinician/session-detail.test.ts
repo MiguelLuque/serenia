@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { getSessionDetail } from '@/lib/clinician/session-detail'
+import { getSessionDetail } from '@/lib/server/clinician/session-detail'
 
 // ── Supabase mock helpers ──────────────────────────────────────────────────
 //

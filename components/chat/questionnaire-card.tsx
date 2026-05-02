@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getQuestionnaireCardHeader } from '@/lib/questionnaires/card-metadata'
+import { getQuestionnaireCardHeader } from '@/lib/shared/questionnaires/card-metadata'
 
 interface Option {
   value: number

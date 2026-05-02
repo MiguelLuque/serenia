@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { textContainsSafetyCheck } from '@/lib/chat/safety-check-history'
+import { textContainsSafetyCheck } from '@/lib/shared/chat/safety-check-history'
 import {
   textContainsFarewell,
   detectFarewellWithoutCloseTool,
-} from '@/lib/chat/farewell-detector'
+} from '@/lib/shared/chat/farewell-detector'
 
 // =============================================================================
 // Plan 7 T3 — Tests heurísticos auxiliares.
@@ -134,7 +134,7 @@ describe('detectFarewellWithoutCloseTool', () => {
 
 describe('session-therapist prompt — T3 secciones vinculantes', () => {
   it('carga sin errores y contiene las secciones nuevas', async () => {
-    const { getSessionTherapistPrompt } = await import('@/lib/llm/prompts/index')
+    const { getSessionTherapistPrompt } = await import('@/lib/server/llm/prompts/index')
     const prompt = getSessionTherapistPrompt()
 
     // 3b — Memoria intra-sesión

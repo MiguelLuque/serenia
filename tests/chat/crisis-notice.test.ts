@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildCrisisNotice } from '@/lib/chat/crisis-notice'
-import type { SafetyState } from '@/lib/chat/safety-state'
+import { buildCrisisNotice } from '@/lib/shared/chat/crisis-notice'
+import type { SafetyState } from '@/lib/server/chat/safety-state'
 
 // =============================================================================
 // Plan 7 T3a v2 — `buildCrisisNotice` traduce un `SafetyState` (+ resultado del

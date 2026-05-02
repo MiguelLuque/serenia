@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectCrisis } from '@/lib/chat/crisis-detector'
+import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
 
 describe('detectCrisis — positive cases', () => {
   it('detects "suicidio" stem', () => {

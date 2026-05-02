@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import { safeValidateUIMessages, type UIMessage } from 'ai'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import {
   closeSession,
   isSessionExpired,
   SESSION_MAX_DURATION_MS,
-} from '@/lib/sessions/service'
-import { getActiveInstanceForSession } from '@/lib/questionnaires/service'
+} from '@/lib/server/sessions/service'
+import { getActiveInstanceForSession } from '@/lib/server/questionnaires/service'
 import { ChatView } from '@/components/chat/chat-view'
 
 type MessageRow = { id: string; role: string; parts: unknown }

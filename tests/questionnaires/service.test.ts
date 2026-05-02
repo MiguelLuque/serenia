@@ -4,7 +4,7 @@ import {
   startInstance,
   getActiveInstanceForSession,
   submitAnswers,
-} from '@/lib/questionnaires/service'
+} from '@/lib/server/questionnaires/service'
 
 // ---------------------------------------------------------------------------
 // Helpers

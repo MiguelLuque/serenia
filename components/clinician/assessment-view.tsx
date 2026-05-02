@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import type { SessionDetail } from '@/lib/clinician/session-detail'
-import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
+import type { SessionDetail } from '@/lib/server/clinician/session-detail'
+import { assessmentStatusLabel } from '@/lib/shared/clinician/assessment-labels'
 import { AssessmentEditor } from '@/components/clinician/assessment-editor'
 import {
   markReviewedAction,

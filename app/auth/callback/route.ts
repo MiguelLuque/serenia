@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)

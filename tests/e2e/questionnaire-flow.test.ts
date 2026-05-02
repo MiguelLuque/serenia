@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createInstance,
   submitAnswers,
-} from '@/lib/questionnaires/service'
+} from '@/lib/server/questionnaires/service'
 
 /**
  * Integration flow: AI proposes PHQ-9 -> user submits 9 answers summing to 12

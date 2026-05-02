@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { getPatientDetail } from '@/lib/clinician/patient'
-import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { getPatientDetail } from '@/lib/server/clinician/patient'
+import { assessmentStatusLabel } from '@/lib/shared/clinician/assessment-labels'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,

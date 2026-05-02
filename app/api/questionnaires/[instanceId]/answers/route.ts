@@ -1,6 +1,6 @@
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { submitAnswers } from '@/lib/questionnaires/service'
-import { SubmitAnswersSchema } from '@/lib/questionnaires/schema'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { submitAnswers } from '@/lib/server/questionnaires/service'
+import { SubmitAnswersSchema } from '@/lib/shared/questionnaires/schema'
 
 // Plan 8 Bloque 2 Fix 4 — validación zod + no-leak de errores técnicos.
 // El handler antes:

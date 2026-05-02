@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { getPatientOpenTasks } from '@/lib/patient-tasks/open-tasks'
+import { getPatientOpenTasks } from '@/lib/server/patient-tasks/open-tasks'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
+import type { Database } from '@/lib/shared/supabase/types'
 
 type TaskRow = {
   id: string

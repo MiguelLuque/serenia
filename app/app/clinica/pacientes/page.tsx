@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { getClinicianPatients } from '@/lib/clinician/patients'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { getClinicianPatients } from '@/lib/server/clinician/patients'
 import {
   Card,
   CardContent,

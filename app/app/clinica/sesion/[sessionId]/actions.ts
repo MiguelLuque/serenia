@@ -2,14 +2,14 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { AssessmentSchema } from '@/lib/assessments/generator'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { AssessmentSchema } from '@/lib/server/assessments/generator'
 import {
   prepareRegeneration,
   rollbackRegeneration,
-} from '@/lib/assessments/regenerate'
-import { enqueueAssessmentGeneration } from '@/lib/workflows'
-import type { Json } from '@/lib/supabase/types'
+} from '@/lib/server/assessments/regenerate'
+import { enqueueAssessmentGeneration } from '@/lib/server/workflows'
+import type { Json } from '@/lib/shared/supabase/types'
 
 const InheritedTaskUpdateSchema = z.object({
   id: z.string().uuid(),

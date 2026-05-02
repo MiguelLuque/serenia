@@ -1,7 +1,7 @@
 'use server'
 import { redirect } from 'next/navigation'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { ClinicalIntakeSchema } from '@/lib/onboarding/schema'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { ClinicalIntakeSchema } from '@/lib/shared/onboarding/schema'
 
 type ActionState = { error?: string } | undefined
 

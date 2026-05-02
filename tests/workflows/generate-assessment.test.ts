@@ -13,15 +13,15 @@ vi.mock('ai', () => ({
   generateObject: generateObjectMock,
 }))
 
-vi.mock('@/lib/llm/models', () => ({
+vi.mock('@/lib/shared/llm/models', () => ({
   llm: { structured: () => 'openai/gpt-5.4' },
 }))
 
-vi.mock('@/lib/llm/prompts/loader', () => ({
+vi.mock('@/lib/server/llm/prompts/loader', () => ({
   loadPromptFromMarkdown: () => 'SYSTEM PROMPT',
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/lib/server/supabase/server', () => ({
   createServiceRoleClient: createServiceRoleClientMock,
 }))
 
@@ -31,7 +31,7 @@ vi.mock('@/lib/supabase/server', () => ({
 // we want for unit testing the orchestration logic (retry → manual_review,
 // idempotency short-circuits, FatalError flow, etc.). The actual durable
 // retry machinery is owned by `@workflow/core` and out of scope here.
-import { generateAssessmentWorkflow } from '@/lib/workflows/generate-assessment'
+import { generateAssessmentWorkflow } from '@/lib/server/workflows/generate-assessment'
 
 // ---------------------------------------------------------------------------
 // Supabase mock helpers

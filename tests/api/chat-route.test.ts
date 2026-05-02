@@ -72,37 +72,37 @@ beforeEach(() => {
     }),
   }
 
-  vi.doMock('@/lib/supabase/server', () => ({
+  vi.doMock('@/lib/server/supabase/server', () => ({
     createAuthenticatedClient: async () => supabaseStub,
   }))
 
-  vi.doMock('@/lib/sessions/service', () => ({
+  vi.doMock('@/lib/server/sessions/service', () => ({
     touchSession: vi.fn().mockResolvedValue(undefined),
     closeSession: closeSessionMock,
     isSessionExpired: vi.fn().mockReturnValue(false),
   }))
 
-  vi.doMock('@/lib/sessions/messages', () => ({
+  vi.doMock('@/lib/server/sessions/messages', () => ({
     saveUserMessage: saveUserMessageMock,
     saveAssistantMessage: vi.fn().mockResolvedValue(undefined),
   }))
 
-  vi.doMock('@/lib/chat/crisis-detector', () => ({
+  vi.doMock('@/lib/shared/chat/crisis-detector', () => ({
     detectCrisis: vi.fn().mockReturnValue({ detected: false, matchedTerms: [] }),
   }))
 
-  vi.doMock('@/lib/chat/safety-state', () => ({
+  vi.doMock('@/lib/server/chat/safety-state', () => ({
     getSessionSafetyState: vi
       .fn()
       .mockResolvedValue({ kind: 'never_assessed' }),
   }))
 
-  vi.doMock('@/lib/questionnaires/service', () => ({
+  vi.doMock('@/lib/server/questionnaires/service', () => ({
     createInstance: vi.fn(),
     getActiveInstanceForSession: vi.fn().mockResolvedValue(null),
   }))
 
-  vi.doMock('@/lib/patient-context/telemetry', () => ({
+  vi.doMock('@/lib/server/patient-context/telemetry', () => ({
     logContextInjection: vi.fn().mockResolvedValue(undefined),
   }))
 
@@ -126,13 +126,13 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  vi.doUnmock('@/lib/supabase/server')
-  vi.doUnmock('@/lib/sessions/service')
-  vi.doUnmock('@/lib/sessions/messages')
-  vi.doUnmock('@/lib/chat/crisis-detector')
-  vi.doUnmock('@/lib/chat/safety-state')
-  vi.doUnmock('@/lib/questionnaires/service')
-  vi.doUnmock('@/lib/patient-context/telemetry')
+  vi.doUnmock('@/lib/server/supabase/server')
+  vi.doUnmock('@/lib/server/sessions/service')
+  vi.doUnmock('@/lib/server/sessions/messages')
+  vi.doUnmock('@/lib/shared/chat/crisis-detector')
+  vi.doUnmock('@/lib/server/chat/safety-state')
+  vi.doUnmock('@/lib/server/questionnaires/service')
+  vi.doUnmock('@/lib/server/patient-context/telemetry')
   vi.doUnmock('ai')
   if (OLD_LLM_MODEL === undefined) delete process.env.LLM_CONVERSATIONAL_MODEL
   else process.env.LLM_CONVERSATIONAL_MODEL = OLD_LLM_MODEL

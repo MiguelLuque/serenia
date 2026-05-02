@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { loadPromptFromMarkdown, __clearPromptCache } from '@/lib/llm/prompts/loader'
-import { getSessionTherapistPrompt } from '@/lib/llm/prompts/index'
+import { loadPromptFromMarkdown, __clearPromptCache } from '@/lib/server/llm/prompts/loader'
+import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts/index'
 
 beforeEach(() => {
   __clearPromptCache()
