@@ -28,7 +28,8 @@ export const ClinicalIntakeSchema = z.object({
   reasonForConsulting: z
     .string()
     .trim()
-    .min(10, 'Cuéntanos un poco más'),
+    .min(10, 'Cuéntanos un poco más')
+    .max(2000, 'Resume en menos de 2000 caracteres'),
 })
 
 export type ClinicalIntakeInput = z.infer<typeof ClinicalIntakeSchema>

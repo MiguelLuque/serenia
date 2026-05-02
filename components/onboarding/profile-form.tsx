@@ -64,6 +64,7 @@ export function ProfileForm() {
           name="reasonForConsulting"
           required
           minLength={10}
+          maxLength={2000}
           rows={4}
         />
       </div>

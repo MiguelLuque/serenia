@@ -45,4 +45,12 @@ describe('ClinicalIntakeSchema', () => {
     const r = ClinicalIntakeSchema.safeParse({ ...validInput, reasonForConsulting: 'corto' })
     expect(r.success).toBe(false)
   })
+
+  it('rechaza reasonForConsulting > 2000 chars', () => {
+    const r = ClinicalIntakeSchema.safeParse({
+      ...validInput,
+      reasonForConsulting: 'a'.repeat(2001),
+    })
+    expect(r.success).toBe(false)
+  })
 })
