@@ -164,6 +164,7 @@ export type Database = {
           id: string
           last_activity_at: string
           opened_at: string
+          protocol_phase: number
           status: Database["public"]["Enums"]["session_status"]
           summary_id: string | null
           updated_at: string
@@ -177,6 +178,7 @@ export type Database = {
           id?: string
           last_activity_at?: string
           opened_at?: string
+          protocol_phase?: number
           status?: Database["public"]["Enums"]["session_status"]
           summary_id?: string | null
           updated_at?: string
@@ -190,6 +192,7 @@ export type Database = {
           id?: string
           last_activity_at?: string
           opened_at?: string
+          protocol_phase?: number
           status?: Database["public"]["Enums"]["session_status"]
           summary_id?: string | null
           updated_at?: string
