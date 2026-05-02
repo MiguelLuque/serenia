@@ -355,3 +355,26 @@ Reglas duras: ningún componente escribe a BD directo. Ningún módulo `lib/` im
 **Consecuencias:**
 - El paciente sabe desde el primer turno que la IA NO es el psicólogo humano.
 - Copy adicional en sesión 1 para introducir el modelo de supervisión.
+
+---
+
+## ADR-021 — Plan 8: deuda de T0.3+T0.4 anotada para revisión en Fases 1-2 y 7
+
+**Fecha:** 2026-05-02 (Plan 8 T0.3+T0.4 architect review)
+**Estado:** vigente
+
+**Contexto:** la review del arquitecto de T0.3+T0.4 aprobó el merge con 3 salvedades no-bloqueantes. Documentadas para que no se pierdan al añadir nuevos cuestionarios.
+
+**Decisión:** registrar y revisar antes de cerrar Fases 1, 2 y 7:
+
+1. **`lib/clinician/inbox.ts:287` aún ramifica con literales `'PHQ9'`/`'GAD7'`** en un ternario por código. Funciona hoy (cada código va a un Map distinto) pero al añadir BDI-II / BAI / STAI / C-SSRS crece linealmente. **Acción Fase 1**: refactorizar a `Map<QuestionnaireCode, Map<string, number[]>>` indexado por code antes de añadir los nuevos cuestionarios al inbox.
+
+2. **`qa_insert_own` (migration `20260422000002`) no excluye instancias clinician-rated.** Hoy no es problema porque el flujo de creación nunca crea instancias clinician-rated con `user_id=patient` desde el cliente paciente, pero sería más airtight cambiar la policy a `... and qd.is_clinician_rated = false`. **Acción Fase 7**: revisar y endurecer la policy antes de exponer la UI clínica de Hamilton.
+
+3. **Test gap del filtro clinician-rated.** `tests/questionnaires/registry.test.ts:40-44` solo verifica que hoy los 3 son patient-rated. **Acción Fase 7**: cuando se añada HAM-D con `isClinicianRated=true`, añadir test que valide `listPatientCodes()` lo excluye.
+
+4. **Edge case `z.enum([])`**: si por error futuro todos los cuestionarios quedan clinician-rated, `app/api/chat/route.ts:182-187` rompería en runtime. **Acción Fase 7**: garantizar que siempre exista ≥1 cuestionario patient-rated.
+
+**Consecuencias:**
+- Cada Fase tiene un check explícito de deuda heredada que cerrar antes de mergear.
+- Si una salvedad sigue abierta tras su Fase, se promueve a su propio ADR como deuda persistente.
