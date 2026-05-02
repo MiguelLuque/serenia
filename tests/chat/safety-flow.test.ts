@@ -131,7 +131,11 @@ describe('POST /api/chat — safety flow integration (T3a v2)', () => {
       body: JSON.stringify({
         sessionId: SESSION_ID,
         messages: [
-          { role: 'user', parts: [{ type: 'text', text: opts.lastUserText }] },
+          {
+            id: 'msg-user-1',
+            role: 'user',
+            parts: [{ type: 'text', text: opts.lastUserText }],
+          },
         ],
       }),
     })
