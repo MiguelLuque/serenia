@@ -9,17 +9,12 @@
  * row in `questionnaire_definitions`.
  *
  * Decision: the registry is STATIC (in code). The `questionnaire_definitions`
- * table still owns clinical metadata that needs to live in BD (instructions,
- * item prompts, options) but the code-level branching always goes through
+ * table still owns clinical metadata que needs to live in BD (instructions,
+ * item prompts, options) pero the code-level branching always goes through
  * `getDefinition()` so we can't end up with a code path that knows about a
  * code the BD doesn't seed (or vice versa).
- *
- * The canonical `QuestionnaireCode` type lives in `./types` (it predates
- * this registry). Adding a code = update both places — TS will fail-fast
- * at compile time because `QUESTIONNAIRE_REGISTRY` is `Record<QuestionnaireCode, …>`.
  */
 
-import type { QuestionnaireCode } from './types'
 import {
   type ScoringStrategy,
   scorePHQ9,
@@ -27,7 +22,12 @@ import {
   scoreASQ,
 } from './scoring'
 
-export type { QuestionnaireCode } from './types'
+/**
+ * Códigos de cuestionarios soportados. Esta es la fuente única — `types.ts`
+ * NO declara este tipo desde Plan 8 Bloque 4. Añadir uno aquí + entrada en
+ * `QUESTIONNAIRE_REGISTRY` + seed row en `questionnaire_definitions`.
+ */
+export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ'
 
 export interface QuestionnaireDefinition {
   code: QuestionnaireCode

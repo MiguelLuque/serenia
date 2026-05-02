@@ -1,4 +1,8 @@
-export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ'
+// `QuestionnaireCode` vive en `./registry.ts` desde Plan 8 Bloque 4 — el
+// registry es la fuente única y declarar el tipo aquí también producía
+// drift: el array del registry y este literal podían divergir y solo se
+// detectaría al fallar `Record<QuestionnaireCode, …>`. Importa desde
+// `@/lib/questionnaires/registry`.
 
 export type SeverityBand =
   | 'minimal'
