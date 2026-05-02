@@ -5,7 +5,7 @@ const { createAuthenticatedClientMock, revalidatePathMock } = vi.hoisted(() => (
   revalidatePathMock: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/lib/server/supabase/server', () => ({
   createAuthenticatedClient: createAuthenticatedClientMock,
 }))
 

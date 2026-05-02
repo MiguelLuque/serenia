@@ -10,11 +10,11 @@ const { createServiceRoleClientMock, enqueueAssessmentGenerationMock } =
     enqueueAssessmentGenerationMock: vi.fn(),
   }))
 
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock('@/lib/server/supabase/server', () => ({
   createServiceRoleClient: createServiceRoleClientMock,
 }))
 
-vi.mock('@/lib/workflows', () => ({
+vi.mock('@/lib/server/workflows', () => ({
   enqueueAssessmentGeneration: enqueueAssessmentGenerationMock,
 }))
 

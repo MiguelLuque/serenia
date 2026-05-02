@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ClinicalIntakeSchema } from '@/lib/onboarding/schema'
+import { ClinicalIntakeSchema } from '@/lib/shared/onboarding/schema'
 
 const validInput = {
   informalName: 'Ana',

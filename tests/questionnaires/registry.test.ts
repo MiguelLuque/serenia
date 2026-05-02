@@ -4,7 +4,7 @@ import {
   getDefinition,
   listCodes,
   listPatientCodes,
-} from '@/lib/questionnaires/registry'
+} from '@/lib/shared/questionnaires/registry'
 
 describe('questionnaire registry', () => {
   it('returns a definition for a known code', () => {

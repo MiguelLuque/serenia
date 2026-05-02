@@ -1,12 +1,12 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import {
   closeSession,
   createSession,
   getOrResolveActiveSession,
-} from '@/lib/sessions/service'
+} from '@/lib/server/sessions/service'
 
 export async function startSessionAction() {
   const supabase = await createAuthenticatedClient()

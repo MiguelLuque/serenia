@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { sortInboxRows, getClinicianInbox, type InboxRow } from '@/lib/clinician/inbox'
+import { sortInboxRows, getClinicianInbox, type InboxRow } from '@/lib/server/clinician/inbox'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
+import type { Database } from '@/lib/shared/supabase/types'
 
 function makeRow(overrides: Partial<InboxRow>): InboxRow {
   return {

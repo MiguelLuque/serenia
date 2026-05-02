@@ -6,30 +6,30 @@ import {
   type UIMessage,
 } from 'ai'
 import { z } from 'zod'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { llm } from '@/lib/llm/models'
-import { getSessionTherapistPrompt } from '@/lib/llm/prompts'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { llm } from '@/lib/shared/llm/models'
+import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
 import {
   touchSession,
   closeSession,
   isSessionExpired,
-} from '@/lib/sessions/service'
-import { saveUserMessage, saveAssistantMessage } from '@/lib/sessions/messages'
-import { detectCrisis } from '@/lib/chat/crisis-detector'
-import { getSessionSafetyState } from '@/lib/chat/safety-state'
-import { buildCrisisNotice } from '@/lib/chat/crisis-notice'
-import { detectFarewellWithoutCloseTool } from '@/lib/chat/farewell-detector'
+} from '@/lib/server/sessions/service'
+import { saveUserMessage, saveAssistantMessage } from '@/lib/server/sessions/messages'
+import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
+import { getSessionSafetyState } from '@/lib/server/chat/safety-state'
+import { buildCrisisNotice } from '@/lib/shared/chat/crisis-notice'
+import { detectFarewellWithoutCloseTool } from '@/lib/shared/chat/farewell-detector'
 import {
   createInstance,
   getActiveInstanceForSession,
-} from '@/lib/questionnaires/service'
-import type { QuestionnaireCode } from '@/lib/questionnaires/registry'
-import { listPatientCodes } from '@/lib/questionnaires/registry'
-import { buildPatientContext } from '@/lib/patient-context/builder'
-import { assemblePlan6ContextPieces } from '@/lib/chat/assemble-plan6-prompt'
-import { buildChatSystemPrompt } from '@/lib/chat/system-prompt'
-import { logContextInjection } from '@/lib/patient-context/telemetry'
-import type { ProtocolPhase } from '@/lib/protocol/render-phase'
+} from '@/lib/server/questionnaires/service'
+import type { QuestionnaireCode } from '@/lib/shared/questionnaires/registry'
+import { listPatientCodes } from '@/lib/shared/questionnaires/registry'
+import { buildPatientContext } from '@/lib/server/patient-context/builder'
+import { assemblePlan6ContextPieces } from '@/lib/server/chat/assemble-plan6-prompt'
+import { buildChatSystemPrompt } from '@/lib/server/chat/system-prompt'
+import { logContextInjection } from '@/lib/server/patient-context/telemetry'
+import type { ProtocolPhase } from '@/lib/shared/protocol/render-phase'
 
 export const maxDuration = 60
 

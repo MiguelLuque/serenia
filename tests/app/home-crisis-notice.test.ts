@@ -51,11 +51,11 @@ describe('home crisis notice — copy clínicamente crítica de crisis', () => {
 
   it('directs the patient to Línea 024 via SAFETY_RESOURCES (centralised)', () => {
     // La Línea 024 ya no está hardcodeada en page.tsx — vive en
-    // `lib/clinical/safety-resources.ts`. Verificamos dos cosas: (a) page.tsx
+    // `lib/shared/safety-resources.ts`. Verificamos dos cosas: (a) page.tsx
     // referencia `SAFETY_RESOURCES.suicide.name` para mostrar el número,
     // (b) la constante centralizada sigue siendo exactamente "Línea 024".
     expect(pageSrc).toContain('SAFETY_RESOURCES.suicide.name')
-    const safetySrc = read('lib/clinical/safety-resources.ts')
+    const safetySrc = read('lib/shared/safety-resources.ts')
     expect(safetySrc).toContain(`name: '${SIGNED_LINE_024_MENTION}'`)
   })
 

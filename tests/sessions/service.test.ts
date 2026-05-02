@@ -9,7 +9,7 @@ import {
   PROTOCOL_MAX_PHASE,
   SESSION_MAX_DURATION_MS,
   SESSION_INACTIVITY_MS,
-} from '@/lib/sessions/service'
+} from '@/lib/server/sessions/service'
 
 // ---------------------------------------------------------------------------
 // Helpers

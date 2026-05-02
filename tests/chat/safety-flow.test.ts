@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { SafetyState } from '@/lib/chat/safety-state'
+import type { SafetyState } from '@/lib/server/chat/safety-state'
 
 // =============================================================================
 // Plan 7 T3a v2 — POST /api/chat con `getSessionSafetyState` + `buildCrisisNotice`
@@ -54,12 +54,12 @@ describe('POST /api/chat — safety flow integration (T3a v2)', () => {
     if (OLD_LLM_MODEL === undefined) delete process.env.LLM_CONVERSATIONAL_MODEL
     else process.env.LLM_CONVERSATIONAL_MODEL = OLD_LLM_MODEL
     vi.restoreAllMocks()
-    vi.doUnmock('@/lib/supabase/server')
-    vi.doUnmock('@/lib/sessions/service')
-    vi.doUnmock('@/lib/sessions/messages')
-    vi.doUnmock('@/lib/chat/safety-state')
-    vi.doUnmock('@/lib/questionnaires/service')
-    vi.doUnmock('@/lib/patient-context/telemetry')
+    vi.doUnmock('@/lib/server/supabase/server')
+    vi.doUnmock('@/lib/server/sessions/service')
+    vi.doUnmock('@/lib/server/sessions/messages')
+    vi.doUnmock('@/lib/server/chat/safety-state')
+    vi.doUnmock('@/lib/server/questionnaires/service')
+    vi.doUnmock('@/lib/server/patient-context/telemetry')
     vi.doUnmock('ai')
   })
 
@@ -82,27 +82,27 @@ describe('POST /api/chat — safety flow integration (T3a v2)', () => {
         return makeBuilder(null)
       }),
     }
-    vi.doMock('@/lib/supabase/server', () => ({
+    vi.doMock('@/lib/server/supabase/server', () => ({
       createAuthenticatedClient: async () => supabaseStub,
     }))
-    vi.doMock('@/lib/sessions/service', () => ({
+    vi.doMock('@/lib/server/sessions/service', () => ({
       touchSession: vi.fn().mockResolvedValue(undefined),
       closeSession: vi.fn().mockResolvedValue(undefined),
       isSessionExpired: vi.fn().mockReturnValue(false),
     }))
-    vi.doMock('@/lib/sessions/messages', () => ({
+    vi.doMock('@/lib/server/sessions/messages', () => ({
       saveUserMessage: vi.fn().mockResolvedValue(undefined),
       saveAssistantMessage: vi.fn().mockResolvedValue(undefined),
     }))
     // SafetyState lo controlamos directamente desde el test.
-    vi.doMock('@/lib/chat/safety-state', () => ({
+    vi.doMock('@/lib/server/chat/safety-state', () => ({
       getSessionSafetyState: vi.fn().mockResolvedValue(opts.safetyState),
     }))
-    vi.doMock('@/lib/questionnaires/service', () => ({
+    vi.doMock('@/lib/server/questionnaires/service', () => ({
       createInstance: vi.fn(),
       getActiveInstanceForSession: vi.fn().mockResolvedValue(null),
     }))
-    vi.doMock('@/lib/patient-context/telemetry', () => ({
+    vi.doMock('@/lib/server/patient-context/telemetry', () => ({
       logContextInjection: vi.fn().mockResolvedValue(undefined),
     }))
 

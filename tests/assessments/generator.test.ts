@@ -8,18 +8,18 @@ vi.mock('ai', () => ({
   generateObject: generateObjectMock,
 }))
 
-vi.mock('@/lib/llm/models', () => ({
+vi.mock('@/lib/shared/llm/models', () => ({
   llm: { structured: () => 'openai/gpt-5.4' },
 }))
 
-vi.mock('@/lib/llm/prompts/loader', () => ({
+vi.mock('@/lib/server/llm/prompts/loader', () => ({
   loadPromptFromMarkdown: () => 'SYSTEM PROMPT',
 }))
 
 import {
   generateAssessment,
   AssessmentSkippedError,
-} from '@/lib/assessments/generator'
+} from '@/lib/server/assessments/generator'
 
 interface MockTable {
   rows?: unknown

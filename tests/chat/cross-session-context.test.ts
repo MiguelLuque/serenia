@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { assemblePlan6ContextPieces } from '@/lib/chat/assemble-plan6-prompt'
-import { buildChatSystemPrompt } from '@/lib/chat/system-prompt'
-import type { PatientContext } from '@/lib/patient-context/builder'
+import { assemblePlan6ContextPieces } from '@/lib/server/chat/assemble-plan6-prompt'
+import { buildChatSystemPrompt } from '@/lib/server/chat/system-prompt'
+import type { PatientContext } from '@/lib/server/patient-context/builder'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -308,17 +308,17 @@ describe('logContextInjection — plan line 586 ("una fila escrita")', () => {
     insertMock.mockResolvedValue({ error: null })
     fromMock.mockClear()
     vi.resetModules()
-    vi.doMock('@/lib/supabase/server', () => ({
+    vi.doMock('@/lib/server/supabase/server', () => ({
       createServiceRoleClient: () => ({ from: fromMock }),
     }))
   })
 
   afterEach(() => {
-    vi.doUnmock('@/lib/supabase/server')
+    vi.doUnmock('@/lib/server/supabase/server')
   })
 
   it('inserts exactly one row into patient_context_injections with the full telemetry payload', async () => {
-    const { logContextInjection } = await import('@/lib/patient-context/telemetry')
+    const { logContextInjection } = await import('@/lib/server/patient-context/telemetry')
 
     await logContextInjection({
       userId: 'user-1',
@@ -350,7 +350,7 @@ describe('logContextInjection — plan line 586 ("una fila escrita")', () => {
 
   it('propagates insert errors so the caller can .catch them (fire-and-forget semantics)', async () => {
     insertMock.mockResolvedValue({ error: new Error('RLS violation') })
-    const { logContextInjection } = await import('@/lib/patient-context/telemetry')
+    const { logContextInjection } = await import('@/lib/server/patient-context/telemetry')
 
     await expect(
       logContextInjection({
@@ -402,13 +402,13 @@ describe('POST /api/chat — graceful degradation when buildPatientContext rejec
     if (OLD_LLM_MODEL === undefined) delete process.env.LLM_CONVERSATIONAL_MODEL
     else process.env.LLM_CONVERSATIONAL_MODEL = OLD_LLM_MODEL
     vi.restoreAllMocks()
-    vi.doUnmock('@/lib/supabase/server')
-    vi.doUnmock('@/lib/patient-context/builder')
-    vi.doUnmock('@/lib/sessions/service')
-    vi.doUnmock('@/lib/sessions/messages')
-    vi.doUnmock('@/lib/chat/crisis-detector')
-    vi.doUnmock('@/lib/questionnaires/service')
-    vi.doUnmock('@/lib/patient-context/telemetry')
+    vi.doUnmock('@/lib/server/supabase/server')
+    vi.doUnmock('@/lib/server/patient-context/builder')
+    vi.doUnmock('@/lib/server/sessions/service')
+    vi.doUnmock('@/lib/server/sessions/messages')
+    vi.doUnmock('@/lib/shared/chat/crisis-detector')
+    vi.doUnmock('@/lib/server/questionnaires/service')
+    vi.doUnmock('@/lib/server/patient-context/telemetry')
     vi.doUnmock('ai')
   })
 
@@ -466,36 +466,36 @@ describe('POST /api/chat — graceful degradation when buildPatientContext rejec
         return makeBuilder(null)
       }),
     }
-    vi.doMock('@/lib/supabase/server', () => ({
+    vi.doMock('@/lib/server/supabase/server', () => ({
       createAuthenticatedClient: async () => supabaseStub,
     }))
 
     // ── Mock buildPatientContext to reject (the degradation trigger) ─────
     const buildErr = new Error('simulated DB hiccup')
-    vi.doMock('@/lib/patient-context/builder', () => ({
+    vi.doMock('@/lib/server/patient-context/builder', () => ({
       buildPatientContext: vi.fn().mockRejectedValue(buildErr),
     }))
 
     // ── Mock the rest of the handler's side effects so POST can complete ─
-    vi.doMock('@/lib/sessions/service', () => ({
+    vi.doMock('@/lib/server/sessions/service', () => ({
       touchSession: vi.fn().mockResolvedValue(undefined),
       closeSession: vi.fn().mockResolvedValue(undefined),
       isSessionExpired: vi.fn().mockReturnValue(false),
     }))
-    vi.doMock('@/lib/sessions/messages', () => ({
+    vi.doMock('@/lib/server/sessions/messages', () => ({
       saveUserMessage: vi.fn().mockResolvedValue(undefined),
       saveAssistantMessage: vi.fn().mockResolvedValue(undefined),
     }))
-    vi.doMock('@/lib/chat/crisis-detector', () => ({
+    vi.doMock('@/lib/shared/chat/crisis-detector', () => ({
       detectCrisis: vi.fn().mockReturnValue({ detected: false, matchedTerms: [] }),
     }))
-    vi.doMock('@/lib/questionnaires/service', () => ({
+    vi.doMock('@/lib/server/questionnaires/service', () => ({
       createInstance: vi.fn(),
       getActiveInstanceForSession: vi.fn().mockResolvedValue(null),
     }))
     // logContextInjection should not be called on the error path; stub it
     // anyway so any accidental invocation doesn't hit a live service role.
-    vi.doMock('@/lib/patient-context/telemetry', () => ({
+    vi.doMock('@/lib/server/patient-context/telemetry', () => ({
       logContextInjection: vi.fn().mockResolvedValue(undefined),
     }))
 

@@ -53,18 +53,18 @@ beforeEach(() => {
     ),
   }
 
-  vi.doMock('@/lib/supabase/server', () => ({
+  vi.doMock('@/lib/server/supabase/server', () => ({
     createAuthenticatedClient: async () => supabaseStub,
   }))
 
-  vi.doMock('@/lib/questionnaires/service', () => ({
+  vi.doMock('@/lib/server/questionnaires/service', () => ({
     submitAnswers: submitAnswersMock,
   }))
 })
 
 afterEach(() => {
-  vi.doUnmock('@/lib/supabase/server')
-  vi.doUnmock('@/lib/questionnaires/service')
+  vi.doUnmock('@/lib/server/supabase/server')
+  vi.doUnmock('@/lib/server/questionnaires/service')
 })
 
 async function postAnswers(body: unknown): Promise<Response> {

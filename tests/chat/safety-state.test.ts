@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   getSessionSafetyState,
   type SafetyState,
-} from '@/lib/chat/safety-state'
+} from '@/lib/server/chat/safety-state'
 
 // =============================================================================
 // Plan 7 T3a v2 — `getSessionSafetyState` deriva un estado tipado a partir de

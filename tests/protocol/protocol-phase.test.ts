@@ -3,7 +3,7 @@ import {
   renderProtocolPhaseBlock,
   renderProtocolMaintenanceBlock,
   type ProtocolPhase,
-} from '@/lib/protocol/render-phase'
+} from '@/lib/shared/protocol/render-phase'
 
 // ---------------------------------------------------------------------------
 // renderProtocolPhaseBlock — contenido por fase

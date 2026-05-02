@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { getPatientDetail } from '@/lib/clinician/patient'
+import { getPatientDetail } from '@/lib/server/clinician/patient'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
+import type { Database } from '@/lib/shared/supabase/types'
 
 type Fixture = {
   profile: { user_id: string; display_name: string | null; birth_date: string | null } | null

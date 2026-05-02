@@ -4,8 +4,8 @@ import {
   saveUserMessage,
   saveAssistantMessage,
   saveMessage,
-} from '@/lib/sessions/messages'
-import type { MessagePart } from '@/lib/types/messages'
+} from '@/lib/server/sessions/messages'
+import type { MessagePart } from '@/lib/shared/types/messages'
 
 // ---------------------------------------------------------------------------
 // Helpers

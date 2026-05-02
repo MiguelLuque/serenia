@@ -4,8 +4,8 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Trash2, Plus } from 'lucide-react'
 
-import type { AssessmentSummary, ProposedTask } from '@/lib/assessments/generator'
-import type { SessionDetail } from '@/lib/clinician/session-detail'
+import type { AssessmentSummary, ProposedTask } from '@/lib/server/assessments/generator'
+import type { SessionDetail } from '@/lib/server/clinician/session-detail'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {

@@ -2,9 +2,9 @@
 
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { RegisterSchema, LoginSchema } from '@/lib/auth/schemas'
-import { closeSession, getOrResolveActiveSession } from '@/lib/sessions/service'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { RegisterSchema, LoginSchema } from '@/lib/shared/auth/schemas'
+import { closeSession, getOrResolveActiveSession } from '@/lib/server/sessions/service'
 
 type ActionState = { error?: string } | undefined
 

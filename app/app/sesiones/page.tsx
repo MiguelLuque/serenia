@@ -1,4 +1,4 @@
-import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import {
   Card,
   CardContent,
@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { SAFETY_RESOURCES } from '@/lib/clinical/safety-resources'
+import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
 
 const closureLabels: Record<string, string> = {
   user_request: 'Cerrada por ti',

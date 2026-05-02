@@ -1,11 +1,11 @@
 import Link from 'next/link'
-import { createAuthenticatedClient } from '@/lib/supabase/server'
-import { getOrResolveActiveSession } from '@/lib/sessions/service'
-import { getClinicianInbox } from '@/lib/clinician/inbox'
+import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { getOrResolveActiveSession } from '@/lib/server/sessions/service'
+import { getClinicianInbox } from '@/lib/server/clinician/inbox'
 import {
   getPatientOpenTasks,
   type PatientOpenTask,
-} from '@/lib/patient-tasks/open-tasks'
+} from '@/lib/server/patient-tasks/open-tasks'
 import { InboxList } from '@/components/clinician/inbox-list'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { SAFETY_RESOURCES } from '@/lib/clinical/safety-resources'
+import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
 import { startSessionAction } from './actions'
 
 function formatMinutesAgo(from: string): string {

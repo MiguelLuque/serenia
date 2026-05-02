@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import type { InboxRow } from '@/lib/clinician/inbox'
-import { assessmentStatusLabel } from '@/lib/clinician/assessment-labels'
+import type { InboxRow } from '@/lib/server/clinician/inbox'
+import { assessmentStatusLabel } from '@/lib/shared/clinician/assessment-labels'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
