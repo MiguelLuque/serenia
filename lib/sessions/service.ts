@@ -70,13 +70,50 @@ export async function getOrResolveActiveSession(
 }
 
 /**
+ * Plan 8 ADR-015: número máximo de fases del protocolo TCC/ACT.
+ * Tras la sesión 8, las sesiones siguientes se quedan en 8 (mantenimiento).
+ */
+export const PROTOCOL_MAX_PHASE = 8
+
+/**
+ * Calcula `protocol_phase` para una nueva sesión a partir del número de
+ * sesiones ya cerradas. Plan 8 T5.2 / ADR-015.
+ *
+ * - 0 cerradas → 1
+ * - 1 cerrada → 2
+ * - 7 cerradas → 8
+ * - ≥ 8 cerradas → 8 (cap; mantenimiento)
+ */
+export function computeProtocolPhase(closedCount: number): number {
+  return Math.min(closedCount + 1, PROTOCOL_MAX_PHASE)
+}
+
+/**
  * Create a conversation + clinical_session pair. Returns the created session row.
  * If the session insert fails, deletes the orphan conversation.
+ *
+ * Plan 8 T5.2: calcula `protocol_phase = min(closed_count + 1, 8)` antes
+ * del INSERT. La columna NUNCA se actualiza después; queda fija para la
+ * vida de la sesión.
  */
 export async function createSession(
   supabase: Supabase,
   userId: string,
 ): Promise<SessionRow> {
+  // Plan 8 T5.2: contar sesiones cerradas del usuario para fijar la fase.
+  // Si el count falla, dejamos el default de la columna (1) y avisamos.
+  // Decisión: el cálculo vive aquí (no en trigger SQL) — más legible y
+  // testeable; la columna BD tiene default 1 como red de seguridad.
+  const { count, error: countError } = await supabase
+    .from('clinical_sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('status', 'closed')
+
+  if (countError) throw countError
+
+  const protocolPhase = computeProtocolPhase(count ?? 0)
+
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
     .insert({ user_id: userId, status: 'active', started_at: new Date().toISOString() })
@@ -87,7 +124,11 @@ export async function createSession(
 
   const { data: session, error: sessionError } = await supabase
     .from('clinical_sessions')
-    .insert({ user_id: userId, conversation_id: conversation.id })
+    .insert({
+      user_id: userId,
+      conversation_id: conversation.id,
+      protocol_phase: protocolPhase,
+    })
     .select()
     .single()
 

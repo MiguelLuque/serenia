@@ -5,6 +5,8 @@ import {
   createSession,
   touchSession,
   closeSession,
+  computeProtocolPhase,
+  PROTOCOL_MAX_PHASE,
   SESSION_MAX_DURATION_MS,
   SESSION_INACTIVITY_MS,
 } from '@/lib/sessions/service'
@@ -31,8 +33,8 @@ function makeSession(overrides: Record<string, unknown> = {}) {
   }
 }
 
-/** Build a minimal chainable Supabase query mock that resolves with { data, error }. */
-function makeChain(result: { data: unknown; error: unknown }) {
+/** Build a minimal chainable Supabase query mock that resolves with { data, error, count? }. */
+function makeChain(result: { data: unknown; error: unknown; count?: unknown }) {
   const chain: Record<string, unknown> = {}
   const methods = [
     'select', 'insert', 'update', 'delete', 'upsert',
@@ -141,22 +143,119 @@ describe('getOrResolveActiveSession', () => {
 // ---------------------------------------------------------------------------
 
 describe('createSession', () => {
+  // Plan 8 T5.2: createSession ahora primero hace un count de sesiones
+  // cerradas (call 1) para fijar protocol_phase, luego inserta la
+  // conversación (call 2) y la sesión (call 3).
+
   it('inserts conversation then clinical_session and returns session row', async () => {
     const conversation = { id: 'conv-1', user_id: 'user-1' }
-    const session = makeSession({ conversation_id: 'conv-1' })
+    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 1 })
 
     let callCount = 0
     const fromMock = vi.fn(() => {
       callCount++
-      if (callCount === 1) return makeChain({ data: conversation, error: null })
+      if (callCount === 1) return makeChain({ data: null, error: null, count: 0 })
+      if (callCount === 2) return makeChain({ data: conversation, error: null })
       return makeChain({ data: session, error: null })
     })
     const supabase = { from: fromMock } as any
 
     const result = await createSession(supabase, 'user-1')
     expect(result).toEqual(session)
-    expect(fromMock).toHaveBeenNthCalledWith(1, 'conversations')
-    expect(fromMock).toHaveBeenNthCalledWith(2, 'clinical_sessions')
+    expect(fromMock).toHaveBeenNthCalledWith(1, 'clinical_sessions') // count
+    expect(fromMock).toHaveBeenNthCalledWith(2, 'conversations')
+    expect(fromMock).toHaveBeenNthCalledWith(3, 'clinical_sessions') // insert
+  })
+
+  it('passes protocol_phase = 1 when no closed sessions exist', async () => {
+    const conversation = { id: 'conv-1', user_id: 'user-1' }
+    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 1 })
+
+    let callCount = 0
+    const chains: ReturnType<typeof makeChain>[] = []
+    const fromMock = vi.fn(() => {
+      callCount++
+      const chain = makeChain({
+        data: callCount === 1 ? null : callCount === 2 ? conversation : session,
+        error: null,
+        count: callCount === 1 ? 0 : undefined,
+      })
+      chains.push(chain)
+      return chain
+    })
+    const supabase = { from: fromMock } as any
+
+    await createSession(supabase, 'user-1')
+
+    // 3rd chain is the clinical_sessions insert
+    expect(chains[2].insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'user-1',
+        conversation_id: 'conv-1',
+        protocol_phase: 1,
+      }),
+    )
+  })
+
+  it('passes protocol_phase = 8 when 7 sessions already closed', async () => {
+    const conversation = { id: 'conv-1', user_id: 'user-1' }
+    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 8 })
+
+    let callCount = 0
+    const chains: ReturnType<typeof makeChain>[] = []
+    const fromMock = vi.fn(() => {
+      callCount++
+      const chain = makeChain({
+        data: callCount === 1 ? null : callCount === 2 ? conversation : session,
+        error: null,
+        count: callCount === 1 ? 7 : undefined,
+      })
+      chains.push(chain)
+      return chain
+    })
+    const supabase = { from: fromMock } as any
+
+    await createSession(supabase, 'user-1')
+
+    expect(chains[2].insert).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol_phase: 8 }),
+    )
+  })
+
+  it('caps protocol_phase at 8 when 10 sessions already closed (mantenimiento)', async () => {
+    const conversation = { id: 'conv-1', user_id: 'user-1' }
+    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 8 })
+
+    let callCount = 0
+    const chains: ReturnType<typeof makeChain>[] = []
+    const fromMock = vi.fn(() => {
+      callCount++
+      const chain = makeChain({
+        data: callCount === 1 ? null : callCount === 2 ? conversation : session,
+        error: null,
+        count: callCount === 1 ? 10 : undefined,
+      })
+      chains.push(chain)
+      return chain
+    })
+    const supabase = { from: fromMock } as any
+
+    await createSession(supabase, 'user-1')
+
+    expect(chains[2].insert).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol_phase: 8 }),
+    )
+  })
+
+  it('throws when count of closed sessions fails', async () => {
+    const countError = new Error('count failed')
+    const fromMock = vi.fn(() =>
+      makeChain({ data: null, error: countError, count: null }),
+    )
+    const supabase = { from: fromMock } as any
+
+    await expect(createSession(supabase, 'user-1')).rejects.toThrow('count failed')
+    expect(fromMock).toHaveBeenCalledTimes(1)
   })
 
   it('deletes orphan conversation if session insert fails', async () => {
@@ -166,25 +265,58 @@ describe('createSession', () => {
     let callCount = 0
     const fromMock = vi.fn(() => {
       callCount++
-      if (callCount === 1) return makeChain({ data: conversation, error: null })
-      if (callCount === 2) return makeChain({ data: null, error: sessionError })
-      // 3rd call: delete orphan conversation
+      if (callCount === 1) return makeChain({ data: null, error: null, count: 0 }) // count
+      if (callCount === 2) return makeChain({ data: conversation, error: null }) // conv insert
+      if (callCount === 3) return makeChain({ data: null, error: sessionError }) // session insert
+      // 4th call: delete orphan conversation
       return makeChain({ data: null, error: null })
     })
     const supabase = { from: fromMock } as any
 
     await expect(createSession(supabase, 'user-1')).rejects.toThrow('session insert failed')
-    expect(fromMock).toHaveBeenCalledTimes(3)
-    expect(fromMock).toHaveBeenNthCalledWith(3, 'conversations')
+    expect(fromMock).toHaveBeenCalledTimes(4)
+    expect(fromMock).toHaveBeenNthCalledWith(4, 'conversations')
   })
 
   it('throws when conversation insert fails', async () => {
     const convError = new Error('conv insert failed')
-    const fromMock = vi.fn(() => makeChain({ data: null, error: convError }))
+    let callCount = 0
+    const fromMock = vi.fn(() => {
+      callCount++
+      if (callCount === 1) return makeChain({ data: null, error: null, count: 0 })
+      return makeChain({ data: null, error: convError })
+    })
     const supabase = { from: fromMock } as any
 
     await expect(createSession(supabase, 'user-1')).rejects.toThrow('conv insert failed')
-    expect(fromMock).toHaveBeenCalledTimes(1)
+    expect(fromMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 3b. computeProtocolPhase — pure function (Plan 8 T5.2)
+// ---------------------------------------------------------------------------
+
+describe('computeProtocolPhase', () => {
+  it('returns 1 when 0 closed sessions', () => {
+    expect(computeProtocolPhase(0)).toBe(1)
+  })
+
+  it('returns N+1 for N closed sessions while N < 8', () => {
+    expect(computeProtocolPhase(1)).toBe(2)
+    expect(computeProtocolPhase(2)).toBe(3)
+    expect(computeProtocolPhase(6)).toBe(7)
+    expect(computeProtocolPhase(7)).toBe(PROTOCOL_MAX_PHASE)
+  })
+
+  it('caps at 8 (mantenimiento) for ≥ 8 closed sessions', () => {
+    expect(computeProtocolPhase(8)).toBe(8)
+    expect(computeProtocolPhase(10)).toBe(8)
+    expect(computeProtocolPhase(100)).toBe(8)
+  })
+
+  it('PROTOCOL_MAX_PHASE is 8', () => {
+    expect(PROTOCOL_MAX_PHASE).toBe(8)
   })
 })
 
