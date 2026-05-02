@@ -562,6 +562,7 @@ export type Database = {
           id: string
           instructions_json: Json
           is_active: boolean
+          is_clinician_rated: boolean
           language: string
           name: string
           scoring_strategy: string
@@ -575,6 +576,7 @@ export type Database = {
           id?: string
           instructions_json?: Json
           is_active?: boolean
+          is_clinician_rated?: boolean
           language?: string
           name: string
           scoring_strategy: string
@@ -588,6 +590,7 @@ export type Database = {
           id?: string
           instructions_json?: Json
           is_active?: boolean
+          is_clinician_rated?: boolean
           language?: string
           name?: string
           scoring_strategy?: string
