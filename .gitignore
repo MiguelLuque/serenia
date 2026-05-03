@@ -44,3 +44,7 @@ next-env.d.ts
 
 # Handoff zips (artefactos efímeros para envío externo)
 docs/handoff/*.zip
+
+# Respuestas crudas del psicólogo asesor (PDFs con copy clínico + .txt UTF-16).
+# Procesadas a docs/agents/questionnaires/*.md + ADR-024. No subir originales.
+docs/handoff/respuesta de pablo/

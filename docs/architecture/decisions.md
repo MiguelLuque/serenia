@@ -426,3 +426,141 @@ Cuando arranque la app Expo, `lib/shared/` se promueve a `packages/shared/` con 
 - **Beneficio cuando arranque Expo**: el cliente RN importa `lib/shared/...` directamente. Cero código duplicado. Cero risk de meter por error un `server-only` en el bundle del móvil.
 
 **No incluido en este ADR:** la conversión a monorepo formal con pnpm workspaces. Esa decisión se toma cuando arranque mobile y se sepa el calendario.
+
+---
+
+## ADR-024 — Plan 8 Fase 1: desviaciones tras feedback clínico de Pablo (2026-05-03)
+
+**Fecha:** 2026-05-03
+**Estado:** vigente
+**Documentos vinculados:** `docs/handoff/respuesta de pablo/_utf8/0{1,2,3,4}-*.md`, `docs/agents/questionnaires/{bdi2,bai,stai,cssrs}.md`
+
+**Contexto:** Pablo respondió el material de handoff con (a) 4 PDFs de cuadernillos en español validado, (b) firmas y edits sobre los dos prompts, (c) decisiones sobre las 8 preguntas sueltas. Varias respuestas **divergen** del Plan 8 mergeado y de los borradores v2.0 firmados antes. Este ADR consolida las desviaciones para no perderlas al implementar Fases 1, 2, 4, 6.
+
+**Decisiones clínicas firmadas y desviaciones:**
+
+### 1. HAM-D queda fuera del MVP (cancela Fase 7)
+
+Pablo retiró HAM-D y dejó abierta una posible sustitución por **MINI** ("MINI en síntomas emocionales"). Pendiente de cierre el 2026-05-04. Mientras tanto:
+- Fase 7 del Plan 8 (UI clínica Hamilton) **se suspende**.
+- ADR-018 (HAM-D clinician-rated) sigue vigente como modelo aplicable a *cualquier* cuestionario clinician-rated futuro, pero el primer consumidor concreto (HAM-D) no se construirá.
+- ADR-021 punto #4 (`z.enum([])` si todos clinician-rated) deja de ser problema inmediato: con HAM-D fuera, los 4 cuestionarios nuevos son patient-rated.
+
+**Consecuencia:** las migrations de seed sólo crean BDI-II, BAI, STAI, C-SSRS — **4 cuestionarios nuevos**, no 5. El registry crece de 3 a 7 (no a 8).
+
+### 2. BAI: 3 bandas en vez de 4
+
+Plan original (T1.3): `0-7 mín / 8-15 leve / 16-25 moderado / 26-63 severo`.
+Pablo firma: `0-21 normal / 22-35 moderado / 36-63 severo`.
+
+Sin desviación de scoring (sigue siendo suma simple 0-63), pero el mapping a banda cambia. El scorer en `lib/shared/questionnaires/scoring.ts` debe usar las bandas de Pablo, **no** las del plan.
+
+### 3. STAI: bandas distintas por sexo y subescala
+
+Plan original (T1.3): "bandas por subscore (≥45 alto)" — corte único sin distinción de sexo.
+Pablo firma: 4 bandas por subescala × 2 sexos = **16 puntos de corte distintos**.
+
+Implicación: el scorer necesita un input `sex` (no `pronouns`, que es independiente). Mapping provisional pendiente de cierre con Pablo:
+
+- `pronouns = 'él'` ⇒ `sex = 'male'` para banda STAI.
+- `pronouns = 'ella'` ⇒ `sex = 'female'`.
+- `pronouns ∈ {'elle', 'prefiero no decirlo'}` ⇒ usar bandas de **mujeres** como conservador (tienen rangos "sin ansiedad" más amplios) y devolver `band_assignment_uncertain=true` para revisión clínica del psicólogo.
+
+Esto requiere o bien (a) añadir un campo `sex` al schema de `user_profiles` separado de `pronouns`, o (b) extraer el mapping del enum `pronouns` directamente en el scorer. La decisión se cierra al implementar T1.3-bis junto con Pablo.
+
+### 4. C-SSRS: lifetime + override "since last visit"
+
+Plan original (T1.4): 5 bandas firmadas según ítems 1-6.
+Pablo añade: usar **sólo lifetime** en sesión 1. En sesiones siguientes el ítem 6 se reformula como *since last visit*. Si **ítem 6 since-last-visit = Sí**, **cortar inmediatamente** y notificar urgente al psicólogo (independiente de la banda calculada).
+
+Implicación: el scorer de C-SSRS recibe `behavior_lifetime: bool` y `behavior_recent_since_last_visit: bool | null`. Si `behavior_recent_since_last_visit === true`, banda = `acute_risk` + `requires_immediate_action=true` que el route handler usa para forzar cierre de sesión. Modelado en `cssrs.md`.
+
+### 5. Toggle "el clínico conoce al usuario"
+
+Plan original: ningún ADR cubre esto.
+Pablo firma: el campo es **manual** — Pablo lo marca/desmarca desde la UI del panel clínico (no se infiere automáticamente).
+
+Implicación:
+- Migration nueva: `user_profiles.clinician_has_met_user boolean not null default false` (o tabla puente si en el futuro hay >1 clínico).
+- UI en panel clínico: toggle por paciente.
+- Inyección al system prompt: si `true`, Serenia usa "Pablo" para referirse al supervisor; si `false`, usa "el psicólogo que supervisa tu caso" (default ADR-020).
+- **Compatible con ADR-020.** Refinamos: ADR-020 fija el default; este ADR fija el override.
+
+### 6. Edad mínima 18 años (España, legislación)
+
+Plan original: T3.1 schema intake clínico no validaba edad mínima.
+Pablo firma: **mayoría de edad legal española = 18 años** es obligatoria.
+
+Implicación:
+- `lib/shared/onboarding/schema.ts` añade `birthDate` con validación de edad ≥ 18 al guardar.
+- Si menor en signup, bloquear con copy explícito: *"Serenia es para adultos. Si tienes menos de 18 años, busca apoyo en [recursos juveniles]"*. Recursos juveniles a definir con Pablo en próxima ronda.
+
+### 7. Diagnósticos fuera de scope (NUNCA tratar)
+
+Plan original: no contemplaba lista de exclusiones.
+Pablo firma: trastornos psicóticos (énfasis especial: "NUNCA JAMÁS SE TRATARÁ NADA QUE IMPLIQUE ALTERACIONES DE LA REALIDAD"), bipolares, alimentarios graves, adicciones activas, TLP.
+
+Implicación:
+- Si Serenia detecta indicadores de cualquiera de estos durante una sesión: generar informe `[URGENTE]`, derivar al psicólogo, comunicar al usuario *"esta problemática excede mis competencias; he generado un informe urgente; el psicólogo te contactará lo antes posible"*.
+- Detección heurística por palabras clave + verificación humana en revisión del informe. La IA NO diagnostica; sólo indica *"impresiona X"* en el campo nuevo de **orientación diagnóstica** del informe (que sólo ve el clínico — ver punto 9).
+- Esta lógica vive en `lib/server/clinical/scope-detection.ts` (nuevo). Se ejecuta en post-procesado del informe, no en el chat (la IA no debe interrumpir la sesión por esto a menos que sea concurrente con C-SSRS aguda).
+
+### 8. Frecuencia entre sesiones: semanal estricta
+
+Plan original: "Frecuencia entre sesiones" no especificada.
+Pablo firma: **semanal estricta**, comunicada al usuario en sesión 1. Si se salta una semana → preguntar (sin juzgar) por qué, validar, y **retomar la sesión que tocaba** (no avanzar).
+
+Implicación:
+- `protocol_phase` se calcula con `min(closedCount + 1, 8)` — esto **ya** funciona así (ADR-015 y `lib/shared/sessions/service.ts:computeProtocolPhase`). Una semana saltada NO avanza la fase. ✅ Sin cambio de código.
+- Sí cambio: copy en el system prompt sesión 1 anuncia la frecuencia. Y bloque condicional: si han pasado >7 días desde la última sesión, validar el lapso y NO juzgar.
+
+### 9. Orientación diagnóstica en el informe
+
+Plan original (T6.1): el informe NO tiene apartado de etiqueta diagnóstica.
+Pablo firma: añadir apartado **"orientación diagnóstica"** (formato *"Impresiona X"*) que **sólo ve el clínico**, jamás el usuario. Coexiste con la regla "nunca etiquetas DSM/CIE en el resumen al paciente".
+
+Implicación:
+- `AssessmentSchema` (zod en `lib/shared/assessments/...`) añade `diagnostic_impression: string | null` con guardarrail: nunca incluido en el campo `patient_summary`.
+- UI clínica muestra el apartado en `assessment-view.tsx` con label explícito "(sólo visible al clínico)".
+
+### 10. Resumen al paciente: SÍ recordar tareas de la semana
+
+Plan original (T6.1): el resumen al paciente NO incluía tareas (lista de prohibiciones era "Referencias a tareas").
+Pablo firma: el resumen al paciente **debe recordar** la tarea de la semana.
+
+Implicación: actualizar el prompt `clinical-report.md` en v2.1 para añadir la tarea al cierre del resumen. Sustituye la regla anterior.
+
+### 11. Notificaciones de informe URGENTE: WhatsApp si posible
+
+Plan original: no especificaba canal.
+Pablo firma: **WhatsApp si es posible** (requiere integración nueva), si no email inmediato con resumen + link.
+
+Implicación:
+- Out-of-scope para Plan 8 inicial. Email inmediato es la opción inmediata.
+- Si Plan 8.5 incorpora integración WhatsApp Business API, este ADR se actualiza.
+
+### 12. SLA del clínico: 72h general, mismo día para urgentes
+
+Plan original: no especificaba SLA.
+Pablo firma: urgentes mismo día, resto **<72h**. Avisar a Pablo cuando quede 1 día para la cita si no se ha revisado.
+
+Implicación:
+- Cron nuevo en `lib/server/cron/...` que busca informes pendientes de revisión cuya cita está a <24h y notifica.
+- **La IA NUNCA comunica al usuario el SLA específico de Pablo.** Copy genérico tipo *"el psicólogo lo verá pronto"*.
+
+### 13. Cambios al prompt session-therapist firmados (resumen)
+
+11 cambios a aplicar al `session-therapist.draft-v2.md` para producir v2.1 (detalle en el archivo `02-session-therapist-revision.md` de Pablo). Ver task list de la session.
+
+### 14. Cambios al prompt clinical-report firmados (resumen)
+
+5 cambios a aplicar al `clinical-report.draft-v2.md` para producir v2.1 (detalle en el archivo `03-clinical-report-revision.md` de Pablo). Incluye los puntos 9, 10, y la definición clínica precisa de "indicios indirectos sin confirmación" en consumo (Pablo pidió aclararlo con literatura).
+
+**Consecuencias generales:**
+
+- **Plan 8 Fases 1, 2, 4, 6 desbloqueadas** con desviaciones documentadas. Fase 7 cancelada hasta nueva orden de Pablo.
+- Migration nueva pendiente: `clinician_has_met_user` (punto 5).
+- Schema cambia: `birthDate` con validación 18+ (punto 6), `diagnostic_impression` en assessment (punto 9).
+- Borradores v2.0 → v2.1 con los cambios firmados; Pablo debe firmar v2.1 antes de Fase 4 y 6.
+- L-014 (lección): cuando el plan cita "5 cuestionarios" basado en estimación interna, validar con el clínico antes de mergear nada que ramifique por código (`PHQ9 | GAD7 | BDI2 | BAI | STAI | CSSRS | HAMD`). Aquí, HAMD entró en la enum del registry y debe quitarse cuando se cancele formalmente.
+
