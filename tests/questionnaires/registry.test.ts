@@ -17,13 +17,16 @@ describe('questionnaire registry', () => {
     expect(typeof def?.scorer).toBe('function')
   })
 
-  it('returns a definition for GAD7 and ASQ as well', () => {
+  it('returns a definition for GAD7, ASQ and BDI2 as well', () => {
     const gad = getDefinition('GAD7')
     const asq = getDefinition('ASQ')
+    const bdi = getDefinition('BDI2')
     expect(gad).not.toBeNull()
     expect(asq).not.toBeNull()
+    expect(bdi).not.toBeNull()
     expect(gad?.code).toBe('GAD7')
     expect(asq?.code).toBe('ASQ')
+    expect(bdi?.code).toBe('BDI2')
   })
 
   it('returns null for an unknown code', () => {
@@ -31,16 +34,16 @@ describe('questionnaire registry', () => {
     expect(getDefinition('')).toBeNull()
   })
 
-  it('lists all three codes (PHQ9, GAD7, ASQ)', () => {
+  it('lists all four codes (PHQ9, GAD7, ASQ, BDI2)', () => {
     const codes = listCodes()
-    expect(codes).toHaveLength(3)
-    expect(codes).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ']))
+    expect(codes).toHaveLength(4)
+    expect(codes).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2']))
   })
 
-  it('lists all three codes as patient-rated (none is clinician-rated yet)', () => {
+  it('lists all four codes as patient-rated (none is clinician-rated yet)', () => {
     const patient = listPatientCodes()
-    expect(patient).toHaveLength(3)
-    expect(patient).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ']))
+    expect(patient).toHaveLength(4)
+    expect(patient).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2']))
   })
 
   it('every registered definition exposes a callable scorer', () => {
@@ -70,6 +73,15 @@ describe('questionnaire registry', () => {
     const result = def.scorer([0, 0, 0, 0])
     expect(result.severityBand).toBe('negative')
     expect(result.requiresReview).toBe(false)
+  })
+
+  it('BDI2 scorer via registry produces severe for all-3 answers + suicidality flag', () => {
+    const def = getDefinition('BDI2')!
+    const result = def.scorer(Array.from({ length: 21 }, () => 3))
+    expect(result.totalScore).toBe(63)
+    expect(result.severityBand).toBe('severe')
+    expect(result.flags).toEqual([{ itemOrder: 9, reason: 'suicidality' }])
+    expect(result.requiresReview).toBe(true)
   })
 
   it('scorer rejects malformed input by throwing (PHQ9 wrong length)', () => {

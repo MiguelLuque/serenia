@@ -86,6 +86,52 @@ export const scoreGAD7: ScoringStrategy = (answers) => {
 }
 
 /**
+ * Score a BDI-II questionnaire.
+ * Expects exactly 21 answers, each in range 0–3.
+ *
+ * Items 16 (sueño) and 18 (apetito) tienen variantes a/b en BD que mapean al
+ * mismo valor numérico (1a=1, 1b=1, 2a=2, etc.) — el scorer recibe siempre un
+ * entero 0-3 por item, no necesita lógica especial.
+ *
+ * Item 9 (index 8) ≥ 1 dispara flag `suicidality` (mismo patrón que PHQ-9).
+ *
+ * Bandas firmadas por Pablo el 2026-05-03 (sin desviación del plan):
+ *   0-13 minimal / 14-19 mild / 20-28 moderate / 29-63 severe.
+ */
+export const scoreBDI2: ScoringStrategy = (answers) => {
+  if (answers.length !== 21) {
+    throw new Error(`BDI-II requires exactly 21 answers, got ${answers.length}`)
+  }
+  for (let i = 0; i < answers.length; i++) {
+    const v = answers[i]
+    if (!Number.isInteger(v) || v < 0 || v > 3) {
+      throw new Error(`BDI-II item ${i + 1} value must be 0–3, got ${v}`)
+    }
+  }
+
+  const totalScore = answers.reduce((sum, v) => sum + v, 0)
+
+  let severityBand: ScoringResult['severityBand']
+  if (totalScore <= 13) severityBand = 'minimal'
+  else if (totalScore <= 19) severityBand = 'mild'
+  else if (totalScore <= 28) severityBand = 'moderate'
+  else severityBand = 'severe'
+
+  const flags: QuestionnaireFlag[] = []
+  if (answers[8] >= 1) {
+    flags.push({ itemOrder: 9, reason: 'suicidality' })
+  }
+
+  return {
+    totalScore,
+    severityBand,
+    subscores: {},
+    flags,
+    requiresReview: flags.length > 0,
+  }
+}
+
+/**
  * Score an ASQ questionnaire.
  * Expects 4 or 5 answers, each 0 or 1.
  * If any of items 1–4 (indexes 0–3) is 1, band = 'positive', requiresReview = true.
