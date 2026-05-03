@@ -246,7 +246,16 @@ Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("
   const patientCodes = listPatientCodes()
   const proposeQuestionnaireTool = tool({
     description:
-      'Propone un cuestionario clínico validado cuando la conversación lo justifica. Usa solo si hay señales claras: ánimo bajo sostenido => PHQ9, ansiedad sostenida => GAD7, ideación suicida (directa o indirecta) => ASQ. Nunca más de uno por sesión.',
+      [
+        'Propone un cuestionario clínico validado cuando la conversación lo justifica. Nunca más de uno por sesión.',
+        'PRIMARIOS (screening): ánimo bajo sostenido ≥2 semanas => PHQ9; ansiedad/preocupación sostenida ≥2 semanas => GAD7.',
+        'SECUNDARIOS (condicionales, profundización): solo tras un primario con banda moderate o superior:',
+        ' · BDI2 si PHQ9 score ≥10 (banda moderate/moderately_severe/severe).',
+        ' · BAI si GAD7 score ≥10 (banda moderate/severe). Por defecto antes que STAI.',
+        ' · STAI solo tras BAI cuando hay sospecha de ansiedad RASGO (>6 meses, no reactiva).',
+        'CRIBADO DE SEGURIDAD: ASQ siempre ante cualquier verbalización de ideación suicida o autolesión, directa o indirecta. NO esperes a que PHQ9 dé positivo. (En Plan 8 Fase 2 ASQ se sustituye por C-SSRS).',
+        'Reglas de uso: nunca en los primeros 2 minutos; primero valida y explora 3-4 turnos; anuncia el cuestionario por texto antes de invocar el tool y espera confirmación del paciente.',
+      ].join('\n'),
     inputSchema: z.object({
       code: z.enum(patientCodes as [QuestionnaireCode, ...QuestionnaireCode[]]),
       reason: z.string().min(10).max(300),

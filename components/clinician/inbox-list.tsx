@@ -1,6 +1,10 @@
 import Link from 'next/link'
 import type { InboxRow } from '@/lib/server/clinician/inbox'
 import { assessmentStatusLabel } from '@/lib/shared/clinician/assessment-labels'
+import {
+  LONGITUDINAL_CODES,
+  QUESTIONNAIRE_REGISTRY,
+} from '@/lib/shared/questionnaires/registry'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -40,11 +44,14 @@ function buildLongitudinalLine(row: InboxRow): string {
   if (row.daysSincePrevious !== null) {
     pieces.push(`${row.daysSincePrevious} días desde la anterior`)
   }
-  if (row.phq9Trend.length > 0) {
-    pieces.push(`PHQ-9: ${row.phq9Trend.join('→')}`)
-  }
-  if (row.gad7Trend.length > 0) {
-    pieces.push(`GAD-7: ${row.gad7Trend.join('→')}`)
+  // Plan 8 Fase 1 (ADR-021 punto #1): trends data-driven a partir del
+  // registry. Iteramos LONGITUDINAL_CODES para mantener orden consistente
+  // (PHQ-9, GAD-7, BDI-II...) y usamos `shortLabel` para el display clínico.
+  for (const code of LONGITUDINAL_CODES) {
+    const trend = row.trendsByCode[code]
+    if (trend && trend.length > 0) {
+      pieces.push(`${QUESTIONNAIRE_REGISTRY[code].shortLabel}: ${trend.join('→')}`)
+    }
   }
   if (row.openTasksCount > 0) {
     const suffix = row.openTasksCount === 1 ? 'acuerdo abierto' : 'acuerdos abiertos'

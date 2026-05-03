@@ -23,8 +23,13 @@ export type InboxRow = {
   // T11 longitudinal fields
   sessionNumber: number
   daysSincePrevious: number | null
-  phq9Trend: number[]
-  gad7Trend: number[]
+  /**
+   * Plan 8 Fase 1 (ADR-021 punto #1): trends por code, en lugar de campos
+   * fijos `phq9Trend` / `gad7Trend`. Indexado por `LongitudinalCode`. Solo
+   * los códigos con resultados aparecen como keys (Partial). Cada array es
+   * `oldest → newest`, máximo 3 valores.
+   */
+  trendsByCode: Partial<Record<LongitudinalCode, number[]>>
   openTasksCount: number
   riskState: PatientRiskState
 }
@@ -264,8 +269,19 @@ export async function getClinicianInbox(
       | { total_score: number }[]
       | null
   }
-  const phqByUser = new Map<string, number[]>()
-  const gadByUser = new Map<string, number[]>()
+  // Plan 8 Fase 1 (ADR-021 punto #1): bucket único indexado por code, en
+  // lugar de Map por código. Añadir un nuevo trend = solo actualizar
+  // `LONGITUDINAL_CODES` en el registry. La query SQL ya está limitada a
+  // estos códigos (`.in('code', LONGITUDINAL_CODES)` en la query upstream),
+  // así que en runtime solo iteramos los relevantes.
+  const isLongitudinalCode = (c: string): c is LongitudinalCode =>
+    (LONGITUDINAL_CODES as readonly string[]).includes(c)
+
+  const trendsByCodeByUser = new Map<LongitudinalCode, Map<string, number[]>>()
+  for (const lc of LONGITUDINAL_CODES) {
+    trendsByCodeByUser.set(lc, new Map<string, number[]>())
+  }
+
   for (const row of (questionnairesRes.data ?? []) as QRow[]) {
     const defRaw = row.questionnaire_definitions
     const code = Array.isArray(defRaw) ? defRaw[0]?.code : defRaw?.code
@@ -274,21 +290,18 @@ export async function getClinicianInbox(
       ? resRaw[0]?.total_score
       : resRaw?.total_score
     if (code === undefined || score === undefined) continue
-    // Route the score to the right per-user trend bucket. Adding a new
-    // trend code = update LONGITUDINAL_CODES + add a Map here.
-    const target: Map<string, number[]> | null =
-      code === 'PHQ9' ? phqByUser : code === 'GAD7' ? gadByUser : null
-    if (!target) continue
-    void (code as LongitudinalCode) // exhaustiveness anchor for LONGITUDINAL_CODES
-    const list = target.get(row.user_id) ?? []
+    if (!isLongitudinalCode(code)) continue
+    const userMap = trendsByCodeByUser.get(code)!
+    const list = userMap.get(row.user_id) ?? []
     if (list.length < 3) {
       list.push(score)
-      target.set(row.user_id, list)
+      userMap.set(row.user_id, list)
     }
   }
   // Reverse each to oldest→newest.
-  for (const [u, list] of phqByUser) phqByUser.set(u, [...list].reverse())
-  for (const [u, list] of gadByUser) gadByUser.set(u, [...list].reverse())
+  for (const [, userMap] of trendsByCodeByUser) {
+    for (const [u, list] of userMap) userMap.set(u, [...list].reverse())
+  }
 
   const rows: InboxRow[] = sessions.map((s) => {
     // previousSession for this row = the closed session for this user
@@ -306,6 +319,14 @@ export async function getClinicianInbox(
           : null,
     })
 
+    const trendsByCode: Partial<Record<LongitudinalCode, number[]>> = {}
+    for (const [code, userMap] of trendsByCodeByUser) {
+      const trend = userMap.get(s.user_id)
+      if (trend && trend.length > 0) {
+        trendsByCode[code] = trend
+      }
+    }
+
     return {
       sessionId: s.id,
       userId: s.user_id,
@@ -317,8 +338,7 @@ export async function getClinicianInbox(
       topRisk: topRiskBySession.get(s.id) ?? null,
       sessionNumber: sessionNumberById.get(s.id) ?? 1,
       daysSincePrevious: daysSincePreviousById.get(s.id) ?? null,
-      phq9Trend: phqByUser.get(s.user_id) ?? [],
-      gad7Trend: gadByUser.get(s.user_id) ?? [],
+      trendsByCode,
       openTasksCount: openTasksByUser.get(s.user_id) ?? 0,
       riskState,
     }

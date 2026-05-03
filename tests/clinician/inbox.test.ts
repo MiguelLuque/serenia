@@ -15,8 +15,7 @@ function makeRow(overrides: Partial<InboxRow>): InboxRow {
     topRisk: null,
     sessionNumber: 1,
     daysSincePrevious: null,
-    phq9Trend: [],
-    gad7Trend: [],
+    trendsByCode: {},
     openTasksCount: 0,
     riskState: 'none',
     ...overrides,
@@ -258,8 +257,8 @@ describe('getClinicianInbox — longitudinal enrichments (T11)', () => {
   // Scenario: two patients
   //  - User A has 3 closed sessions. The newest is the inbox row → sessionNumber=3.
   //    Previous closed at 2026-04-12, newest at 2026-04-20 → daysSincePrevious=8.
-  //    PHQ-9 history: 18 (old) → 15 (mid) → 12 (latest) → phq9Trend [18,15,12].
-  //    GAD-7 history: 10 (old) → 8 (latest) → gad7Trend [10, 8].
+  //    PHQ-9 history: 18 (old) → 15 (mid) → 12 (latest) → trendsByCode.PHQ9 [18,15,12].
+  //    GAD-7 history: 10 (old) → 8 (latest) → trendsByCode.GAD7 [10, 8].
   //    2 open patient_tasks.
   //    Suicidality 'none' on a validated assessment → riskState 'none'.
   //  - User B has 1 closed session (first one ever) → sessionNumber=1, daysSincePrevious=null.
@@ -352,15 +351,15 @@ describe('getClinicianInbox — longitudinal enrichments (T11)', () => {
     expect(rowA.sessionId).toBe('s-a3')
     expect(rowA.sessionNumber).toBe(3)
     expect(rowA.daysSincePrevious).toBe(8)
-    expect(rowA.phq9Trend).toEqual([18, 15, 12])
-    expect(rowA.gad7Trend).toEqual([10, 8])
+    expect(rowA.trendsByCode.PHQ9).toEqual([18, 15, 12])
+    expect(rowA.trendsByCode.GAD7).toEqual([10, 8])
     expect(rowA.openTasksCount).toBe(2)
 
     expect(rowB.sessionId).toBe('s-b1')
     expect(rowB.sessionNumber).toBe(1)
     expect(rowB.daysSincePrevious).toBeNull()
-    expect(rowB.phq9Trend).toEqual([])
-    expect(rowB.gad7Trend).toEqual([])
+    expect(rowB.trendsByCode.PHQ9).toBeUndefined()
+    expect(rowB.trendsByCode.GAD7).toBeUndefined()
     expect(rowB.openTasksCount).toBe(0)
   })
 
@@ -392,13 +391,13 @@ describe('getClinicianInbox — longitudinal enrichments (T11)', () => {
     const supabase = makeSupabaseForInbox(fixture)
     const rows = await getClinicianInbox(supabase)
     const rowA = rows.find((r) => r.sessionId === 's-a3')!
-    expect(rowA.phq9Trend).toEqual([18, 15, 12])
+    expect(rowA.trendsByCode.PHQ9).toEqual([18, 15, 12])
   })
 
   it('per-patient trend isolation — user B scores do not leak into user A row', async () => {
     // Adversarial fixture: user-b has a PHQ9 score that is chronologically
     // adjacent to user-a's latest. A naive "last 3 overall" implementation
-    // would surface user-b's 8 inside rowA.phq9Trend.
+    // would surface user-b's 8 inside rowA.trendsByCode.PHQ9.
     const fixture: InboxFixture = {
       ...baseFixture,
       questionnaires: [
@@ -415,9 +414,9 @@ describe('getClinicianInbox — longitudinal enrichments (T11)', () => {
     const rowB = rows.find((r) => r.sessionId === 's-b1')!
 
     // user-a's trend stays exactly its own three scores, with no user-b bleed.
-    expect(rowA.phq9Trend).toEqual([18, 15, 12])
-    expect(rowA.phq9Trend).not.toContain(8)
+    expect(rowA.trendsByCode.PHQ9).toEqual([18, 15, 12])
+    expect(rowA.trendsByCode.PHQ9).not.toContain(8)
     // user-b only owns its own single score.
-    expect(rowB.phq9Trend).toEqual([8])
+    expect(rowB.trendsByCode.PHQ9).toEqual([8])
   })
 })

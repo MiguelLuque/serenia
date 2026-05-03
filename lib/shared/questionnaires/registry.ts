@@ -34,12 +34,15 @@ export interface QuestionnaireDefinition {
   code: QuestionnaireCode
   /** Nombre clínico legible. Ej: "PHQ-9 — Depresión". */
   label: string
+  /** Etiqueta clínica corta (sin descripción). Ej: "PHQ-9", "BDI-II", "C-SSRS". */
+  shortLabel: string
   /** Copy de duración mostrado en QuestionnaireCard. Ej: "5 minutos · 9 preguntas". */
   durationCopy: string
   /**
    * Si es true, el cuestionario lo administra el clínico (no el paciente)
-   * y el paciente nunca lo ve en el chat. Plan 8 Fase 7 introducirá HAM-D
-   * como primer cuestionario clinician-rated; los 3 de hoy son paciente-rated.
+   * y el paciente nunca lo ve en el chat. Tras Plan 8 desviación 1 (HAM-D
+   * fuera, ADR-024), todos los cuestionarios actuales son paciente-rated.
+   * Mantenemos el flag por si vuelve un clinician-rated más adelante.
    */
   isClinicianRated: boolean
   /** Función pura que puntúa las respuestas (ya proyectadas a number[]). */
@@ -53,6 +56,7 @@ export const QUESTIONNAIRE_REGISTRY: Record<
   PHQ9: {
     code: 'PHQ9',
     label: 'PHQ-9 — Cómo te has sentido estas 2 últimas semanas',
+    shortLabel: 'PHQ-9',
     durationCopy: '9 preguntas · unos 2 minutos',
     isClinicianRated: false,
     scorer: scorePHQ9,
@@ -60,6 +64,7 @@ export const QUESTIONNAIRE_REGISTRY: Record<
   GAD7: {
     code: 'GAD7',
     label: 'GAD-7 — Cómo has estado de ánimo y preocupación estas 2 semanas',
+    shortLabel: 'GAD-7',
     durationCopy: '7 preguntas · unos 2 minutos',
     isClinicianRated: false,
     scorer: scoreGAD7,
@@ -67,6 +72,7 @@ export const QUESTIONNAIRE_REGISTRY: Record<
   ASQ: {
     code: 'ASQ',
     label: 'ASQ — Unas preguntas breves sobre seguridad',
+    shortLabel: 'ASQ',
     durationCopy: '4 ó 5 preguntas · menos de 1 minuto',
     isClinicianRated: false,
     scorer: scoreASQ,
@@ -74,6 +80,7 @@ export const QUESTIONNAIRE_REGISTRY: Record<
   BDI2: {
     code: 'BDI2',
     label: 'BDI-II — Cómo te has sentido estas 2 últimas semanas (en detalle)',
+    shortLabel: 'BDI-II',
     durationCopy: '21 grupos de afirmaciones · unos 5 minutos',
     isClinicianRated: false,
     scorer: scoreBDI2,
