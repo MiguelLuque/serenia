@@ -86,6 +86,44 @@ export const scoreGAD7: ScoringStrategy = (answers) => {
 }
 
 /**
+ * Score a BAI (Beck Anxiety Inventory) questionnaire.
+ * Expects exactly 21 answers, each in range 0–3.
+ *
+ * Sin flags de riesgo (BAI no tiene ítem de suicidalidad/autolesión).
+ *
+ * Bandas firmadas por Pablo el 2026-05-03 — DESVIACIÓN DEL PLAN: el plan
+ * original listaba 4 bandas (0-7/8-15/16-25/26-63), Pablo firmó 3:
+ *   0-21 minimal / 22-35 moderate / 36-63 severe.
+ * Documentado en ADR-024 punto 2.
+ */
+export const scoreBAI: ScoringStrategy = (answers) => {
+  if (answers.length !== 21) {
+    throw new Error(`BAI requires exactly 21 answers, got ${answers.length}`)
+  }
+  for (let i = 0; i < answers.length; i++) {
+    const v = answers[i]
+    if (!Number.isInteger(v) || v < 0 || v > 3) {
+      throw new Error(`BAI item ${i + 1} value must be 0–3, got ${v}`)
+    }
+  }
+
+  const totalScore = answers.reduce((sum, v) => sum + v, 0)
+
+  let severityBand: ScoringResult['severityBand']
+  if (totalScore <= 21) severityBand = 'minimal'
+  else if (totalScore <= 35) severityBand = 'moderate'
+  else severityBand = 'severe'
+
+  return {
+    totalScore,
+    severityBand,
+    subscores: {},
+    flags: [],
+    requiresReview: false,
+  }
+}
+
+/**
  * Score a BDI-II questionnaire.
  * Expects exactly 21 answers, each in range 0–3.
  *

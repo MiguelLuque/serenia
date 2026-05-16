@@ -21,6 +21,7 @@ import {
   scoreGAD7,
   scoreASQ,
   scoreBDI2,
+  scoreBAI,
 } from './scoring'
 
 /**
@@ -28,7 +29,7 @@ import {
  * NO declara este tipo desde Plan 8 Bloque 4. Añadir uno aquí + entrada en
  * `QUESTIONNAIRE_REGISTRY` + seed row en `questionnaire_definitions`.
  */
-export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ' | 'BDI2'
+export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ' | 'BDI2' | 'BAI'
 
 export interface QuestionnaireDefinition {
   code: QuestionnaireCode
@@ -85,6 +86,14 @@ export const QUESTIONNAIRE_REGISTRY: Record<
     isClinicianRated: false,
     scorer: scoreBDI2,
   },
+  BAI: {
+    code: 'BAI',
+    label: 'BAI — Cómo te ha afectado la ansiedad en la última semana',
+    shortLabel: 'BAI',
+    durationCopy: '21 preguntas · unos 3 minutos',
+    isClinicianRated: false,
+    scorer: scoreBAI,
+  },
 }
 
 /**
@@ -119,12 +128,15 @@ export function listPatientCodes(): QuestionnaireCode[] {
 
 /**
  * Codes que se siguen longitudinalmente (trends del inbox y patient view).
- * Tras Plan 8 Fase 1 T1.1: PHQ-9 + BDI-II (depresión, primario y secundario)
- * + GAD-7 (ansiedad). ASQ y C-SSRS son cribados binarios/categóricos, no
- * trends. BAI/STAI se añadirán cuando se implementen (T1.2/T1.3).
+ * Tras Plan 8 Fase 1 T1.1+T1.2:
+ *   - Depresión: PHQ-9 (primario) + BDI-II (secundario)
+ *   - Ansiedad: GAD-7 (primario) + BAI (secundario)
+ * ASQ y C-SSRS son cribados categóricos, no trends. STAI tiene subscores
+ * (state/trait) — al implementarse en T1.3 se decidirá si entra aquí o
+ * se trata aparte por su shape distinto.
  *
  * Tipados como tupla `as const satisfies` para que un rename de código en
  * el registry rompa al compilar.
  */
-export const LONGITUDINAL_CODES = ['PHQ9', 'GAD7', 'BDI2'] as const satisfies readonly QuestionnaireCode[]
+export const LONGITUDINAL_CODES = ['PHQ9', 'GAD7', 'BDI2', 'BAI'] as const satisfies readonly QuestionnaireCode[]
 export type LongitudinalCode = (typeof LONGITUDINAL_CODES)[number]

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePHQ9, scoreGAD7, scoreASQ, scoreBDI2 } from '@/lib/shared/questionnaires/scoring'
+import { scorePHQ9, scoreGAD7, scoreASQ, scoreBDI2, scoreBAI } from '@/lib/shared/questionnaires/scoring'
 
 // ---------------------------------------------------------------------------
 // PHQ-9
@@ -246,5 +246,92 @@ describe('scoreBDI2', () => {
     const arr = baseline()
     arr[0] = 1.5
     expect(() => scoreBDI2(arr)).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// BAI
+// ---------------------------------------------------------------------------
+
+describe('scoreBAI', () => {
+  const baseline = () => Array.from({ length: 21 }, () => 0)
+
+  it('29. all zeros → minimal, score 0, no flags', () => {
+    const result = scoreBAI(baseline())
+    expect(result.totalScore).toBe(0)
+    expect(result.severityBand).toBe('minimal')
+    expect(result.flags).toHaveLength(0)
+    expect(result.requiresReview).toBe(false)
+  })
+
+  it('30. all 3s → severe, score 63', () => {
+    const result = scoreBAI(Array.from({ length: 21 }, () => 3))
+    expect(result.totalScore).toBe(63)
+    expect(result.severityBand).toBe('severe')
+    expect(result.flags).toHaveLength(0)
+    expect(result.requiresReview).toBe(false)
+  })
+
+  it('31. score 21 → minimal upper bound', () => {
+    // 21 ones → 21
+    const result = scoreBAI(Array.from({ length: 21 }, () => 1))
+    expect(result.totalScore).toBe(21)
+    expect(result.severityBand).toBe('minimal')
+  })
+
+  it('32. score 22 → moderate (lower bound)', () => {
+    const arr = Array.from({ length: 21 }, () => 1)
+    arr[0] = 2 // 20 ones + 1 two = 22
+    expect(arr.reduce((a, b) => a + b, 0)).toBe(22)
+    const result = scoreBAI(arr)
+    expect(result.severityBand).toBe('moderate')
+  })
+
+  it('33. score 35 → moderate upper bound', () => {
+    // 14 twos + 7 ones = 35
+    const arr = baseline()
+    for (let i = 0; i < 14; i++) arr[i] = 2
+    for (let i = 14; i < 21; i++) arr[i] = 1
+    expect(arr.reduce((a, b) => a + b, 0)).toBe(35)
+    const result = scoreBAI(arr)
+    expect(result.severityBand).toBe('moderate')
+  })
+
+  it('34. score 36 → severe (lower bound)', () => {
+    // 14 twos + 7 ones + uno extra a 2 = 36
+    const arr = baseline()
+    for (let i = 0; i < 15; i++) arr[i] = 2
+    for (let i = 15; i < 21; i++) arr[i] = 1
+    expect(arr.reduce((a, b) => a + b, 0)).toBe(36)
+    const result = scoreBAI(arr)
+    expect(result.severityBand).toBe('severe')
+  })
+
+  it('35. wrong length (20) → throws', () => {
+    expect(() => scoreBAI(Array.from({ length: 20 }, () => 0))).toThrow()
+  })
+
+  it('36. out-of-range value (4) → throws', () => {
+    const arr = baseline()
+    arr[5] = 4
+    expect(() => scoreBAI(arr)).toThrow()
+  })
+
+  it('37. negative value → throws', () => {
+    const arr = baseline()
+    arr[0] = -1
+    expect(() => scoreBAI(arr)).toThrow()
+  })
+
+  it('38. non-integer value → throws', () => {
+    const arr = baseline()
+    arr[0] = 1.5
+    expect(() => scoreBAI(arr)).toThrow()
+  })
+
+  it('39. BAI never has flags — high score does NOT set requiresReview', () => {
+    const result = scoreBAI(Array.from({ length: 21 }, () => 3))
+    expect(result.flags).toEqual([])
+    expect(result.requiresReview).toBe(false)
   })
 })

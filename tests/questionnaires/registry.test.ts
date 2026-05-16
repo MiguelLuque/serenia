@@ -17,16 +17,19 @@ describe('questionnaire registry', () => {
     expect(typeof def?.scorer).toBe('function')
   })
 
-  it('returns a definition for GAD7, ASQ and BDI2 as well', () => {
+  it('returns a definition for GAD7, ASQ, BDI2 and BAI as well', () => {
     const gad = getDefinition('GAD7')
     const asq = getDefinition('ASQ')
     const bdi = getDefinition('BDI2')
+    const bai = getDefinition('BAI')
     expect(gad).not.toBeNull()
     expect(asq).not.toBeNull()
     expect(bdi).not.toBeNull()
+    expect(bai).not.toBeNull()
     expect(gad?.code).toBe('GAD7')
     expect(asq?.code).toBe('ASQ')
     expect(bdi?.code).toBe('BDI2')
+    expect(bai?.code).toBe('BAI')
   })
 
   it('returns null for an unknown code', () => {
@@ -34,16 +37,16 @@ describe('questionnaire registry', () => {
     expect(getDefinition('')).toBeNull()
   })
 
-  it('lists all four codes (PHQ9, GAD7, ASQ, BDI2)', () => {
+  it('lists all five codes (PHQ9, GAD7, ASQ, BDI2, BAI)', () => {
     const codes = listCodes()
-    expect(codes).toHaveLength(4)
-    expect(codes).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2']))
+    expect(codes).toHaveLength(5)
+    expect(codes).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2', 'BAI']))
   })
 
-  it('lists all four codes as patient-rated (none is clinician-rated yet)', () => {
+  it('lists all five codes as patient-rated (none is clinician-rated yet)', () => {
     const patient = listPatientCodes()
-    expect(patient).toHaveLength(4)
-    expect(patient).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2']))
+    expect(patient).toHaveLength(5)
+    expect(patient).toEqual(expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2', 'BAI']))
   })
 
   it('every registered definition exposes a callable scorer', () => {
@@ -82,6 +85,15 @@ describe('questionnaire registry', () => {
     expect(result.severityBand).toBe('severe')
     expect(result.flags).toEqual([{ itemOrder: 9, reason: 'suicidality' }])
     expect(result.requiresReview).toBe(true)
+  })
+
+  it('BAI scorer via registry produces severe for all-3 answers without flags', () => {
+    const def = getDefinition('BAI')!
+    const result = def.scorer(Array.from({ length: 21 }, () => 3))
+    expect(result.totalScore).toBe(63)
+    expect(result.severityBand).toBe('severe')
+    expect(result.flags).toEqual([])
+    expect(result.requiresReview).toBe(false)
   })
 
   it('scorer rejects malformed input by throwing (PHQ9 wrong length)', () => {
