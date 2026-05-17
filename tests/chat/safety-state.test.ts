@@ -5,17 +5,17 @@ import {
 } from '@/lib/server/chat/safety-state'
 
 // =============================================================================
-// Plan 7 T3a v2 — `getSessionSafetyState` deriva un estado tipado a partir de
-// `questionnaire_instances` + `questionnaire_results` + `questionnaire_answers`,
-// con fallback heurístico léxico sobre `messages`.
+// Plan 7 T3a v2 + Plan 8 Fase 2 — `getSessionSafetyState` deriva un estado
+// tipado a partir de `questionnaire_instances` + `questionnaire_results`,
+// con fallback heurístico léxico sobre `messages`. Variantes ASQ renombradas
+// a CSSRS con 5 bandas + override behaviorRecent (ítem 6b).
 // =============================================================================
 
 const NOW_ISO = '2026-04-28T12:00:00Z'
 const SESSION_ID = '11111111-1111-4111-8111-111111111111'
-const ASQ_DEF_ID = 'asq-def-id'
+const CSSRS_DEF_ID = 'cssrs-def-id'
 const PHQ9_DEF_ID = 'phq9-def-id'
-const ASQ_INSTANCE_ID = 'asq-instance-id'
-const ITEM_5_ID = 'item-5-id'
+const CSSRS_INSTANCE_ID = 'cssrs-instance-id'
 
 /**
  * Build a Supabase stub whose `.from(table)` returns a fluent builder. Each
@@ -31,8 +31,6 @@ interface Responses {
   questionnaire_instances?: TableResponse
   questionnaire_definitions?: TableResponse
   questionnaire_results?: TableResponse
-  questionnaire_items?: TableResponse
-  questionnaire_answers?: TableResponse
   messages?: TableResponse
 }
 
@@ -73,179 +71,173 @@ afterEach(() => {
   consoleErrorSpy.mockRestore()
 })
 
-describe('getSessionSafetyState — ASQ variants', () => {
-  it('ASQ scored negativo + answer al item 5 → asq_negative con coversAcuteIdeation=true (caso del smoke)', async () => {
+function cssrsScoredInstance() {
+  return {
+    id: CSSRS_INSTANCE_ID,
+    questionnaire_id: CSSRS_DEF_ID,
+    status: 'scored',
+    created_at: NOW_ISO,
+    scored_at: NOW_ISO,
+  }
+}
+
+describe('getSessionSafetyState — C-SSRS variants', () => {
+  it('C-SSRS scored band=negative → cssrs_negative', async () => {
     const supabase = makeSupabase({
-      questionnaire_instances: {
-        data: {
-          id: ASQ_INSTANCE_ID,
-          questionnaire_id: ASQ_DEF_ID,
-          status: 'scored',
-          created_at: NOW_ISO,
-          scored_at: NOW_ISO,
-        },
-        error: null,
-      },
-      questionnaire_definitions: {
-        data: { code: 'ASQ' },
-        error: null,
-      },
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
       questionnaire_results: {
         data: { severity_band: 'negative', flags_json: [] },
-        error: null,
-      },
-      questionnaire_items: {
-        data: { id: ITEM_5_ID, order_index: 5 },
-        error: null,
-      },
-      questionnaire_answers: {
-        data: { id: 'answer-5-id' },
         error: null,
       },
     })
 
     const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
-    expect(state.kind).toBe('asq_negative')
-    if (state.kind === 'asq_negative') {
-      expect(state.coversAcuteIdeation).toBe(true)
+    expect(state.kind).toBe('cssrs_negative')
+    if (state.kind === 'cssrs_negative') {
       expect(state.scoredAt).toBe(NOW_ISO)
     }
   })
 
-  it('ASQ scored negativo SIN answer al item 5 → asq_negative con coversAcuteIdeation=false', async () => {
+  it('C-SSRS scored band=low_risk (item 1 o 2 = Sí) → cssrs_low_risk', async () => {
     const supabase = makeSupabase({
-      questionnaire_instances: {
-        data: {
-          id: ASQ_INSTANCE_ID,
-          questionnaire_id: ASQ_DEF_ID,
-          status: 'scored',
-          created_at: NOW_ISO,
-          scored_at: NOW_ISO,
-        },
-        error: null,
-      },
-      questionnaire_definitions: {
-        data: { code: 'ASQ' },
-        error: null,
-      },
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
       questionnaire_results: {
-        data: { severity_band: 'negative', flags_json: [] },
-        error: null,
-      },
-      questionnaire_items: {
-        data: { id: ITEM_5_ID, order_index: 5 },
-        error: null,
-      },
-      questionnaire_answers: {
-        data: null, // sin respuesta al item 5
+        data: { severity_band: 'low_risk', flags_json: [] },
         error: null,
       },
     })
 
     const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
-    expect(state.kind).toBe('asq_negative')
-    if (state.kind === 'asq_negative') {
-      expect(state.coversAcuteIdeation).toBe(false)
+    expect(state.kind).toBe('cssrs_low_risk')
+    if (state.kind === 'cssrs_low_risk') {
+      expect(state.scoredAt).toBe(NOW_ISO)
     }
   })
 
-  it('ASQ scored positivo sin acute_risk flag → asq_positive_non_acute', async () => {
+  it('C-SSRS scored band=moderate_risk (item 3 = Sí) → cssrs_moderate_risk', async () => {
     const supabase = makeSupabase({
-      questionnaire_instances: {
-        data: {
-          id: ASQ_INSTANCE_ID,
-          questionnaire_id: ASQ_DEF_ID,
-          status: 'scored',
-          created_at: NOW_ISO,
-          scored_at: NOW_ISO,
-        },
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
+      questionnaire_results: {
+        data: { severity_band: 'moderate_risk', flags_json: [] },
         error: null,
       },
-      questionnaire_definitions: { data: { code: 'ASQ' }, error: null },
+    })
+
+    const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
+    expect(state.kind).toBe('cssrs_moderate_risk')
+  })
+
+  it('C-SSRS scored band=high_risk (item 4 = Sí) → cssrs_high_risk', async () => {
+    const supabase = makeSupabase({
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
+      questionnaire_results: {
+        data: { severity_band: 'high_risk', flags_json: [] },
+        error: null,
+      },
+    })
+
+    const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
+    expect(state.kind).toBe('cssrs_high_risk')
+  })
+
+  it('C-SSRS scored band=acute_risk con flag suicidality (lifetime) → cssrs_acute_risk con behaviorRecent=false', async () => {
+    const supabase = makeSupabase({
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
       questionnaire_results: {
         data: {
-          severity_band: 'positive',
-          flags_json: [{ reason: 'suicidality', itemOrder: 1 }],
+          severity_band: 'acute_risk',
+          flags_json: [{ reason: 'suicidality', itemOrder: 6 }],
         },
         error: null,
       },
     })
 
     const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
-    expect(state.kind).toBe('asq_positive_non_acute')
-    if (state.kind === 'asq_positive_non_acute') {
+    expect(state.kind).toBe('cssrs_acute_risk')
+    if (state.kind === 'cssrs_acute_risk') {
+      expect(state.behaviorRecent).toBe(false)
       expect(state.flags).toHaveLength(1)
     }
   })
 
-  it('ASQ scored con acute_risk flag → asq_acute_risk', async () => {
+  it('C-SSRS scored band=acute_risk con flag acute_risk itemOrder=7 (override 6b) → cssrs_acute_risk con behaviorRecent=true', async () => {
     const supabase = makeSupabase({
-      questionnaire_instances: {
-        data: {
-          id: ASQ_INSTANCE_ID,
-          questionnaire_id: ASQ_DEF_ID,
-          status: 'scored',
-          created_at: NOW_ISO,
-          scored_at: NOW_ISO,
-        },
-        error: null,
-      },
-      questionnaire_definitions: { data: { code: 'ASQ' }, error: null },
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
       questionnaire_results: {
         data: {
-          severity_band: 'positive',
-          flags_json: [{ reason: 'acute_risk', itemOrder: 5 }],
+          severity_band: 'acute_risk',
+          flags_json: [{ reason: 'acute_risk', itemOrder: 7 }],
         },
         error: null,
       },
     })
 
     const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
-    expect(state.kind).toBe('asq_acute_risk')
-    if (state.kind === 'asq_acute_risk') {
-      expect(state.flags).toHaveLength(1)
+    expect(state.kind).toBe('cssrs_acute_risk')
+    if (state.kind === 'cssrs_acute_risk') {
+      expect(state.behaviorRecent).toBe(true)
     }
   })
 
-  it('ASQ proposed pero no scored → asq_proposed_pending', async () => {
+  it('C-SSRS scored banda inesperada → conservador cssrs_negative', async () => {
+    const supabase = makeSupabase({
+      questionnaire_instances: { data: cssrsScoredInstance(), error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
+      questionnaire_results: {
+        data: { severity_band: 'banda-rara-no-mapeable', flags_json: [] },
+        error: null,
+      },
+    })
+
+    const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
+    expect(state.kind).toBe('cssrs_negative')
+  })
+
+  it('C-SSRS proposed pero no scored → cssrs_pending', async () => {
     const supabase = makeSupabase({
       questionnaire_instances: {
         data: {
-          id: ASQ_INSTANCE_ID,
-          questionnaire_id: ASQ_DEF_ID,
+          id: CSSRS_INSTANCE_ID,
+          questionnaire_id: CSSRS_DEF_ID,
           status: 'proposed',
           created_at: NOW_ISO,
           scored_at: null,
         },
         error: null,
       },
-      questionnaire_definitions: { data: { code: 'ASQ' }, error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
     })
 
     const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
-    expect(state.kind).toBe('asq_proposed_pending')
-    if (state.kind === 'asq_proposed_pending') {
+    expect(state.kind).toBe('cssrs_pending')
+    if (state.kind === 'cssrs_pending') {
       expect(state.proposedAt).toBe(NOW_ISO)
     }
   })
 
-  it('ASQ in_progress (todavía sin score) → asq_proposed_pending', async () => {
+  it('C-SSRS in_progress (todavía sin score) → cssrs_pending', async () => {
     const supabase = makeSupabase({
       questionnaire_instances: {
         data: {
-          id: ASQ_INSTANCE_ID,
-          questionnaire_id: ASQ_DEF_ID,
+          id: CSSRS_INSTANCE_ID,
+          questionnaire_id: CSSRS_DEF_ID,
           status: 'in_progress',
           created_at: NOW_ISO,
           scored_at: null,
         },
         error: null,
       },
-      questionnaire_definitions: { data: { code: 'ASQ' }, error: null },
+      questionnaire_definitions: { data: { code: 'CSSRS' }, error: null },
     })
 
     const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
-    expect(state.kind).toBe('asq_proposed_pending')
+    expect(state.kind).toBe('cssrs_pending')
   })
 })
 
@@ -315,9 +307,9 @@ describe('getSessionSafetyState — fallback heurístico textual', () => {
   })
 
   it('PHQ-9 scored existe pero SIN check textual → fallback never_assessed (no contamos PHQ-9)', async () => {
-    // Decisión deliberada de v2: no hay rama `phq9_item9_clean`. Un PHQ-9
-    // scored cae al fallback textual; si tampoco hay check textual, queda
-    // como `never_assessed`.
+    // Decisión deliberada: no hay rama `phq9_item9_clean`. Un PHQ-9 scored
+    // cae al fallback textual; si tampoco hay check textual, queda como
+    // `never_assessed`.
     const supabase = makeSupabase({
       questionnaire_instances: {
         data: {
@@ -326,6 +318,26 @@ describe('getSessionSafetyState — fallback heurístico textual', () => {
           status: 'scored',
           created_at: NOW_ISO,
           scored_at: NOW_ISO,
+        },
+        error: null,
+      },
+      questionnaire_definitions: { data: { code: 'PHQ9' }, error: null },
+      messages: { data: [], error: null },
+    })
+
+    const state = await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)
+    expect(state.kind).toBe('never_assessed')
+  })
+
+  it('cuestionario no-CSSRS proposed (PHQ-9) → fallback textual (no cuenta como pending de seguridad)', async () => {
+    const supabase = makeSupabase({
+      questionnaire_instances: {
+        data: {
+          id: 'phq9-instance',
+          questionnaire_id: PHQ9_DEF_ID,
+          status: 'proposed',
+          created_at: NOW_ISO,
+          scored_at: null,
         },
         error: null,
       },
@@ -369,16 +381,29 @@ describe('SafetyState type', () => {
   it('discriminated union exhaustivo (compile-time)', () => {
     const cases: SafetyState[] = [
       { kind: 'never_assessed' },
-      { kind: 'asq_proposed_pending', proposedAt: NOW_ISO },
-      { kind: 'asq_negative', scoredAt: NOW_ISO, coversAcuteIdeation: true },
-      { kind: 'asq_positive_non_acute', scoredAt: NOW_ISO, flags: [] },
-      { kind: 'asq_acute_risk', scoredAt: NOW_ISO, flags: [] },
+      { kind: 'cssrs_pending', proposedAt: NOW_ISO },
+      { kind: 'cssrs_negative', scoredAt: NOW_ISO },
+      { kind: 'cssrs_low_risk', scoredAt: NOW_ISO },
+      { kind: 'cssrs_moderate_risk', scoredAt: NOW_ISO },
+      { kind: 'cssrs_high_risk', scoredAt: NOW_ISO },
+      {
+        kind: 'cssrs_acute_risk',
+        scoredAt: NOW_ISO,
+        flags: [],
+        behaviorRecent: false,
+      },
+      {
+        kind: 'cssrs_acute_risk',
+        scoredAt: NOW_ISO,
+        flags: [{ reason: 'acute_risk', itemOrder: 7 }],
+        behaviorRecent: true,
+      },
       {
         kind: 'textual_check_completed',
         lastAssistantCheckAt: NOW_ISO,
         lastPatientResponseAt: NOW_ISO,
       },
     ]
-    expect(cases).toHaveLength(6)
+    expect(cases).toHaveLength(9)
   })
 })

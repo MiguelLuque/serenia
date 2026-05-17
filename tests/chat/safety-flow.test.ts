@@ -146,41 +146,56 @@ describe('POST /api/chat — safety flow integration (T3a v2)', () => {
     return capturedSystemPrompts[0]!
   }
 
-  it('ASQ scored negativo + texto neutro → variante "ASQ NEGATIVO YA APLICADO" (no [AVISO])', async () => {
+  it('C-SSRS scored negativo + texto neutro → variante "C-SSRS NEGATIVO YA APLICADO" (no [AVISO])', async () => {
     const prompt = await runHandler({
       safetyState: {
-        kind: 'asq_negative',
+        kind: 'cssrs_negative',
         scoredAt: NOW_ISO,
-        coversAcuteIdeation: true,
       },
       lastUserText: 'estoy un poco cansada',
     })
 
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — ASQ NEGATIVO YA APLICADO]')
+    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
     expect(prompt).not.toContain('[AVISO DE SEGURIDAD — POSIBLE SEÑAL]')
   })
 
-  it('ASQ acute → variante "RIESGO AGUDO"', async () => {
+  it('C-SSRS acute lifetime → variante "RIESGO AGUDO"', async () => {
     const prompt = await runHandler({
       safetyState: {
-        kind: 'asq_acute_risk',
+        kind: 'cssrs_acute_risk',
         scoredAt: NOW_ISO,
-        flags: [{ reason: 'acute_risk', itemOrder: 5 }],
+        flags: [{ reason: 'suicidality', itemOrder: 6 }],
+        behaviorRecent: false,
       },
       lastUserText: 'no sé qué hacer',
     })
 
-    expect(prompt).toContain('[RESULTADO DE CUESTIONARIO — ASQ — RIESGO AGUDO]')
+    expect(prompt).toContain('[RESULTADO C-SSRS — RIESGO AGUDO]')
     expect(prompt).toContain('Activa el protocolo de crisis AHORA')
   })
 
-  it('ASQ pending → variante "ASQ PROPUESTO PENDIENTE"', async () => {
+  it('C-SSRS acute + behaviorRecent (override 6b) → variante CONDUCTA RECIENTE', async () => {
     const prompt = await runHandler({
-      safetyState: { kind: 'asq_proposed_pending', proposedAt: NOW_ISO },
+      safetyState: {
+        kind: 'cssrs_acute_risk',
+        scoredAt: NOW_ISO,
+        flags: [{ reason: 'acute_risk', itemOrder: 7 }],
+        behaviorRecent: true,
+      },
+      lastUserText: 'sí, fue hace un mes',
+    })
+
+    expect(prompt).toContain('[RESULTADO C-SSRS — RIESGO AGUDO + CONDUCTA RECIENTE]')
+    expect(prompt).toContain('alerta URGENTE')
+  })
+
+  it('C-SSRS pending → variante "C-SSRS PROPUESTO PENDIENTE"', async () => {
+    const prompt = await runHandler({
+      safetyState: { kind: 'cssrs_pending', proposedAt: NOW_ISO },
       lastUserText: 'no quiero hacerlo ahora',
     })
 
-    expect(prompt).toContain('[ASQ PROPUESTO PENDIENTE]')
+    expect(prompt).toContain('[C-SSRS PROPUESTO PENDIENTE]')
     expect(prompt).toContain('NO propongas otro cuestionario')
   })
 
@@ -207,35 +222,33 @@ describe('POST /api/chat — safety flow integration (T3a v2)', () => {
     expect(prompt).not.toContain('[RE-ESCALADA')
   })
 
-  it('ASQ negativo + último mensaje "voy a quitarme la vida esta noche" → prepende RE-ESCALADA', async () => {
+  it('C-SSRS negativo + último mensaje "voy a quitarme la vida esta noche" → prepende RE-ESCALADA', async () => {
     const prompt = await runHandler({
       safetyState: {
-        kind: 'asq_negative',
+        kind: 'cssrs_negative',
         scoredAt: NOW_ISO,
-        coversAcuteIdeation: true,
       },
       lastUserText: 'voy a quitarme la vida esta noche',
     })
 
     expect(prompt).toContain('[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]')
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — ASQ NEGATIVO YA APLICADO]')
-    // RE-ESCALADA debe ir ANTES de la variante 3 en el prompt final.
+    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
+    // RE-ESCALADA debe ir ANTES de la variante negativo en el prompt final.
     const idxReEsc = prompt.indexOf('[RE-ESCALADA')
-    const idxBase = prompt.indexOf('[CONTEXTO DE SEGURIDAD — ASQ NEGATIVO YA APLICADO]')
+    const idxBase = prompt.indexOf('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
     expect(idxReEsc).toBeLessThan(idxBase)
   })
 
-  it('ASQ negativo + último mensaje "totalmente desbordado" (sin alta señal) → variante 3 sin RE-ESCALADA', async () => {
+  it('C-SSRS negativo + último mensaje "totalmente desbordado" (sin alta señal) → variante negativo sin RE-ESCALADA', async () => {
     const prompt = await runHandler({
       safetyState: {
-        kind: 'asq_negative',
+        kind: 'cssrs_negative',
         scoredAt: NOW_ISO,
-        coversAcuteIdeation: true,
       },
       lastUserText: 'estoy totalmente desbordado',
     })
 
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — ASQ NEGATIVO YA APLICADO]')
+    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
     expect(prompt).not.toContain('[RE-ESCALADA')
     expect(prompt).not.toContain('[AVISO DE SEGURIDAD')
   })
