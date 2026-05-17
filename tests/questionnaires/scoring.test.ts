@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePHQ9, scoreGAD7, scoreASQ, scoreBDI2, scoreBAI } from '@/lib/shared/questionnaires/scoring'
+import { scorePHQ9, scoreGAD7, scoreASQ, scoreBDI2, scoreBAI, scoreCSSRS } from '@/lib/shared/questionnaires/scoring'
 
 // ---------------------------------------------------------------------------
 // PHQ-9
@@ -333,5 +333,102 @@ describe('scoreBAI', () => {
     const result = scoreBAI(Array.from({ length: 21 }, () => 3))
     expect(result.flags).toEqual([])
     expect(result.requiresReview).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// C-SSRS — 7 items (1-6 + 6b), valores 0/1. Bandas firmadas por Pablo
+// (2026-05-03): negative / low_risk / moderate_risk / high_risk / acute_risk.
+// Override behavior_recent (item 6b = Sí) fuerza acute_risk + flag.
+// Banda asignada = la más severa que cualquier ítem dispare.
+// ---------------------------------------------------------------------------
+
+describe('scoreCSSRS', () => {
+  it('40. todos No → negative, sin flags, requiresReview=false', () => {
+    const result = scoreCSSRS([0, 0, 0, 0, 0, 0, 0])
+    expect(result.totalScore).toBe(0)
+    expect(result.severityBand).toBe('negative')
+    expect(result.flags).toEqual([])
+    expect(result.requiresReview).toBe(false)
+  })
+
+  it('41. solo item 1 = Sí → low_risk, sin flags, requiresReview=false', () => {
+    const result = scoreCSSRS([1, 0, 0, 0, 0, 0, 0])
+    expect(result.severityBand).toBe('low_risk')
+    expect(result.flags).toEqual([])
+    expect(result.requiresReview).toBe(false)
+  })
+
+  it('42. solo item 2 = Sí → low_risk', () => {
+    const result = scoreCSSRS([0, 1, 0, 0, 0, 0, 0])
+    expect(result.severityBand).toBe('low_risk')
+    expect(result.requiresReview).toBe(false)
+  })
+
+  it('43. item 3 = Sí → moderate_risk, requiresReview=true', () => {
+    const result = scoreCSSRS([0, 1, 1, 0, 0, 0, 0])
+    expect(result.severityBand).toBe('moderate_risk')
+    expect(result.requiresReview).toBe(true)
+    expect(result.flags).toEqual([])
+  })
+
+  it('44. item 4 = Sí → high_risk', () => {
+    const result = scoreCSSRS([0, 1, 0, 1, 0, 0, 0])
+    expect(result.severityBand).toBe('high_risk')
+    expect(result.requiresReview).toBe(true)
+  })
+
+  it('45. item 5 = Sí → acute_risk + flag suicidality itemOrder=5', () => {
+    const result = scoreCSSRS([0, 1, 0, 0, 1, 0, 0])
+    expect(result.severityBand).toBe('acute_risk')
+    expect(result.requiresReview).toBe(true)
+    expect(result.flags).toEqual([{ itemOrder: 5, reason: 'suicidality' }])
+  })
+
+  it('46. item 6 = Sí (lifetime, sin 6b) → acute_risk + flag suicidality itemOrder=6', () => {
+    const result = scoreCSSRS([0, 0, 0, 0, 0, 1, 0])
+    expect(result.severityBand).toBe('acute_risk')
+    expect(result.requiresReview).toBe(true)
+    expect(result.flags).toEqual([{ itemOrder: 6, reason: 'suicidality' }])
+  })
+
+  it('47. item 6b = Sí (override behavior_recent) → acute_risk + flag acute_risk itemOrder=7', () => {
+    const result = scoreCSSRS([0, 0, 0, 0, 0, 1, 1])
+    expect(result.severityBand).toBe('acute_risk')
+    expect(result.requiresReview).toBe(true)
+    expect(result.flags).toEqual([{ itemOrder: 7, reason: 'acute_risk' }])
+  })
+
+  it('48. banda = la MÁS SEVERA (item 1 + item 4 → high_risk, no low_risk)', () => {
+    const result = scoreCSSRS([1, 0, 0, 1, 0, 0, 0])
+    expect(result.severityBand).toBe('high_risk')
+  })
+
+  it('49. banda = la MÁS SEVERA (item 1 + item 5 → acute_risk)', () => {
+    const result = scoreCSSRS([1, 0, 0, 0, 1, 0, 0])
+    expect(result.severityBand).toBe('acute_risk')
+  })
+
+  it('50. override 6b fuerza acute_risk aunque ítems 1-5 sean No', () => {
+    // Edge case clínicamente improbable pero defensivo: 6b=Sí debe ganar.
+    const result = scoreCSSRS([0, 0, 0, 0, 0, 0, 1])
+    expect(result.severityBand).toBe('acute_risk')
+    expect(result.flags).toEqual([{ itemOrder: 7, reason: 'acute_risk' }])
+  })
+
+  it('51. wrong length (6) → throws', () => {
+    expect(() => scoreCSSRS([0, 0, 0, 0, 0, 0])).toThrow()
+  })
+
+  it('52. wrong length (8) → throws', () => {
+    expect(() => scoreCSSRS([0, 0, 0, 0, 0, 0, 0, 0])).toThrow()
+  })
+
+  it('53. valor fuera de rango (2) → throws', () => {
+    expect(() => scoreCSSRS([0, 0, 2, 0, 0, 0, 0])).toThrow()
+  })
+
+  it('54. valor negativo → throws', () => {
+    expect(() => scoreCSSRS([-1, 0, 0, 0, 0, 0, 0])).toThrow()
   })
 })

@@ -12,6 +12,12 @@ export type SeverityBand =
   | 'severe'
   | 'positive'
   | 'negative'
+  // C-SSRS (Plan 8 T1.4) — 5 bandas firmadas por Pablo el 2026-05-03.
+  // Suffix `_risk` para no chocar con `moderate` clínico (depresión/ansiedad).
+  | 'low_risk'
+  | 'moderate_risk'
+  | 'high_risk'
+  | 'acute_risk'
 
 export interface QuestionnaireFlag {
   itemOrder: number

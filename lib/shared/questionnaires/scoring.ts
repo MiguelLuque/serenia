@@ -170,6 +170,75 @@ export const scoreBDI2: ScoringStrategy = (answers) => {
 }
 
 /**
+ * Score a C-SSRS (Columbia Suicide Severity Rating Scale) screener.
+ * Expects exactly 7 answers (items 1, 2, 3, 4, 5, 6, 6b), each 0 (No) or 1 (Sí).
+ *
+ * Skip lógico: si item 2 = No, items 3-5 no se preguntan (caller los pasa como 0).
+ * Si item 6 = No, item 6b no se pregunta (caller lo pasa como 0).
+ *
+ * Bandas firmadas por Pablo el 2026-05-03 (5 bandas — el screener oficial define
+ * "any yes = positivo", Pablo aprobó esta granularidad para que la app reaccione
+ * distinto en cada caso). Banda asignada = la MÁS SEVERA que cualquier ítem
+ * dispare.
+ *
+ *   negative       — todos los items = No.
+ *   low_risk       — items 1 o 2 = Sí (deseo de morir / pensamiento no específico).
+ *   moderate_risk  — item 3 = Sí (pensamiento con método sin plan ni intención).
+ *   high_risk      — item 4 = Sí (intención sin plan).
+ *   acute_risk     — items 5 o 6 = Sí (intención clara o conducta lifetime).
+ *
+ * Override `behavior_recent` (item 6b = Sí ⇔ answers[6] = 1): fuerza
+ * `acute_risk` y emite flag `acute_risk` para que el SafetyState corte
+ * la sesión inmediatamente y avise al psicólogo referente.
+ *
+ * requiresReview:
+ *   - acute_risk / high_risk / moderate_risk → true
+ *   - low_risk / negative                    → false
+ */
+export const scoreCSSRS: ScoringStrategy = (answers) => {
+  if (answers.length !== 7) {
+    throw new Error(`C-SSRS requires exactly 7 answers, got ${answers.length}`)
+  }
+  for (let i = 0; i < answers.length; i++) {
+    const v = answers[i]
+    if (!Number.isInteger(v) || (v !== 0 && v !== 1)) {
+      throw new Error(`C-SSRS item ${i + 1} value must be 0 or 1, got ${v}`)
+    }
+  }
+
+  const [i1, i2, i3, i4, i5, i6, i6b] = answers
+  const totalScore = answers.reduce((sum, v) => sum + v, 0)
+
+  let severityBand: ScoringResult['severityBand']
+  if (i5 === 1 || i6 === 1) severityBand = 'acute_risk'
+  else if (i4 === 1) severityBand = 'high_risk'
+  else if (i3 === 1) severityBand = 'moderate_risk'
+  else if (i1 === 1 || i2 === 1) severityBand = 'low_risk'
+  else severityBand = 'negative'
+
+  const flags: QuestionnaireFlag[] = []
+  if (i6b === 1) {
+    severityBand = 'acute_risk'
+    flags.push({ itemOrder: 7, reason: 'acute_risk' })
+  } else if (severityBand === 'acute_risk') {
+    flags.push({ itemOrder: i5 === 1 ? 5 : 6, reason: 'suicidality' })
+  }
+
+  const requiresReview =
+    severityBand === 'acute_risk' ||
+    severityBand === 'high_risk' ||
+    severityBand === 'moderate_risk'
+
+  return {
+    totalScore,
+    severityBand,
+    subscores: {},
+    flags,
+    requiresReview,
+  }
+}
+
+/**
  * Score an ASQ questionnaire.
  * Expects 4 or 5 answers, each 0 or 1.
  * If any of items 1–4 (indexes 0–3) is 1, band = 'positive', requiresReview = true.

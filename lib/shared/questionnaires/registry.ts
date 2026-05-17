@@ -22,6 +22,7 @@ import {
   scoreASQ,
   scoreBDI2,
   scoreBAI,
+  scoreCSSRS,
 } from './scoring'
 
 /**
@@ -29,7 +30,7 @@ import {
  * NO declara este tipo desde Plan 8 Bloque 4. Añadir uno aquí + entrada en
  * `QUESTIONNAIRE_REGISTRY` + seed row en `questionnaire_definitions`.
  */
-export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ' | 'BDI2' | 'BAI'
+export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ' | 'BDI2' | 'BAI' | 'CSSRS'
 
 export interface QuestionnaireDefinition {
   code: QuestionnaireCode
@@ -93,6 +94,14 @@ export const QUESTIONNAIRE_REGISTRY: Record<
     durationCopy: '21 preguntas · unos 3 minutos',
     isClinicianRated: false,
     scorer: scoreBAI,
+  },
+  CSSRS: {
+    code: 'CSSRS',
+    label: 'C-SSRS — Unas preguntas breves sobre seguridad',
+    shortLabel: 'C-SSRS',
+    durationCopy: '6 preguntas · menos de 1 minuto',
+    isClinicianRated: false,
+    scorer: scoreCSSRS,
   },
 }
 
