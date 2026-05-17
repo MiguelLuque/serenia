@@ -15,9 +15,9 @@ describe('getQuestionnaireCardHeader', () => {
     expect(h.duration).toMatch(/7 preguntas/)
   })
 
-  it('returns ASQ clinical title focused on safety and short duration', () => {
-    const h = getQuestionnaireCardHeader('ASQ', 'ASQ')
-    expect(h.title).toMatch(/ASQ/)
+  it('returns C-SSRS clinical title focused on safety and short duration', () => {
+    const h = getQuestionnaireCardHeader('CSSRS', 'C-SSRS')
+    expect(h.title).toMatch(/C-SSRS/)
     expect(h.title.toLowerCase()).toContain('seguridad')
     expect(h.duration).toMatch(/menos de 1 minuto/)
   })

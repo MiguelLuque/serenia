@@ -171,19 +171,19 @@ describe('questionnaire flow — end to end (mocked DB)', () => {
     expect(insertedRows.find((r) => r.table === 'risk_events')).toBeUndefined()
   })
 
-  it('ASQ item 5 = 1 produces critical risk_event with acute_risk flag', async () => {
-    const definition = { id: 'def-asq', code: 'ASQ', name: 'ASQ' }
+  it('C-SSRS override behaviorRecent (ítem 6b = Sí) produces critical risk_event con flag acute_risk', async () => {
+    const definition = { id: 'def-cssrs', code: 'CSSRS', name: 'C-SSRS' }
     const instance = {
-      id: 'inst-asq',
+      id: 'inst-cssrs',
       user_id: 'user-1',
       session_id: 'sess-1',
       conversation_id: 'conv-1',
-      questionnaire_id: 'def-asq',
+      questionnaire_id: 'def-cssrs',
       status: 'proposed',
     }
-    const items = Array.from({ length: 5 }, (_, i) => ({
+    const items = Array.from({ length: 7 }, (_, i) => ({
       id: `item-${i + 1}`,
-      questionnaire_id: 'def-asq',
+      questionnaire_id: 'def-cssrs',
       order_index: i + 1,
       prompt: `Item ${i + 1}`,
       options_json: {},
@@ -221,19 +221,22 @@ describe('questionnaire flow — end to end (mocked DB)', () => {
       typeof submitAnswers
     >[0]
 
+    // [0,0,0,0,0,1,1] — item 6 lifetime + 6b reciente → acute_risk + override
     const scoring = await submitAnswers(supabase, {
-      instanceId: 'inst-asq',
+      instanceId: 'inst-cssrs',
       answers: [
-        { itemOrder: 1, valueNumeric: 1, valueRaw: 'Sí' },
+        { itemOrder: 1, valueNumeric: 0, valueRaw: 'No' },
         { itemOrder: 2, valueNumeric: 0, valueRaw: 'No' },
         { itemOrder: 3, valueNumeric: 0, valueRaw: 'No' },
         { itemOrder: 4, valueNumeric: 0, valueRaw: 'No' },
-        { itemOrder: 5, valueNumeric: 1, valueRaw: 'Sí' },
+        { itemOrder: 5, valueNumeric: 0, valueRaw: 'No' },
+        { itemOrder: 6, valueNumeric: 1, valueRaw: 'Sí' },
+        { itemOrder: 7, valueNumeric: 1, valueRaw: 'Sí' },
       ],
     })
 
-    expect(scoring.severityBand).toBe('positive')
-    expect(scoring.flags).toEqual([{ itemOrder: 5, reason: 'acute_risk' }])
+    expect(scoring.severityBand).toBe('acute_risk')
+    expect(scoring.flags).toEqual([{ itemOrder: 7, reason: 'acute_risk' }])
 
     const risk = insertedRows.find((r) => r.table === 'risk_events')
     expect(risk).toBeDefined()

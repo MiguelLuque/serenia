@@ -11,10 +11,10 @@ import { z } from 'zod'
 // del error técnico se devolvía crudo al cliente filtrando detalle.
 //
 // Las cotas (max items=50, max valueNumeric=10, max valueRaw chars=200) son
-// holguras razonables para los cuestionarios actuales (PHQ-9, GAD-7, ASQ
-// son ≤ 9 items con escala 0-3 o 0-1). Cualquier instrumento futuro con más
-// items o escala más amplia ajustará el schema explícitamente — falla mejor
-// con un 400 que con un INSERT raro.
+// holguras razonables para los cuestionarios actuales (PHQ-9 / GAD-7 / BDI-II
+// / BAI ≤ 21 items con escala 0-3; C-SSRS 7 items con escala 0-1). Cualquier
+// instrumento futuro con más items o escala más amplia ajustará el schema
+// explícitamente — falla mejor con un 400 que con un INSERT raro.
 
 export const AnswerSchema = z.object({
   itemOrder: z.number().int().min(1).max(50),

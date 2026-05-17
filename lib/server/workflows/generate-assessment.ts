@@ -250,10 +250,11 @@ export async function generateAssessmentStep(
           .eq('instance_id', qi.id)
           .maybeSingle(),
         // T5: pull individual item-level answers so the LLM can apply the
-        // anti-overclassification rules (e.g. ASQ ítem 5 = No → not 'active').
-        // The score+band alone don't disambiguate; the per-item answer is the
-        // binding signal. Defensive on shape: if the join fails or rows are
-        // missing we fall back to the aggregated line only.
+        // anti-overclassification rules (e.g. C-SSRS ítem 6b = No → no recent
+        // behavior; PHQ-9 ítem 9 = 0 → no suicidality). The score+band alone
+        // don't disambiguate; the per-item answer is the binding signal.
+        // Defensive on shape: if the join fails or rows are missing we fall
+        // back to the aggregated line only.
         supabase
           .from('questionnaire_answers')
           .select(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePHQ9, scoreGAD7, scoreASQ, scoreBDI2, scoreBAI, scoreCSSRS } from '@/lib/shared/questionnaires/scoring'
+import { scorePHQ9, scoreGAD7, scoreBDI2, scoreBAI, scoreCSSRS } from '@/lib/shared/questionnaires/scoring'
 
 // ---------------------------------------------------------------------------
 // PHQ-9
@@ -83,44 +83,9 @@ describe('scoreGAD7', () => {
 })
 
 // ---------------------------------------------------------------------------
-// ASQ
+// ASQ — Borrado en Plan 8 T1.7 (2026-05-17). Sustituido por C-SSRS al final
+// de este archivo. Tests de scoreASQ eliminados con el scorer.
 // ---------------------------------------------------------------------------
-
-describe('scoreASQ', () => {
-  it('11. all zeros (4 items) → negative, score 0, no flags, requiresReview false', () => {
-    const result = scoreASQ([0, 0, 0, 0])
-    expect(result.totalScore).toBe(0)
-    expect(result.severityBand).toBe('negative')
-    expect(result.flags).toHaveLength(0)
-    expect(result.requiresReview).toBe(false)
-  })
-
-  it('12. [1,0,0,0] → positive, requiresReview true, no acute flag', () => {
-    const result = scoreASQ([1, 0, 0, 0])
-    expect(result.severityBand).toBe('positive')
-    expect(result.requiresReview).toBe(true)
-    expect(result.flags).toHaveLength(0)
-  })
-
-  it('13. [1,0,0,0,1] → positive, requiresReview true, acute_risk flag', () => {
-    const result = scoreASQ([1, 0, 0, 0, 1])
-    expect(result.severityBand).toBe('positive')
-    expect(result.requiresReview).toBe(true)
-    expect(result.flags).toHaveLength(1)
-    expect(result.flags[0]).toEqual({ itemOrder: 5, reason: 'acute_risk' })
-  })
-
-  it('14. [0,0,0,0,1] → negative (item 5 ignored if screen negative), no flags', () => {
-    const result = scoreASQ([0, 0, 0, 0, 1])
-    expect(result.severityBand).toBe('negative')
-    expect(result.flags).toHaveLength(0)
-    expect(result.requiresReview).toBe(false)
-  })
-
-  it('15. wrong length (3) → throws', () => {
-    expect(() => scoreASQ([0, 0, 0])).toThrow()
-  })
-})
 
 // ---------------------------------------------------------------------------
 // BDI-II

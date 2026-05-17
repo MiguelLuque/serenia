@@ -340,18 +340,20 @@ describe('submitAnswers', () => {
     )
   })
 
-  it('ASQ acute → inserts risk_event with severity critical', async () => {
-    const instance = makeInstance({ questionnaire_id: 'def-asq' })
-    const definition = makeDefinition({ id: 'def-asq', code: 'ASQ', domain: 'risk' })
-    const items = makeItems(5, 'def-asq')
+  it('C-SSRS acute_risk con override behaviorRecent (ítem 6b = Sí) → critical risk_event', async () => {
+    const instance = makeInstance({ questionnaire_id: 'def-cssrs' })
+    const definition = makeDefinition({ id: 'def-cssrs', code: 'CSSRS', domain: 'suicide_risk' })
+    const items = makeItems(7, 'def-cssrs')
 
-    // [1,0,0,0,1] → positive + acute_risk flag
+    // [0,0,0,0,0,1,1] → acute_risk + flag acute_risk itemOrder=7 (override)
     const answers = [
-      { itemOrder: 1, valueNumeric: 1, valueRaw: '1' },
+      { itemOrder: 1, valueNumeric: 0, valueRaw: '0' },
       { itemOrder: 2, valueNumeric: 0, valueRaw: '0' },
       { itemOrder: 3, valueNumeric: 0, valueRaw: '0' },
       { itemOrder: 4, valueNumeric: 0, valueRaw: '0' },
-      { itemOrder: 5, valueNumeric: 1, valueRaw: '1' },
+      { itemOrder: 5, valueNumeric: 0, valueRaw: '0' },
+      { itemOrder: 6, valueNumeric: 1, valueRaw: '1' },
+      { itemOrder: 7, valueNumeric: 1, valueRaw: '1' },
     ]
 
     let callCount = 0
@@ -373,7 +375,7 @@ describe('submitAnswers', () => {
 
     const result = await submitAnswers(supabase, { instanceId: 'instance-1', answers })
 
-    expect(result.severityBand).toBe('positive')
+    expect(result.severityBand).toBe('acute_risk')
     expect(result.flags).toHaveLength(1)
     expect(result.flags[0].reason).toBe('acute_risk')
 
@@ -389,17 +391,20 @@ describe('submitAnswers', () => {
     )
   })
 
-  it('ASQ positive without acute → inserts risk_event with severity high', async () => {
-    const instance = makeInstance({ questionnaire_id: 'def-asq' })
-    const definition = makeDefinition({ id: 'def-asq', code: 'ASQ', domain: 'risk' })
-    const items = makeItems(4, 'def-asq')
+  it('C-SSRS high_risk (ítem 4 = Sí, intención sin plan) → high risk_event', async () => {
+    const instance = makeInstance({ questionnaire_id: 'def-cssrs' })
+    const definition = makeDefinition({ id: 'def-cssrs', code: 'CSSRS', domain: 'suicide_risk' })
+    const items = makeItems(7, 'def-cssrs')
 
-    // [1,0,0,0] → positive, no acute flag (only 4 answers submitted)
+    // [0,1,0,1,0,0,0] → high_risk, sin flag (banda alta sin lifetime)
     const answers = [
-      { itemOrder: 1, valueNumeric: 1, valueRaw: '1' },
-      { itemOrder: 2, valueNumeric: 0, valueRaw: '0' },
+      { itemOrder: 1, valueNumeric: 0, valueRaw: '0' },
+      { itemOrder: 2, valueNumeric: 1, valueRaw: '1' },
       { itemOrder: 3, valueNumeric: 0, valueRaw: '0' },
-      { itemOrder: 4, valueNumeric: 0, valueRaw: '0' },
+      { itemOrder: 4, valueNumeric: 1, valueRaw: '1' },
+      { itemOrder: 5, valueNumeric: 0, valueRaw: '0' },
+      { itemOrder: 6, valueNumeric: 0, valueRaw: '0' },
+      { itemOrder: 7, valueNumeric: 0, valueRaw: '0' },
     ]
 
     let callCount = 0
@@ -421,7 +426,7 @@ describe('submitAnswers', () => {
 
     const result = await submitAnswers(supabase, { instanceId: 'instance-1', answers })
 
-    expect(result.severityBand).toBe('positive')
+    expect(result.severityBand).toBe('high_risk')
     expect(result.flags).toHaveLength(0)
 
     // 7 calls: instance, definition, items, answers, result, update instance, risk_event

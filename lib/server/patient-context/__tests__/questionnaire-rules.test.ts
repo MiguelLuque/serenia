@@ -123,9 +123,9 @@ describe('computeQuestionnaireRetakeHint', () => {
     expect(computeQuestionnaireRetakeHint(ctx, NOW)).toBeNull()
   })
 
-  // 10. ASQ severe >7d → null (ASQ not covered)
-  it('returns null for ASQ entries regardless of score or age', () => {
-    const ctx = makeCtx([{ code: 'ASQ', score: 20, band: 'severe', scoredAt: daysAgo(30), deltaVsPrevious: null }])
+  // 10. C-SSRS severe >7d → null (cribados categóricos no triggean retake hint)
+  it('returns null for C-SSRS entries regardless of score or age', () => {
+    const ctx = makeCtx([{ code: 'CSSRS', score: 4, band: 'acute_risk', scoredAt: daysAgo(30), deltaVsPrevious: null }])
     expect(computeQuestionnaireRetakeHint(ctx, NOW)).toBeNull()
   })
 

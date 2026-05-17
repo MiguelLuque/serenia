@@ -17,42 +17,42 @@ describe('questionnaire registry', () => {
     expect(typeof def?.scorer).toBe('function')
   })
 
-  it('returns a definition for GAD7, ASQ, BDI2, BAI and CSSRS as well', () => {
+  it('returns a definition for GAD7, BDI2, BAI and CSSRS as well', () => {
     const gad = getDefinition('GAD7')
-    const asq = getDefinition('ASQ')
     const bdi = getDefinition('BDI2')
     const bai = getDefinition('BAI')
     const cssrs = getDefinition('CSSRS')
     expect(gad).not.toBeNull()
-    expect(asq).not.toBeNull()
     expect(bdi).not.toBeNull()
     expect(bai).not.toBeNull()
     expect(cssrs).not.toBeNull()
     expect(gad?.code).toBe('GAD7')
-    expect(asq?.code).toBe('ASQ')
     expect(bdi?.code).toBe('BDI2')
     expect(bai?.code).toBe('BAI')
     expect(cssrs?.code).toBe('CSSRS')
   })
 
-  it('returns null for an unknown code', () => {
+  it('returns null for an unknown code (including the removed ASQ)', () => {
     expect(getDefinition('UNKNOWN')).toBeNull()
     expect(getDefinition('')).toBeNull()
+    // ASQ borrado en Plan 8 T1.7 — sustituido por C-SSRS.
+    expect(getDefinition('ASQ')).toBeNull()
   })
 
-  it('lists all six codes (PHQ9, GAD7, ASQ, BDI2, BAI, CSSRS)', () => {
+  it('lists all five codes (PHQ9, GAD7, BDI2, BAI, CSSRS)', () => {
     const codes = listCodes()
-    expect(codes).toHaveLength(6)
+    expect(codes).toHaveLength(5)
     expect(codes).toEqual(
-      expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2', 'BAI', 'CSSRS']),
+      expect.arrayContaining(['PHQ9', 'GAD7', 'BDI2', 'BAI', 'CSSRS']),
     )
+    expect(codes).not.toContain('ASQ')
   })
 
-  it('lists all six codes as patient-rated (none is clinician-rated yet)', () => {
+  it('lists all five codes as patient-rated (none is clinician-rated yet)', () => {
     const patient = listPatientCodes()
-    expect(patient).toHaveLength(6)
+    expect(patient).toHaveLength(5)
     expect(patient).toEqual(
-      expect.arrayContaining(['PHQ9', 'GAD7', 'ASQ', 'BDI2', 'BAI', 'CSSRS']),
+      expect.arrayContaining(['PHQ9', 'GAD7', 'BDI2', 'BAI', 'CSSRS']),
     )
   })
 
@@ -76,13 +76,6 @@ describe('questionnaire registry', () => {
     const result = def.scorer([3, 3, 3, 3, 3, 3, 3])
     expect(result.totalScore).toBe(21)
     expect(result.severityBand).toBe('severe')
-  })
-
-  it('ASQ scorer via registry produces negative for all-zero screening', () => {
-    const def = getDefinition('ASQ')!
-    const result = def.scorer([0, 0, 0, 0])
-    expect(result.severityBand).toBe('negative')
-    expect(result.requiresReview).toBe(false)
   })
 
   it('BDI2 scorer via registry produces severe for all-3 answers + suicidality flag', () => {

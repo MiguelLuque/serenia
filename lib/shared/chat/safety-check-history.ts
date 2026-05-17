@@ -5,7 +5,7 @@
  * instruye al modelo a comprobar riesgo (Línea 024, "estás a salvo",
  * "hacerte daño", "pensando en suicidarte", etc.). Lo consume
  * `lib/chat/safety-state.ts` como fallback cuando no hay datos clínicos
- * en BD (ASQ no scored).
+ * en BD (C-SSRS no scored, o aún no propuesto).
  *
  * Diseño: prefiere FALSO POSITIVO ("ya hice check") sobre falso negativo —
  * es preferible que el LLM peque de no-insistir que de insistir.

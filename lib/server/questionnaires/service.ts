@@ -232,13 +232,14 @@ export async function submitAnswers(
   if (updateError) throw updateError
 
   // 6. Insert a single risk_event with highest applicable severity
-  //    - ASQ positive with item 5 = 1  → critical
-  //    - ASQ positive without acute   → high
-  //    - PHQ-9 item 9 flag            → high
+  //    - C-SSRS acute_risk band con flag acute_risk (item 6b reciente) → critical
+  //    - C-SSRS acute_risk band con flag suicidality (5/6 lifetime)    → critical
+  //    - C-SSRS high_risk band                                         → high
+  //    - PHQ-9 / BDI-II item suicidalidad flag                         → high
   const hasAcute = scoringResult.flags.some((f) => f.reason === 'acute_risk')
   const hasSuicidality =
     scoringResult.flags.some((f) => f.reason === 'suicidality') ||
-    (code === 'ASQ' && scoringResult.severityBand === 'positive')
+    (code === 'CSSRS' && scoringResult.severityBand === 'high_risk')
 
   if (hasAcute || hasSuicidality) {
     const severity = hasAcute ? 'critical' : 'high'

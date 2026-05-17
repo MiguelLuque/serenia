@@ -504,14 +504,14 @@ describe('renderPatientContextBlock — questionnaire delta', () => {
   it('renders 0 delta correctly', () => {
     const ctx = makeTierACtx({
       recentQuestionnaires: [
-        { code: 'ASQ', score: 2, band: 'low', scoredAt: daysAgo(1), deltaVsPrevious: 0 },
+        { code: 'CSSRS', score: 2, band: 'low_risk', scoredAt: daysAgo(1), deltaVsPrevious: 0 },
       ],
     })
     const block = renderPatientContextBlock(ctx)
     // Match the exact rendered shape of the 0-delta questionnaire line:
-    //   - ASQ: 2 (low) el <date> — antes 0
+    //   - C-SSRS: 2 (low_risk) el <date> — antes 0
     // The bare char '0' is too loose (appears in dates, ages, session nº).
-    expect(block).toContain('- ASQ: 2 (low) el ')
+    expect(block).toContain('- C-SSRS: 2 (low_risk) el ')
     expect(block).toContain(' — antes 0')
   })
 
@@ -767,7 +767,7 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
     const heavyQuestionnaires = [
       { code: 'PHQ9' as const, score: 12, band: 'moderate', scoredAt: daysAgo(1), deltaVsPrevious: 2 },
       { code: 'GAD7' as const, score: 8, band: 'mild', scoredAt: daysAgo(2), deltaVsPrevious: -1 },
-      { code: 'ASQ' as const, score: 3, band: 'low', scoredAt: daysAgo(3), deltaVsPrevious: 0 },
+      { code: 'CSSRS' as const, score: 1, band: 'low_risk', scoredAt: daysAgo(3), deltaVsPrevious: 0 },
     ]
 
     const ctx = makeTierACtx({

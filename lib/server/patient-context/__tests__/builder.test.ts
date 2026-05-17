@@ -402,8 +402,8 @@ describe('buildPatientContext', () => {
   })
 
   // I3.1: all 3 questionnaire codes present — prove grouping + emit-up-to-3
-  it('recentQuestionnaires: PHQ9 + GAD7 + ASQ all present → 3 entries with correct deltas', async () => {
-    const makeQRow = (code: 'PHQ9' | 'GAD7' | 'ASQ', score: number, offset: number) => ({
+  it('recentQuestionnaires: PHQ9 + GAD7 + CSSRS all present → 3 entries with correct deltas', async () => {
+    const makeQRow = (code: 'PHQ9' | 'GAD7' | 'CSSRS', score: number, offset: number) => ({
       total_score: score,
       severity_band: 'moderate',
       created_at: daysAgo(offset),
@@ -417,7 +417,7 @@ describe('buildPatientContext', () => {
     const qRows = [
       makeQRow('PHQ9', 10, 1), // latest PHQ9
       makeQRow('GAD7', 8, 2), // latest GAD7
-      makeQRow('ASQ', 3, 3), // latest ASQ (only one → null delta)
+      makeQRow('CSSRS', 3, 3), // latest CSSRS (only one → null delta)
       makeQRow('PHQ9', 14, 5), // previous PHQ9 → delta 10-14=-4
       makeQRow('GAD7', 5, 6), // previous GAD7 → delta 8-5=+3
     ]
@@ -435,7 +435,7 @@ describe('buildPatientContext', () => {
     const byCode = Object.fromEntries(ctx.recentQuestionnaires.map((q) => [q.code, q]))
     expect(byCode.PHQ9).toMatchObject({ score: 10, deltaVsPrevious: -4 })
     expect(byCode.GAD7).toMatchObject({ score: 8, deltaVsPrevious: 3 })
-    expect(byCode.ASQ).toMatchObject({ score: 3, deltaVsPrevious: null })
+    expect(byCode.CSSRS).toMatchObject({ score: 3, deltaVsPrevious: null })
   })
 
   // I3.2: pendingTasks estado narrowing and acordadaEn = created_at

@@ -19,7 +19,6 @@ import {
   type ScoringStrategy,
   scorePHQ9,
   scoreGAD7,
-  scoreASQ,
   scoreBDI2,
   scoreBAI,
   scoreCSSRS,
@@ -30,7 +29,7 @@ import {
  * NO declara este tipo desde Plan 8 Bloque 4. Añadir uno aquí + entrada en
  * `QUESTIONNAIRE_REGISTRY` + seed row en `questionnaire_definitions`.
  */
-export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'ASQ' | 'BDI2' | 'BAI' | 'CSSRS'
+export type QuestionnaireCode = 'PHQ9' | 'GAD7' | 'BDI2' | 'BAI' | 'CSSRS'
 
 export interface QuestionnaireDefinition {
   code: QuestionnaireCode
@@ -70,14 +69,6 @@ export const QUESTIONNAIRE_REGISTRY: Record<
     durationCopy: '7 preguntas · unos 2 minutos',
     isClinicianRated: false,
     scorer: scoreGAD7,
-  },
-  ASQ: {
-    code: 'ASQ',
-    label: 'ASQ — Unas preguntas breves sobre seguridad',
-    shortLabel: 'ASQ',
-    durationCopy: '4 ó 5 preguntas · menos de 1 minuto',
-    isClinicianRated: false,
-    scorer: scoreASQ,
   },
   BDI2: {
     code: 'BDI2',
@@ -140,7 +131,7 @@ export function listPatientCodes(): QuestionnaireCode[] {
  * Tras Plan 8 Fase 1 T1.1+T1.2:
  *   - Depresión: PHQ-9 (primario) + BDI-II (secundario)
  *   - Ansiedad: GAD-7 (primario) + BAI (secundario)
- * ASQ y C-SSRS son cribados categóricos, no trends. STAI tiene subscores
+ * C-SSRS es cribado categórico, no trend. STAI tiene subscores
  * (state/trait) — al implementarse en T1.3 se decidirá si entra aquí o
  * se trata aparte por su shape distinto.
  *
