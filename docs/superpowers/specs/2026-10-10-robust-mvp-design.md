@@ -27,4 +27,4 @@ No se despliega ni modifica la BD remota en esta fase. Una mejora local no equiv
 
 ## Criterios de finalización
 
-Los cuatro bloques del plan están implementados, revisados y consolidados; los gates locales tienen resultados completos; la auditoría distingue corregido, pendiente y no verificado; existe una recomendación de IA con costes trazables y un procedimiento reproducible para comparar candidatos. El último control usa el artefacto construido y una BD sintética, con las limitaciones declaradas.
+Todos los bloques del plan están implementados, revisados y consolidados; los gates locales tienen resultados completos; la auditoría distingue corregido, pendiente y no verificado; existe una recomendación de IA con costes trazables y un procedimiento reproducible para comparar candidatos. El último control usa el artefacto construido y una BD sintética, con las limitaciones declaradas.

@@ -62,20 +62,38 @@
 - [ ] Regresiones RED sobre 18.º cumpleaños, menor/futuro/fecha imposible; errores del chat recuperables; cuestionario nuevo sin estado heredado; riesgos visibles/editables; informe rejected/superseded oculto y nombre disponible.
 - [ ] Implementar validación adulta, registro de aceptación y gating coherente con usuarios existentes; comprobar datos actuales y versión aceptada al iniciar sesión y en chat, sin confiar únicamente en `onboarding_status` editable por el paciente. No admitir escrituras directas que fabriquen el registro servidor de aceptación. Mensajes precisos sin promesa inventada de revisión actual.
 - [ ] Implementar recuperación del chat preservando texto, estados accesibles y selección semántica; rehidratar el último turno recuperable mediante la proyección scoped de Task 2 y reintentar el mismo ID/texto sin duplicarlo. Permitir escribir mientras existe cribado pendiente y ofrecer una salida accesible para interrumpir una espera/fallo y enviar una señal urgente nueva con su propio ID. C-SSRS con ramas documentadas y normalización compatible con Task 2. Conservar ventana temporal vigente y registrar discrepancia para acuerdo clínico.
-- [ ] Mostrar/editar heteroaggression/substance_use_acute y actualizar la prioridad de bandeja conservando reglas aprobadas; resolver revisión antigua oculta por limit prematuro.
+- [ ] Mostrar/editar heteroaggression/substance_use_acute y actualizar la prioridad de bandeja conservando reglas aprobadas; resolver revisión antigua oculta por limit prematuro con filtro previo y paginación real, trabajo acotado por petición y prioridad global coherente; no cargar el backlog completo para ordenarlo en memoria.
 - [ ] Usar la versión autorizada de informes y fallback de nombre informal; aplicar también la frontera de lectura en BD: paciente accede únicamente a la proyección autorizada del resumen, sin `clinical_notes` ni informe interno completo vía Data API. Conservar lecturas del clínico y contexto privado server-side validado. Verificar recarga/navegación/error con fixtures sintéticos de paciente/clínico.
 - [ ] Informe, tests de componentes/navegador y revisión independiente.
 
-## Task 4: Dependencias, gates y evaluación de modelos
+## Task 4: Dependencias y herramientas Supabase
 
-**Files:** `package.json`, lockfile, `next.config.ts`, `eslint.config.mjs`, `hooks/use-mobile.ts`, tests con errores lint, scripts/CI, `.env.example`, configuración/adaptadores LLM y `docs/audits/`.
+**Files:** `package.json`, lockfile, `next.config.ts`, `eslint.config.mjs`, `hooks/use-mobile.ts`, tests con errores lint, scripts/CI, `.env.example`, seed/configuración Supabase y `docs/operations/`.
 
-**Interfaces:** Mantener roles conversational/structured/fast compatibles; no habilitar decisiones en pacientes sin evaluación. Harness de modelos usa entradas sintéticas, versión/modelo registrados, límites de gasto explícitos y no imprime entradas privadas. Si no hay credenciales aprobadas, evaluación offline pasa y comparación online queda no ejecutada.
+**Interfaces:** Conservar contratos de las Tasks 1–3. Usar los candidatos publicados en `docs/audits/2026-10-10-dependency-upgrade.md`, comprobando la instalación efectiva y sus guías. El wrapper Supabase conserva estado local aislado y opt-out en cada comando; nunca opera sobre un proyecto enlazado.
 
 - [ ] Fijar dependencias corregidas tras investigar advisories y uso real; retirar herramientas CLI del runtime si corresponde, sin `audit fix --force`. No instalar en el node_modules de otro checkout.
 - [ ] Resolver errores lint de fuente y pruebas con tipos útiles, raíz Turbopack explícita y scripts de typecheck/verify/DB. Añadir CI con gates fail-closed y reporte de vulnerabilidades. Actualizar SDK/CLI Supabase y el uso de skills oficiales fijadas por commit; documentación y comandos locales de tipos/advisors con límites de entorno explícitos. Revisar todos los adaptadores SSR del proyecto (browser, servidor, proxy y callback) con las guías de la versión instalada; verificar refresh, cookies/cache headers, PKCE y signout sin mutar configuración global.
+- [ ] Corregir el bootstrap/seed para funcionar desde vacío con las migraciones actuales, sin reincluir ASQ retirado ni depender de metacomandos psql incompatibles. Incluir `NEXT_PUBLIC_SITE_URL` y documentar claves modernas con fallback explícito y sin rotar claves.
+- [ ] Verificar los reducers y serializer reales de Workflow frente a los payloads previos conservados en `.superpowers/sdd/2026-10-10-robust-mvp/workflow-wire-before/`, además del roundtrip nuevo. Registrar la limitación original de DataView; no presentar un JSON roundtrip como evidencia de wire format. El replay durable del artefacto construido se comprueba en Task 6.
+- [ ] Implementar el build local aislado del commit mediante snapshot sin `.env.local`, entorno explícito y dependencias instaladas copiadas. Ejecutar tests, lint, tipos, build aislado, SQL y auditoría del lock final; conservar errores completos y advisories residuales. Informe y revisión independiente del bloque.
+
+## Task 5: Evaluación y configuración de IA
+
+**Files:** configuración/adaptadores LLM, scripts de evaluación, fixtures sintéticos, tests asociados y `docs/audits/`.
+
+**Interfaces:** Mantener roles conversational/structured/fast compatibles; no habilitar decisiones en pacientes sin evaluación. Harness de modelos usa entradas sintéticas, versión/modelo registrados, límites de gasto explícitos y no imprime entradas privadas. Si no hay credenciales aprobadas, evaluación offline pasa y comparación online queda no ejecutada.
+
 - [ ] Documentar comparativa de modelos con fuentes primarias, precio de entrada/salida, capacidades y límites; evaluar Jev/Decisions como capa auxiliar. Separar ahorro proyectado y rendimiento medido.
 - [ ] Añadir escenarios y procedimiento de evaluación en español con errores críticos, abstención/calibración, latencia/coste y estabilidad de esquema; bandera de decisiones apagada por defecto.
+- [ ] Añadir presets tipados para candidatos, un adaptador auxiliar acotado y evaluación reproducible offline. Conservar los modelos actuales del flujo paciente hasta superar el benchmark clínico. No ejecutar llamadas online ni añadir autoridad probabilística sobre permisos, edad, puntuaciones, alertas o cierre. Informe, pruebas focalizadas y revisión independiente.
+
+## Task 6: Aceptación integral y entrega
+
+**Files:** scripts/fixtures de aceptación fuera de `app/`, tests de integración, README y auditorías consolidadas. Mantener los contratos productivos de Tasks 1–5.
+
+- [ ] Arrancar Supabase local con Auth/PostgREST y actores ficticios; verificar migraciones/seed, grants/RLS, consentimiento y proyección privada mediante JWT reales. Ejecutar tipos/advisors estrictos de la CLI final.
+- [ ] Ejecutar el ciclo de paciente, chat, cuestionarios, error/retry/recarga, cierre, informe y revisión clínica sobre `next start` del build final aislado. Usar el proveedor sintético global documentado del SDK, sin endpoints de bypass, credenciales reales ni fallback externo. Comprobar el proveedor también en los pasos generados de Workflow y el replay del mismo run tras reinicio.
 - [ ] Consolidar auditoría con estado de cada hallazgo y roadmap de gates externos. Actualizar README con configuración, arranque y comandos exactos; los comandos de fixtures/promoción local deben exigir URL loopback y no cargar `.env.local` implícitamente. No alterar permisos ni cuentas remotas durante la verificación.
 - [ ] Ejecutar `npm test`, `npm run lint`, typecheck, build, SQL/harness y navegador sobre artefacto final; revisar toda la rama con agente independiente y corregir regresiones.
 
