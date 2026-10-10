@@ -81,13 +81,32 @@ begin
  if not found then raise exception 'Conversation ownership mismatch' using errcode='23514'; end if;
  if s.status<>'closed' then
   if s.status<>'open' or c.status<>'active' then raise exception 'Invalid closure transition' using errcode='23514'; end if;
+  if p_reason='inactivity' and s.last_activity_at>clock_timestamp()-interval '30 minutes' then raise exception 'Session activity resumed' using errcode='23514'; end if;
+  stamp=clock_timestamp();
   update clinical_sessions set status='closed',closed_at=stamp,closure_reason=p_reason where id=s.id;
   update conversations set status='closed',ended_at=stamp where id=c.id;
  end if;
+ -- The accepted user text/risk remains part of the sealed transcript. Any
+ -- still-running response loses its token before the outbox becomes visible.
+ update chat_turns set status='interrupted',token=gen_random_uuid(),lease_until=now(),error_code='session_closed' where session_id=s.id and status in ('generating','failed');
+ delete from session_close_proposals where session_id=s.id;
  insert into assessment_jobs(session_id) values(s.id) on conflict do nothing;
 end $$;
 revoke all on function close_session_atomic(uuid,uuid,text) from public,anon;
 grant execute on function close_session_atomic(uuid,uuid,text) to authenticated,service_role;
+
+-- Protect even legacy server writers against inserting after closure.
+-- The parent row lock serializes this with close_session_atomic.
+create function require_open_message_session() returns trigger language plpgsql set search_path=public,pg_temp as $$
+begin
+ if new.session_id is not null then
+  perform 1 from clinical_sessions where id=new.session_id and status='open' for update;
+  if not found then raise exception 'Open message session required' using errcode='23514'; end if;
+ end if;
+ return new;
+end $$;
+revoke all on function require_open_message_session() from public,anon,authenticated;
+create trigger messages_require_open_session before insert on messages for each row execute function require_open_message_session();
 
 -- Server-only operations are invokers with narrowly granted EXECUTE. Their
 -- explicit owner is checked against locked parents even under service_role.
@@ -220,14 +239,17 @@ begin
  select * into t from chat_turns where session_id=s.id and request_id=p_request_id and token=p_token for update;
  if not found then raise exception 'Stale turn owner' using errcode='42501'; end if;
  if t.status='completed' then return; end if;
+ if s.status<>'open' then raise exception 'Session closed' using errcode='42501'; end if;
  if t.status<>'generating' or t.lease_until<now() then raise exception 'Expired turn' using errcode='42501'; end if;
  if p_close_reason is not null then
   if not (p_close_reason='time_limit' and s.opened_at<=now()-interval '1 hour') and not close_chat_turn(s.id,t.request_id,t.token,p_close_reason) then raise exception 'Closure not authorized' using errcode='42501'; end if;
-  perform close_session_atomic(s.id,t.user_id,p_close_reason);
  end if;
  if jsonb_typeof(p_parts) is distinct from 'array' or jsonb_array_length(p_parts)=0 or jsonb_typeof(p_chunks) is distinct from 'array' then raise exception 'Empty response' using errcode='23514'; end if;
  insert into messages(conversation_id,session_id,role,parts) values(s.conversation_id,s.id,'assistant',p_parts);
  update chat_turns set status='completed',response_parts=p_parts,response_chunks=p_chunks,error_code=null where session_id=s.id and request_id=t.request_id;
+ -- The own-turn close commits the assistant first, then seals the transcript
+ -- and creates its outbox in this same transaction. No worker sees a gap.
+ if p_close_reason is not null then perform close_session_atomic(s.id,t.user_id,p_close_reason); end if;
  delete from session_close_proposals where session_id=s.id;
  if p_proposal is not null and p_close_reason is null and s.status='open' then insert into session_close_proposals values(s.id,t.request_id,p_proposal); end if;
 end $$;

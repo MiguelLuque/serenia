@@ -13,12 +13,15 @@ export async function chatHarness() {
     safety: { kind: 'never_assessed' } as SafetyState,
     captured: [] as any[], writes: [] as any[],
     persistFailures: 0, generationFailure: false, urgentReply: false,
+    prompt: 'Active prompt', promptFailure: false, historyFailure: false, safetyFailure: false, omitAdmittedMessage: false,
     hook: async (_options: any) => { void _options },
   }
   const chain = (table: string) => {
     const q: any = {}
+    let rowLimit = Infinity
     for (const method of ['select','eq','gt','gte','in','order','limit','single','maybeSingle']) q[method] = vi.fn(() => q)
-    q.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'clinical_sessions' ? state.session : table === 'conversations' ? { id: 'conv-1', user_id: state.conversationOwner } : table === 'messages' ? state.rows : null, error: null, count: 0 }).then(resolve, reject)
+    q.limit = vi.fn((limit: number) => { rowLimit = limit; return q })
+    q.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'clinical_sessions' ? state.session : table === 'conversations' ? { id: 'conv-1', user_id: state.conversationOwner } : table === 'messages' ? state.rows.filter(row => !state.omitAdmittedMessage || !row.id.startsWith('user-turn')).slice(0, rowLimit) : null, error: table === 'messages' && state.historyFailure ? new Error('history unavailable') : null, count: 0 }).then(resolve, reject)
     return q
   }
   const service = { from: vi.fn(chain), rpc: vi.fn(async (name: string, args: any) => {
@@ -30,7 +33,7 @@ export async function chatHarness() {
       if (prior?.status === 'generating' || [...state.turns.values()].some(t => t.status !== 'completed' && t !== prior)) return { error: { code: '55P03' }, data: null }
       if (!prior) state.rows.push({ id: `user-${args.p_request_id}`, role: 'user', parts: [{ type: 'text', text: args.p_text }] })
       state.turns.set(args.p_request_id, { text: args.p_text, status: 'generating', previousRequest: state.previousRequest })
-      return { data: { replay: false, token: '11111111-1111-4111-8111-111111111111', urgent: state.urgentReply }, error: null }
+      return { data: { replay: false, token: '11111111-1111-4111-8111-111111111111', urgent: state.urgentReply, userMessageId: `user-${args.p_request_id}` }, error: null }
     }
     if (name === 'finish_chat_turn') {
       if (state.persistFailures-- > 0) return { error: { code: 'XX000' }, data: null }
@@ -50,9 +53,9 @@ export async function chatHarness() {
   }) }
   const authClient = { auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
   vi.doMock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => authClient, createServiceRoleClient: () => service }))
-  vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => 'Active prompt' }))
+  vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
   vi.doMock('@/lib/shared/llm/models', () => ({ llm: { conversational: () => 'synthetic-model' } }))
-  vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async () => state.safety }))
+  vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async () => { if (state.safetyFailure) throw new Error('safety unavailable'); return state.safety } }))
   vi.doMock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn(async () => ({ runId: 'synthetic-run' })) }))
   vi.doMock('@/lib/server/questionnaires/service', () => ({ createInstance: vi.fn(async () => ({ id: 'quiz' })), getActiveInstanceForSession: async () => null }))
   vi.doMock('ai', async importOriginal => {

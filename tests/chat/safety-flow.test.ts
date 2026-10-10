@@ -36,6 +36,23 @@ describe('safety notices and final input precedence',()=>{
     expect(h.state.rows.filter(row=>row.role==='assistant')).toHaveLength(1)
     expect(h.state.writes.find(w=>w.name==='begin_chat_turn').args.p_urgent).toBe(true)
   })
+  it('keeps safety resources when only the final prompt exceeds the context budget',async()=>{
+    const h=await chatHarness(); h.state.prompt='Synthetic system context '.repeat(600)
+    h.state.rows.push({id:'early',role:'user',parts:[{type:'text',text:'x'.repeat(70000)}]})
+    const response=await h.post('Voy a matarme')
+    expect(response.status).toBe(200)
+    const body=await response.text(); expect(body).toContain('024'); expect(body).toContain('112')
+    expect(h.state.captured).toHaveLength(0)
+    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+  })
+  it.each(['historyFailure','safetyFailure','promptFailure'] as const)('keeps deterministic resources when context preparation fails: %s',async failure=>{
+    const h=await chatHarness(); h.state[failure]=true
+    const response=await h.post('Voy a matarme')
+    expect(response.status).toBe(200)
+    const body=await response.text(); expect(body).toContain('024'); expect(body).toContain('112')
+    expect(h.state.captured).toHaveLength(0)
+    expect(h.state.session.status).toBe('open')
+  })
   it('records crisis before a hard time limit and responds with safety resources',async()=>{
     const h=await chatHarness(); h.state.session.opened_at=new Date(Date.now()-61*60*1000).toISOString()
     const response=await h.post('Quiero matarme esta noche')

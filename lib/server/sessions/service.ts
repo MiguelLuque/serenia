@@ -39,7 +39,15 @@ export async function getOrResolveActiveSession(
   const inactiveDuration = Date.now() - lastActivity
 
   if (inactiveDuration >= SESSION_INACTIVITY_MS) {
-    await closeSession(supabase, session.id, 'inactivity')
+    try { await closeSession(supabase, session.id, 'inactivity') }
+    catch (error) {
+      if (typeof error !== 'object' || !error || !('code' in error) || error.code !== '23514' || !('message' in error) || error.message !== 'Session activity resumed') throw error
+      // Activity may have resumed after the first read. SQL rejected the
+      // stale closure under lock; return the current authorized open session.
+      const { data: current, error: readError } = await supabase.from('clinical_sessions').select().eq('id', session.id).eq('user_id', userId).eq('status', 'open').maybeSingle()
+      if (readError) throw readError
+      return current
+    }
     return null
   }
 

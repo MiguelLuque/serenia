@@ -221,4 +221,54 @@ do $$ declare sid uuid:='20000000-0000-0000-0000-000000000013'; before_row jsonb
  if before_row is distinct from (select to_jsonb(a) from assessments a where session_id=sid and status='rejected') then raise exception 'Late failure changed clinical rejection'; end if;
 end $$;
 reset role;
+-- External closure fences admitted work before any assessment can read it.
+insert into conversations(id,user_id) values('10000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id) values('20000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000015');
+set local role service_role;
+do $$ declare sid uuid:='20000000-0000-0000-0000-000000000015'; uid uuid:='00000000-0000-0000-0000-000000000002'; claim jsonb; transcript jsonb; jobs integer;
+begin
+ claim=begin_chat_turn(sid,uid,'external-close','Voy a matarme',true,true);
+ perform close_session_atomic(sid,uid,'user_request');
+ select jsonb_agg(to_jsonb(m) order by m.created_at,m.id) into transcript from messages m where session_id=sid;
+ select count(*) into jobs from claim_assessment_jobs(1,sid);
+ if jobs<>1 then raise exception 'Closed session cannot be claimed'; end if;
+ perform pg_temp.expect_failure(format('select finish_chat_turn(%L,%L,%L,%L,%L)',sid,'external-close',claim->>'token','[{"type":"text","text":"Late assistant"}]','[]'));
+ perform pg_temp.expect_failure(format('insert into messages(session_id,conversation_id,role,parts) values(%L,%L,%L,%L)',sid,'10000000-0000-0000-0000-000000000015','assistant','[{"type":"text","text":"Legacy late writer"}]'));
+ if transcript is distinct from (select jsonb_agg(to_jsonb(m) order by m.created_at,m.id) from messages m where session_id=sid) then raise exception 'Report transcript changed after close'; end if;
+ if (select status from chat_turns where session_id=sid)<>'interrupted' then raise exception 'External closure did not fence turn'; end if;
+ if (select closure_reason from clinical_sessions where id=sid)<>'user_request' or not exists(select 1 from risk_events where session_id=sid) then raise exception 'External closure changed reason or lost signal'; end if;
+ perform pg_temp.expect_failure(format('select begin_chat_turn(%L,%L,%L,%L,true,true)',sid,uid,'external-close','Voy a matarme'));
+end $$;
+reset role;
+-- A candidate selected before renewed activity must remain open.
+insert into conversations(id,user_id) values('10000000-0000-0000-0000-000000000016','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id,last_activity_at) values('20000000-0000-0000-0000-000000000016','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000016',now()-interval '31 minutes');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+select touch_session_atomic('20000000-0000-0000-0000-000000000016');
+set local role service_role;
+select pg_temp.expect_failure($q$select close_session_atomic('20000000-0000-0000-0000-000000000016','00000000-0000-0000-0000-000000000002','inactivity')$q$);
+do $$ begin
+ if (select status from clinical_sessions where id='20000000-0000-0000-0000-000000000016')<>'open' or exists(select 1 from assessment_jobs where session_id='20000000-0000-0000-0000-000000000016') then raise exception 'Renewed activity closed or enqueued'; end if;
+end $$;
+update clinical_sessions set last_activity_at=now()-interval '31 minutes' where id='20000000-0000-0000-0000-000000000016';
+select close_session_atomic('20000000-0000-0000-0000-000000000016','00000000-0000-0000-0000-000000000002','inactivity');
+reset role;
+-- A failure creating the outbox after own-turn assistant insertion must undo
+-- the assistant, completion and both parent closures together.
+insert into conversations(id,user_id) values('10000000-0000-0000-0000-000000000017','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id) values('20000000-0000-0000-0000-000000000017','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000017');
+create function pg_temp.fail_test_outbox() returns trigger language plpgsql as $$ begin raise exception 'Synthetic outbox failure' using errcode='23514'; end $$;
+create trigger test_outbox_failure before insert on assessment_jobs for each row when (new.session_id='20000000-0000-0000-0000-000000000017') execute function pg_temp.fail_test_outbox();
+set local role service_role;
+do $$ declare sid uuid:='20000000-0000-0000-0000-000000000017'; claim jsonb; begin
+ claim=begin_chat_turn(sid,'00000000-0000-0000-0000-000000000002','own-close','Voy a matarme',true,true);
+ perform pg_temp.expect_failure(format('select finish_chat_turn(%L,%L,%L,%L,%L,null,%L)',sid,'own-close',claim->>'token','[{"type":"text","text":"Línea 024"}]','[]','crisis_detected'));
+ if exists(select 1 from messages where session_id=sid and role='assistant') or (select status from chat_turns where session_id=sid)<>'generating' or (select status from clinical_sessions where id=sid)<>'open' or (select status from conversations where id='10000000-0000-0000-0000-000000000017')<>'active' or exists(select 1 from assessment_jobs where session_id=sid) then raise exception 'Own-turn close partially committed'; end if;
+end $$;
+reset role;
+drop trigger test_outbox_failure on assessment_jobs;
+set local role service_role;
+select finish_chat_turn('20000000-0000-0000-0000-000000000017','own-close',(select token from chat_turns where session_id='20000000-0000-0000-0000-000000000017'),'[{"type":"text","text":"Línea 024"}]','[]',null,'crisis_detected');
+reset role;
 rollback;

@@ -52,6 +52,19 @@ describe('authenticated server-owned chat transport', () => {
     release(); expect((await first).status).toBe(200)
     expect(h.state.captured).toHaveLength(1)
   })
+  it.each([['El texto nuevo distintivo',503],['Voy a matarme',200]] as const)('detects raw-row truncation before filtering tool-only history: %s',async(text,status)=>{
+    const h=await chatHarness()
+    h.state.rows.push(...Array.from({length:162},(_,i)=>({id:`legacy-${i}`,role:'assistant',parts:i<2?[{type:'tool-example',state:'output-available',output:{}}]:[{type:'text',text:`Short historical text ${i}`}]})))
+    const response=await h.post(text)
+    expect(response.status).toBe(status)
+    expect(h.state.captured).toHaveLength(0)
+    if(status===200) expect(await response.text()).toContain('024')
+  })
+  it('rejects an incomplete history even below the sentinel if the admitted message is absent',async()=>{
+    const h=await chatHarness(); h.state.omitAdmittedMessage=true
+    expect((await h.post('Distinct admitted input')).status).toBe(503)
+    expect(h.state.captured).toHaveLength(0)
+  })
   it('returns an observable retryable error on model failure', async()=>{
     const h=await chatHarness(); h.state.generationFailure=true
     expect((await h.post()).status).toBe(503)

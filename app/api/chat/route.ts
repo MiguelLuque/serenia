@@ -45,34 +45,28 @@ export async function POST(req: Request) {
   const crisis = detectCrisis(lastUserText)
   const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: crisis.detected && hasHighSignalTerm(crisis.matchedTerms) })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
-  const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean }
+  const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string }
   if (turn.replay) return replay(turn.chunks ?? [])
   const token = turn.token
-  try {
-    const expired = isSessionExpired(session)
+  const expired = isSessionExpired(session)
+  const finishStaticReply = async (closeReason: 'crisis_detected' | 'time_limit' | null) => {
+    const text = crisis.detected
+      ? `Lo que cuentas necesita apoyo inmediato. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. No esperes a completar un cuestionario para pedir ayuda. La señal queda registrada para revisión clínica.`
+      : 'Se ha alcanzado el límite de tiempo de la sesión. La sesión se cerrará y el informe quedará pendiente de revisión clínica.'
+    const response = staticReply(`assistant-${requestId}`, text)
+    const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: response.parts as Json, p_chunks: response.chunks as unknown as Json, p_close_reason: closeReason })
+    if (error) throw error
+    if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
+    return replay(response.chunks)
+  }
+  const prepareContext = async () => {
     const { data: rows, error: historyError } = await service.from('messages').select('id, role, parts, created_at').eq('session_id', sessionId).eq('conversation_id', session.conversation_id).order('created_at', { ascending: true }).order('id', { ascending: true }).limit(161)
     if (historyError) throw historyError
+    if (!rows || rows.length >= 161 || !rows.some(row => row.id === turn.userMessageId)) throw new Error('context_limit')
     // Only persisted server data contributes history. Full tool parts are
     // retained for UI rehydration; model history contains conversational text.
     const messages: UIMessage[] = (rows ?? []).filter(row => row.role === 'user' || row.role === 'assistant').map(row => ({ id: row.id, role: row.role as 'user' | 'assistant', parts: (Array.isArray(row.parts) ? row.parts : []).flatMap(part => part && typeof part === 'object' && !Array.isArray(part) && part.type === 'text' && typeof part.text === 'string' ? [{ type: 'text' as const, text: part.text }] : []) })).filter(message => message.parts.length > 0)
-    let oversized = false
-    try { checkContextBudget(messages) } catch { oversized = true }
-    // The final input and its risk event have already committed. Safety
-    // therefore cannot disappear behind a timer, context limit, or pending quiz.
-    if (expired || session.status !== 'open' || turn.urgent || (oversized && crisis.detected)) {
-      const text = crisis.detected
-        ? `Lo que cuentas necesita apoyo inmediato. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. No esperes a completar un cuestionario para pedir ayuda. La señal queda registrada para revisión clínica.`
-        : session.status !== 'open' ? 'La sesión ya está cerrada. El informe queda pendiente de revisión clínica.' : 'Se ha alcanzado el límite de tiempo de la sesión. La sesión se cerrará y el informe quedará pendiente de revisión clínica.'
-      const response = staticReply(`assistant-${requestId}`, text)
-      // Assistant, optional closure and outbox commit in one transaction;
-      // persistence failure leaves a retryable turn and no invisible goodbye.
-      const closeReason = session.status !== 'open' || (turn.urgent && !expired && !oversized) ? null : crisis.detected ? 'crisis_detected' : 'time_limit'
-      const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: response.parts as Json, p_chunks: response.chunks as unknown as Json, p_close_reason: closeReason })
-      if (error) throw error
-      if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
-      return replay(response.chunks)
-    }
-    if (oversized) throw new Error('context_limit')
+    checkContextBudget(messages)
     const safetyState = await getSessionSafetyState(supabase, sessionId, session.opened_at)
     const crisisNotice = buildCrisisNotice({ safetyState, crisis })
     const questionnaireNotice = await buildQuestionnaireResultNotice(supabase, sessionId, session.opened_at, session.conversation_id)
@@ -87,10 +81,28 @@ export async function POST(req: Request) {
         const pieces = assemblePlan6ContextPieces(ctx)
         ;({ patientContextBlock, riskOpeningNotice, intakeBlock, protocolPhaseBlock } = pieces)
         void logContextInjection({ userId: user.id, sessionId, ...pieces.telemetry }).catch(() => console.error('[context-telemetry] failed'))
-      } catch { console.error('[patient-context] unavailable') }
+      } catch (error) {
+        console.error('[patient-context] unavailable')
+        if (crisis.detected) throw error
+      }
     }
     const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
     checkContextBudget([systemPrompt, ...messages])
+    return { messages, systemPrompt }
+  }
+  try {
+    // Accepted text/risk already committed. Urgent/time-limit responses do
+    // not depend on history, prompt loading or optional context availability.
+    if (expired || turn.urgent) return await finishStaticReply(expired ? crisis.detected ? 'crisis_detected' : 'time_limit' : null)
+    let context: Awaited<ReturnType<typeof prepareContext>>
+    try { context = await prepareContext() }
+    catch (error) {
+      if (!crisis.detected) throw error
+      // Preserve the existing budget fallback closure criterion. A context
+      // outage alone does not introduce a new reason to close the session.
+      return await finishStaticReply(error instanceof Error && error.message === 'context_limit' ? 'crisis_detected' : null)
+    }
+    const { messages, systemPrompt } = context
     const patientCodes = listPatientCodes()
     let proposal: string | null = null
     let closeReason: string | null = null

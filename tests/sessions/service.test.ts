@@ -105,6 +105,14 @@ describe('getOrResolveActiveSession', () => {
     expect(rpc).toHaveBeenCalledWith('close_session_atomic',{p_session_id:'session-1',p_user_id:'user-1',p_reason:'inactivity'})
   })
 
+  it('returns the still-open session when activity resumes after the lazy-close read',async()=>{
+    const old=makeSession({last_activity_at:new Date(Date.now()-SESSION_INACTIVITY_MS-1000).toISOString()})
+    const current=makeSession()
+    const from=vi.fn().mockReturnValueOnce(makeChain({data:old,error:null})).mockReturnValueOnce(makeChain({data:current,error:null}))
+    const client={from,auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc:vi.fn().mockResolvedValue({error:{code:'23514',message:'Session activity resumed'}})}
+    expect(await getOrResolveActiveSession(client as never,'user-1')).toEqual(current)
+    expect(from).toHaveBeenCalledTimes(2)
+  })
   it('returns null when no open session exists', async () => {
     const chain = makeChain({ data: null, error: null })
     const fromMock = vi.fn(() => chain)

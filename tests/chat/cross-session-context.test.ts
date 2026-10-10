@@ -369,6 +369,20 @@ describe('logContextInjection — plan line 586 ("una fila escrita")', () => {
 })
 
 describe('private context degradation',()=>{
+  it('responds deterministically to a new crisis when private context is unavailable',async()=>{
+    const previous=process.env.FEATURE_CROSS_SESSION_CONTEXT
+    process.env.FEATURE_CROSS_SESSION_CONTEXT='on'
+    try {
+      const {chatHarness}=await import('../helpers/chat-harness')
+      vi.doMock('@/lib/server/patient-context/builder',()=>({buildPatientContext:vi.fn().mockRejectedValue(new Error('synthetic failure'))}))
+      const h=await chatHarness()
+      const response=await h.post('Voy a matarme')
+      expect(response.status).toBe(200)
+      const text=await response.text(); expect(text).toContain('024'); expect(text).toContain('112')
+      expect(h.state.captured).toHaveLength(0)
+      expect(h.state.session.status).toBe('open')
+    } finally { process.env.FEATURE_CROSS_SESSION_CONTEXT=previous; vi.doUnmock('@/lib/server/patient-context/builder') }
+  })
   it('keeps chat available when the authorized private context read fails',async()=>{
     const previous=process.env.FEATURE_CROSS_SESSION_CONTEXT
     process.env.FEATURE_CROSS_SESSION_CONTEXT='on'

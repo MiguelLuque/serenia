@@ -158,5 +158,27 @@ try:
         list(pool.map(query, [complete, complete]))
     query(f"do $$ begin if (select count(*) from assessments where session_id='{sid}' and status='draft_ai')<>1 or (select status from assessment_jobs where session_id='{sid}')<>'completed' then raise exception 'Concurrent completion duplicate/lost job'; end if; end $$;")
     print('PASS concurrent quiz create/score, urgent chat fencing, assessment enqueue/worker claim and atomic completion')
+    # Force the stale candidate close to wait behind renewed activity. Observe
+    # pg_sleep only after touch acquired the session lock; no timing guess.
+    race_sid = '20000000-0000-0000-0000-000000000021'
+    race_cid = '10000000-0000-0000-0000-000000000021'
+    query(f"insert into conversations(id,user_id) values('{race_cid}','{uid}'); insert into clinical_sessions(id,user_id,conversation_id,last_activity_at) values('{race_sid}','{uid}','{race_cid}',now()-interval '31 minutes');")
+    touch_actor = f"set role authenticated; select set_config('request.jwt.claim.sub','{uid}',false);"
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        touching = pool.submit(query, f"set application_name='serenia-touch-race'; begin; {touch_actor} select touch_session_atomic('{race_sid}'); select pg_sleep(1); commit;")
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            observed = query("select count(*) from pg_stat_activity where application_name='serenia-touch-race' and wait_event='PgSleep';")
+            if re.search(r'\n\s+1\s*\n', observed): break
+            time.sleep(.02)
+        else: raise RuntimeError('Touch lock barrier not observed')
+        try:
+            query(server + f"select close_session_atomic('{race_sid}','{uid}','inactivity');")
+        except RuntimeError as error:
+            if 'Session activity resumed' not in str(error): raise
+        else: raise RuntimeError('Stale inactivity close won after renewed activity')
+        touching.result()
+    query(f"do $$ begin if (select status from clinical_sessions where id='{race_sid}')<>'open' or exists(select 1 from assessment_jobs where session_id='{race_sid}') then raise exception 'Stale inactivity job created'; end if; end $$;")
+    print('PASS concurrent touch/inactivity lock revalidation preserves active session without outbox')
 finally:
     docker('rm', '--force', name, check=False)

@@ -79,6 +79,7 @@ reset role;
 
 -- Regeneration uses clinician authorization and compare-and-set/restore.
 set role service_role;
+update clinical_sessions set last_activity_at=now()-interval '31 minutes' where id='20000000-0000-0000-0000-000000000002';
 select close_session_atomic('20000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002','inactivity');
 reset role;
 insert into assessments(id,user_id,session_id,assessment_type,status,summary_json) values
