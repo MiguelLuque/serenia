@@ -46,12 +46,12 @@
 
 **Interfaces:** Conservar transporte AI SDK y exports de servicios cuando sea seguro. El modelo recibe historial servidor y el nuevo turno autorizado. Persistencia de resultados/asistente usa operación servidor autorizada, compatible con Task 1. Recuperación usa un estado persistente o sweep de sesiones closed sin informe con idempotencia explícita.
 
-- [ ] Regresiones RED: rechazo de system/assistant/tool falsificados, confirmación sin propuesta/aceptación, segundo cuestionario tras scored, respuesta parcial sin escrituras, señal nueva con CSSRS pendiente, crisis al límite, cron sin cookie y enqueue fallido recuperado.
-- [ ] Implementar frontera de mensajes, límites e idempotencia; validar cierres server-side. Procesar el último turno y señal antes del límite temporal.
-- [ ] Validar opciones y conjunto de respuestas antes de writes; transacción respuestas/resultado/riesgos/estado. Retrys seguros y prioridad de CSSRS; corregir descripción de tool obsoleta ASQ.
-- [ ] Unificar cierre manual/lazy/cron; hacer llegar cron a autenticación CRON_SECRET; recuperar closed sin trabajo/informe y limitar la concurrencia/coste del sweep. Conservar cookies de refresh y cabeceras de caché SSR al construir redirects del proxy.
-- [ ] Ejecutar pruebas focalizadas y ampliar SQL real para atomicidad y concurrencia; informar compatibilidad con contratos de Task 1.
-- [ ] Informe del bloque y revisión independiente; resolver hallazgos antes de integración siguiente.
+- [x] Regresiones RED: rechazo de system/assistant/tool falsificados, confirmación sin propuesta/aceptación, segundo cuestionario tras scored, respuesta parcial sin escrituras, señal nueva con CSSRS pendiente, crisis al límite, cron sin cookie y enqueue fallido recuperado.
+- [x] Implementar frontera de mensajes, límites e idempotencia; validar cierres server-side. Procesar el último turno y señal antes del límite temporal.
+- [x] Validar opciones y conjunto de respuestas antes de writes; transacción respuestas/resultado/riesgos/estado. Retrys seguros y prioridad de CSSRS; corregir descripción de tool obsoleta ASQ.
+- [x] Unificar cierre manual/lazy/cron; hacer llegar cron a autenticación CRON_SECRET; recuperar closed sin trabajo/informe y limitar la concurrencia/coste del sweep. Conservar cookies de refresh y cabeceras de caché SSR al construir redirects del proxy.
+- [x] Ejecutar pruebas focalizadas y ampliar SQL real para atomicidad y concurrencia; informar compatibilidad con contratos de Task 1.
+- [x] Informe del bloque y revisión independiente; resolver hallazgos antes de integración siguiente.
 
 ## Task 3: Flujos paciente y clínico
 
