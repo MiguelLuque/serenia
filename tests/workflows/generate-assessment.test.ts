@@ -32,6 +32,7 @@ vi.mock('@/lib/server/supabase/server', () => ({
 // idempotency short-circuits, FatalError flow, etc.). The actual durable
 // retry machinery is owned by `@workflow/core` and out of scope here.
 import { generateAssessmentWorkflow } from '@/lib/server/workflows/generate-assessment'
+import { generateAssessmentStep } from '@/lib/server/workflows/generate-assessment'
 
 // ---------------------------------------------------------------------------
 // Supabase mock helpers
@@ -89,7 +90,9 @@ type TableSpec = {
  */
 function makeSupabase(tables: Record<string, TableSpec>) {
   const fromMock = vi.fn((name: string) => {
-    const spec = tables[name] ?? {}
+    const spec = tables[name] ?? (name === 'conversations'
+      ? { rows: { id: 'conv-1', user_id: 'user-1' } }
+      : {})
 
     if (name === 'assessments') {
       let mode: 'read' | 'write' = 'read'
@@ -130,6 +133,17 @@ function makeSupabase(tables: Record<string, TableSpec>) {
 
   return { from: fromMock }
 }
+
+it('refuses foreign conversation ownership before reading transcript with service role', async () => {
+  const supabase = makeSupabase({
+    clinical_sessions: { rows: makeSession() },
+    conversations: { rows: { id: 'conv-1', user_id: 'other-patient' } },
+    messages: { rows: makeMessages(4) },
+  })
+  createServiceRoleClientMock.mockReturnValue(supabase)
+  await expect(generateAssessmentStep(makeSession())).rejects.toThrow(/ownership/i)
+  expect(supabase.from).not.toHaveBeenCalledWith('messages')
+})
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {

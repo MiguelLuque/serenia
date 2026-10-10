@@ -140,6 +140,7 @@ export async function loadClosedSessionStep(
     })
     return null
   }
+  await assertConversationOwner(supabase, data.conversation_id, data.user_id)
   return {
     id: data.id,
     user_id: data.user_id,
@@ -202,6 +203,15 @@ export async function generateAssessmentStep(
 
   const supabase = serviceClient()
 
+  // Each durable retry rechecks the relationship before elevated reads.
+  const { data: current, error: sessionError } = await supabase.from('clinical_sessions')
+    .select('user_id, conversation_id, status').eq('id', session.id).maybeSingle()
+  if (sessionError) throw sessionError
+  if (!current || current.status !== 'closed' || current.user_id !== session.user_id || current.conversation_id !== session.conversation_id) {
+    throw new FatalError('Session ownership changed')
+  }
+  await assertConversationOwner(supabase, current.conversation_id, current.user_id)
+
   const { data: msgRows, error: msgError } = await supabase
     .from('messages')
     .select('role, parts, created_at')
@@ -233,6 +243,7 @@ export async function generateAssessmentStep(
     .from('questionnaire_instances')
     .select('id, questionnaire_id, status')
     .eq('session_id', session.id)
+    .eq('user_id', session.user_id)
     .eq('status', 'scored')
 
   const questionnaireBlocks: string[] = []
@@ -279,6 +290,7 @@ export async function generateAssessmentStep(
     .from('risk_events')
     .select('risk_type, severity, source_type, created_at, payload_json')
     .eq('session_id', session.id)
+    .eq('user_id', session.user_id)
     .order('created_at', { ascending: true })
 
   const riskBlocks = (riskRows ?? []).map(
@@ -490,4 +502,11 @@ function formatItemLines(rows: unknown): string[] {
 
   parsed.sort((a, b) => a.order - b.order)
   return parsed.map((p) => `Item ${p.order}: ${p.prompt} — ${p.answer}`)
+}
+
+async function assertConversationOwner(supabase: Supabase, conversationId: string, userId: string) {
+  const { data, error } = await supabase.from('conversations')
+    .select('id, user_id').eq('id', conversationId).maybeSingle()
+  if (error) throw error
+  if (!data || data.user_id !== userId) throw new FatalError('Conversation ownership mismatch')
 }

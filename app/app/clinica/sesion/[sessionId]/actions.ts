@@ -81,123 +81,20 @@ export async function saveAssessmentAction(
   if (userError || !userData?.user) {
     return { ok: false, error: 'No autenticado' }
   }
-  const reviewerId = userData.user.id
-
-  const now = new Date().toISOString()
-
-  // Normalize clinical_notes: trim, collapse empty → null. We store null
-  // for "no note" rather than empty string so the agent's context-injection
-  // tier (Plan 7 T-1) can do simple truthy checks.
-  const trimmedNotes =
-    typeof input.clinical_notes === 'string' ? input.clinical_notes.trim() : ''
-  const clinicalNotes = trimmedNotes.length > 0 ? trimmedNotes : null
-
-  const { data: inserted, error: insertError } = await supabase
-    .from('assessments')
-    .insert({
-      user_id: input.userId,
-      session_id: input.sessionId,
-      assessment_type: 'closure',
-      status: 'reviewed_modified',
-      generated_by: 'clinician',
-      summary_json: parsed.data as unknown as Json,
-      supersedes_assessment_id: input.assessmentId,
-      reviewed_by: reviewerId,
-      reviewed_at: now,
-      clinical_notes: clinicalNotes,
-    })
-    .select('id')
-    .single()
-
-  if (insertError || !inserted) {
-    return {
-      ok: false,
-      error: insertError?.message ?? 'No se pudo crear el informe',
-    }
-  }
-
-  const { error: updateError } = await supabase
-    .from('assessments')
-    .update({ status: 'superseded' })
-    .eq('id', input.assessmentId)
-
-  if (updateError) {
-    return {
-      ok: false,
-      error: `Informe guardado pero no se pudo marcar el anterior como superseded: ${updateError.message}`,
-    }
-  }
-
-  // Delete open tasks from prior revisions of this same session so re-saving
-  // doesn't duplicate rows. Open tasks from this session can only have come
-  // from an earlier revision of this exact assessment flow.
-  const { error: cleanupError } = await supabase
-    .from('patient_tasks')
-    .delete()
-    .eq('acordada_en_session_id', input.sessionId)
-    .is('closed_at', null)
-
-  if (cleanupError) {
-    console.error('[T4] patient_tasks cleanup failed — assessment already saved, skipping task materialization', cleanupError)
-    return {
-      ok: false,
-      error: `Informe guardado pero no se pudo limpiar tareas previas: ${cleanupError.message}`,
-    }
-  }
-
-  // Apply inherited_task_updates: update estado/nota and stamp closed_at when
-  // the new estado is terminal so the task lifecycle is properly closed.
-  const terminalStates = new Set(['cumplida', 'no_realizada', 'no_abordada'])
-  const updateResults = await Promise.all(
-    parsedUpdates.data.map(({ id, estado, nota }) => {
-      const isTerminal = terminalStates.has(estado)
-      return supabase
-        .from('patient_tasks')
-        .update({
-          estado,
-          nota: nota === '' ? null : (nota ?? null),
-          closed_at: isTerminal ? new Date().toISOString() : null,
-          closed_by_assessment_id: isTerminal ? inserted.id : null,
-        })
-        .eq('id', id)
-        .eq('user_id', input.userId)
-    }),
-  )
-
-  const failedUpdate = updateResults.find((r) => r.error)
-  if (failedUpdate?.error) {
-    console.error('[T4] patient_tasks update failed — assessment already saved', failedUpdate.error)
-    return {
-      ok: false,
-      error: `Informe guardado pero no se pudo actualizar tareas heredadas: ${failedUpdate.error.message}`,
-    }
-  }
-
-  // Materialize proposed_tasks as new patient_tasks rows.
-  const inserts = parsed.data.proposed_tasks.map((t) => ({
-    user_id: input.userId,
-    acordada_en_session_id: input.sessionId,
-    acordada_en_assessment_id: inserted.id,
-    descripcion: t.descripcion,
-    nota: t.nota ?? null,
-    estado: 'pendiente' as const,
-  }))
-
-  if (inserts.length > 0) {
-    const { error: insertTasksError } = await supabase.from('patient_tasks').insert(inserts)
-    if (insertTasksError) {
-      console.error('[T4] patient_tasks insert failed — assessment already saved', insertTasksError)
-      return {
-        ok: false,
-        error: `Informe guardado pero no se pudieron crear las tareas: ${insertTasksError.message}`,
-      }
-    }
-  }
+  const { data: assessmentId, error } = await supabase.rpc('review_assessment_atomic', {
+    p_session_id: input.sessionId,
+    p_assessment_id: input.assessmentId,
+    p_action: 'modify',
+    p_summary: parsed.data as unknown as Json,
+    p_notes: input.clinical_notes?.trim() || null,
+    p_inherited_updates: parsedUpdates.data as unknown as Json,
+  })
+  if (error || !assessmentId) return { ok: false, error: error?.message ?? 'No se pudo guardar el informe' }
 
   revalidatePath('/app')
   revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
 
-  return { ok: true, assessmentId: inserted.id }
+  return { ok: true, assessmentId }
 }
 
 type ReviewActionResult = { ok: true } | { ok: false; error: string }
@@ -241,57 +138,12 @@ export async function markReviewedAction(input: {
     }
   }
 
-  const { error: updateError } = await supabase
-    .from('assessments')
-    .update({
-      status: 'reviewed_confirmed',
-      reviewed_by: userData.user.id,
-      reviewed_at: new Date().toISOString(),
-    })
-    .eq('id', input.assessmentId)
-
-  if (updateError) {
-    return {
-      ok: false,
-      error: updateError.message ?? 'No se pudo marcar como revisado',
-    }
-  }
-
-  // Idempotent cleanup: rare in practice but guards against re-confirm after an
-  // edit path was taken before mark-reviewed.
-  const { error: cleanupError } = await supabase
-    .from('patient_tasks')
-    .delete()
-    .eq('acordada_en_session_id', input.sessionId)
-    .is('closed_at', null)
-
-  if (cleanupError) {
-    console.error('[T4] markReviewed patient_tasks cleanup failed — assessment already confirmed', cleanupError)
-    return {
-      ok: false,
-      error: `Revisión confirmada pero no se pudo limpiar tareas previas: ${cleanupError.message}`,
-    }
-  }
-
-  const inserts = parsed.data.proposed_tasks.map((t) => ({
-    user_id: assessmentRow.user_id,
-    acordada_en_session_id: input.sessionId,
-    acordada_en_assessment_id: input.assessmentId,
-    descripcion: t.descripcion,
-    nota: t.nota ?? null,
-    estado: 'pendiente' as const,
-  }))
-
-  if (inserts.length > 0) {
-    const { error: insertTasksError } = await supabase.from('patient_tasks').insert(inserts)
-    if (insertTasksError) {
-      console.error('[T4] markReviewed patient_tasks insert failed — assessment already confirmed', insertTasksError)
-      return {
-        ok: false,
-        error: `Revisión confirmada pero no se pudieron crear las tareas: ${insertTasksError.message}`,
-      }
-    }
-  }
+  const { error } = await supabase.rpc('review_assessment_atomic', {
+    p_session_id: input.sessionId,
+    p_assessment_id: input.assessmentId,
+    p_action: 'confirm',
+  })
+  if (error) return { ok: false, error: error.message }
 
   revalidatePath('/app')
   revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
@@ -322,22 +174,13 @@ export async function rejectAssessmentAction(input: {
     return { ok: false, error: 'No autenticado' }
   }
 
-  const { error: updateError } = await supabase
-    .from('assessments')
-    .update({
-      status: 'rejected',
-      reviewed_by: userData.user.id,
-      reviewed_at: new Date().toISOString(),
-      rejection_reason: reason,
-    })
-    .eq('id', input.assessmentId)
-
-  if (updateError) {
-    return {
-      ok: false,
-      error: updateError.message ?? 'No se pudo rechazar el informe',
-    }
-  }
+  const { error } = await supabase.rpc('review_assessment_atomic', {
+    p_session_id: input.sessionId,
+    p_assessment_id: input.assessmentId,
+    p_action: 'reject',
+    p_reason: reason,
+  })
+  if (error) return { ok: false, error: error.message }
 
   revalidatePath('/app')
   revalidatePath(`/app/clinica/sesion/${input.sessionId}`)
@@ -350,28 +193,9 @@ type RegenerateActionResult =
   | { ok: false; error: string }
 
 /**
- * Regenerate a rejected closure assessment.
- *
- * Pipeline:
- *   1. Authenticate the caller (RLS handles role enforcement — only
- *      clinicians can UPDATE assessments per migration
- *      20260423000001_rls_clinician_write).
- *   2. `prepareRegeneration` fetches the rejected row, captures
- *      `rejection_reason` + `clinical_notes`, and marks the row as
- *      `superseded` so the next `assessmentExistsStep` check sees no live
- *      row.
- *   3. Enqueue `generateAssessmentWorkflow` with a `rejectionContext` so
- *      the LLM has the clinician's reasons + notes when producing the
- *      new draft.
- *
- * The new draft starts with `clinical_notes=null`. The clinician can add
- * notes again in the new revision — notes apply to the specific assessment
- * version, not the session globally. Decision recorded in T-B spec.
- *
- * Idempotency: `prepareRegeneration` + the live-status filter +
- * `assessments_session_closure_live_unique` together guarantee at most one
- * live draft per session even under concurrent regenerate requests. See
- * `prepareRegeneration` JSDoc for the atomicity contract.
+ * Claim a rejected/manual-review assessment via the clinician RPC, then enqueue.
+ * Compensation restores the captured status if enqueue fails. SQL prevents
+ * concurrent claims; external dispatch durability is handled separately.
  */
 export async function regenerateAssessmentAction(input: {
   assessmentId: string

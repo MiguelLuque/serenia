@@ -42,6 +42,8 @@ export type Database = {
       assessments: {
         Row: {
           assessment_type: Database["public"]["Enums"]["assessment_type"]
+          review_request_json: Json | null
+          regeneration_previous_status: Database["public"]["Enums"]["assessment_status"] | null
           clinical_notes: string | null
           created_at: string
           generated_by: Database["public"]["Enums"]["generated_by_source"]
@@ -59,6 +61,8 @@ export type Database = {
         }
         Insert: {
           assessment_type?: Database["public"]["Enums"]["assessment_type"]
+          review_request_json?: Json | null
+          regeneration_previous_status?: Database["public"]["Enums"]["assessment_status"] | null
           clinical_notes?: string | null
           created_at?: string
           generated_by?: Database["public"]["Enums"]["generated_by_source"]
@@ -76,6 +80,8 @@ export type Database = {
         }
         Update: {
           assessment_type?: Database["public"]["Enums"]["assessment_type"]
+          review_request_json?: Json | null
+          regeneration_previous_status?: Database["public"]["Enums"]["assessment_status"] | null
           clinical_notes?: string | null
           created_at?: string
           generated_by?: Database["public"]["Enums"]["generated_by_source"]
@@ -481,6 +487,7 @@ export type Database = {
           acordada_en_assessment_id: string
           acordada_en_session_id: string
           closed_at: string | null
+          source_task_index: number | null
           closed_by_assessment_id: string | null
           created_at: string
           descripcion: string
@@ -494,6 +501,7 @@ export type Database = {
           acordada_en_assessment_id: string
           acordada_en_session_id: string
           closed_at?: string | null
+          source_task_index?: number | null
           closed_by_assessment_id?: string | null
           created_at?: string
           descripcion: string
@@ -507,6 +515,7 @@ export type Database = {
           acordada_en_assessment_id?: string
           acordada_en_session_id?: string
           closed_at?: string | null
+          source_task_index?: number | null
           closed_by_assessment_id?: string | null
           created_at?: string
           descripcion?: string
@@ -1034,6 +1043,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      review_assessment_atomic: {
+        Args: { p_session_id: string; p_assessment_id: string; p_action: string; p_summary?: Json; p_notes?: string | null; p_inherited_updates?: Json; p_reason?: string }
+        Returns: string
+      }
+      regenerate_assessment_atomic: {
+        Args: { p_assessment_id: string; p_expected_status: string; p_restore?: boolean }
+        Returns: boolean
+      }
       close_session_atomic: {
         Args: { p_reason: string; p_session_id: string; p_user_id: string }
         Returns: undefined
