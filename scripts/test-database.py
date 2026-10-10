@@ -47,9 +47,11 @@ try:
     print('PASS migrations from empty auth.users')
     # Keep the temporary must_deny helper and fixtures on one SQL connection.
     query((ROOT / 'supabase/tests/authorization-review.sql').read_text() + '\n' +
-          (ROOT / 'supabase/tests/relationships.sql').read_text())
+          (ROOT / 'supabase/tests/relationships.sql').read_text() + '\n' +
+          (ROOT / 'supabase/tests/review-task-progress.sql').read_text())
     print('PASS authorization, ownership, closure, review, rollback and regeneration')
     print('PASS elevated cross-parent writes and foreign inherited task rollback')
+    print('PASS review preserves completed/partial tasks and rejects incompatible agreements')
     # Replay the two repaired historical data migrations against existing rows:
     # preserve accounts/clinician roles and repair only a missing profile.
     query("delete from user_profiles where user_id='00000000-0000-0000-0000-000000000002';")
