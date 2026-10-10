@@ -1,3 +1,5 @@
+import 'server-only'
+import { requireOwnedSession } from './authorization'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/shared/supabase/types'
 import type { MessagePart } from '@/lib/shared/types/messages'
@@ -16,7 +18,8 @@ export async function saveMessage(
     visibleToUser?: boolean
   },
 ): Promise<MessageRow> {
-  const { data, error } = await supabase
+  const { service } = await requireOwnedSession(supabase, params.sessionId, params.conversationId)
+  const { data, error } = await service
     .from('messages')
     .insert({
       conversation_id: params.conversationId,

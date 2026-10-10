@@ -7,6 +7,8 @@ import {
 } from '@/lib/server/sessions/messages'
 import type { MessagePart } from '@/lib/shared/types/messages'
 
+vi.mock('@/lib/server/sessions/authorization',()=>({requireOwnedSession:async(service:unknown)=>({service})}))
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

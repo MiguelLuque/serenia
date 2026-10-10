@@ -6,7 +6,6 @@ import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { AssessmentSchema } from '@/lib/server/assessments/generator'
 import {
   prepareRegeneration,
-  rollbackRegeneration,
 } from '@/lib/server/assessments/regenerate'
 import { enqueueAssessmentGeneration } from '@/lib/server/workflows'
 import type { Json } from '@/lib/shared/supabase/types'
@@ -224,15 +223,8 @@ export async function regenerateAssessmentAction(input: {
     runId = result.runId
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    // The row is now `superseded` but the workflow never started. Without
-    // rollback the row would be orphaned — `prepareRegeneration` would
-    // reject any retry because status is no longer regenerable. Restore
-    // the original status so the next click can succeed.
-    await rollbackRegeneration(
-      supabase,
-      input.assessmentId,
-      prepared.originalStatus,
-    )
+    // The supersession, original reason and notes already committed with
+    // a durable outbox job. Recovery can retry without undoing the request.
     console.error('[regenerateAssessmentAction] enqueue failed', {
       assessmentId: input.assessmentId,
       sessionId: prepared.sessionId,
@@ -242,7 +234,7 @@ export async function regenerateAssessmentAction(input: {
     return {
       ok: false,
       error:
-        'No se pudo encolar la regeneración. El informe queda como estaba; intenta de nuevo en unos segundos.',
+        'No se pudo iniciar la regeneración ahora. La solicitud y las notas se han guardado para recuperación automática; recarga más tarde para comprobar su estado.',
     }
   }
 

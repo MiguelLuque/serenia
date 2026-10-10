@@ -1047,6 +1047,20 @@ export type Database = {
         Args: { p_session_id: string; p_assessment_id: string; p_action: string; p_summary?: Json; p_notes?: string | null; p_inherited_updates?: Json; p_reason?: string }
         Returns: string
       }
+      create_session_atomic: { Args: { p_user_id: string }; Returns: Database['public']['Tables']['clinical_sessions']['Row'] }
+      touch_session_atomic: { Args: { p_session_id: string }; Returns: undefined }
+      create_questionnaire_atomic: { Args: { p_session_id: string; p_user_id: string; p_conversation_id: string; p_code: string; p_reason: string; p_request_id?: string; p_token?: string }; Returns: Database['public']['Tables']['questionnaire_instances']['Row'] }
+      start_questionnaire_atomic: { Args: { p_instance_id: string; p_user_id: string }; Returns: undefined }
+      submit_questionnaire_atomic: { Args: { p_instance_id: string; p_user_id: string; p_answers: Json; p_result: Json; p_risk_severity?: string | null }; Returns: Json }
+      begin_chat_turn: { Args: { p_session_id: string; p_user_id: string; p_request_id: string; p_text: string; p_crisis?: boolean; p_urgent?: boolean }; Returns: Json }
+      finish_chat_turn: { Args: { p_session_id: string; p_request_id: string; p_token: string; p_parts: Json; p_chunks: Json; p_proposal?: string | null; p_close_reason?: string | null }; Returns: undefined }
+      fail_chat_turn: { Args: { p_session_id: string; p_request_id: string; p_token: string; p_error: string }; Returns: undefined }
+      get_chat_turn_recovery: { Args: { p_session_id: string }; Returns: Json }
+      close_chat_turn: { Args: { p_session_id: string; p_request_id: string; p_token: string; p_reason: string }; Returns: boolean }
+      recover_assessment_jobs: { Args: { p_limit?: number }; Returns: number }
+      claim_assessment_jobs: { Args: { p_limit?: number; p_session_id?: string }; Returns: { session_id: string; context_json: Json; token: string; attempts: number; status: string }[] }
+      finish_assessment_job: { Args: { p_session_id: string; p_token: string; p_status: string; p_summary: Json }; Returns: boolean }
+      update_assessment_job: { Args: { p_session_id: string; p_token: string; p_action: string; p_run_id?: string }; Returns: boolean }
       regenerate_assessment_atomic: {
         Args: { p_assessment_id: string; p_expected_status: string; p_restore?: boolean }
         Returns: boolean

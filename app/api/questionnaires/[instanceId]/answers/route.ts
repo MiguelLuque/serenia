@@ -1,5 +1,7 @@
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { submitAnswers } from '@/lib/server/questionnaires/service'
+import { readBoundedJson } from '@/lib/server/chat/request-boundary'
+import { z } from 'zod'
 import { SubmitAnswersSchema } from '@/lib/shared/questionnaires/schema'
 
 // Plan 8 Bloque 2 Fix 4 — validación zod + no-leak de errores técnicos.
@@ -18,6 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ instanceId: string }> },
 ) {
   const { instanceId } = await params
+  if (!z.string().uuid().safeParse(instanceId).success) return new Response('Not found', { status: 404 })
   const supabase = await createAuthenticatedClient()
 
   const {
@@ -36,13 +39,13 @@ export async function POST(
     return new Response('Not found', { status: 404 })
   }
 
-  if (instance.status === 'scored' || instance.status === 'cancelled') {
+  if (instance.status === 'cancelled') {
     return new Response('Instance already closed', { status: 409 })
   }
 
   let rawBody: unknown
   try {
-    rawBody = await req.json()
+    rawBody = await readBoundedJson(req)
   } catch (err) {
     console.warn('[answers POST] invalid JSON body', {
       instanceId,

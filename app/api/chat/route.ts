@@ -1,394 +1,144 @@
-import {
-  convertToModelMessages,
-  safeValidateUIMessages,
-  streamText,
-  tool,
-  type UIMessage,
-} from 'ai'
+import { convertToModelMessages, createUIMessageStreamResponse, streamText, tool, type UIMessage, type UIMessageChunk } from 'ai'
 import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { requireOwnedSession } from '@/lib/server/sessions/authorization'
 import { llm } from '@/lib/shared/llm/models'
 import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
-import {
-  touchSession,
-  closeSession,
-  isSessionExpired,
-} from '@/lib/server/sessions/service'
-import { saveUserMessage, saveAssistantMessage } from '@/lib/server/sessions/messages'
+import { isSessionExpired } from '@/lib/server/sessions/service'
 import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
 import { getSessionSafetyState } from '@/lib/server/chat/safety-state'
-import { buildCrisisNotice } from '@/lib/shared/chat/crisis-notice'
-import { detectFarewellWithoutCloseTool } from '@/lib/shared/chat/farewell-detector'
-import {
-  createInstance,
-  getActiveInstanceForSession,
-} from '@/lib/server/questionnaires/service'
-import type { QuestionnaireCode } from '@/lib/shared/questionnaires/registry'
-import { listPatientCodes } from '@/lib/shared/questionnaires/registry'
+import { buildCrisisNotice, hasHighSignalTerm } from '@/lib/shared/chat/crisis-notice'
+import { createInstance, getActiveInstanceForSession } from '@/lib/server/questionnaires/service'
+import { listPatientCodes, type QuestionnaireCode } from '@/lib/shared/questionnaires/registry'
 import { buildPatientContext } from '@/lib/server/patient-context/builder'
 import { assemblePlan6ContextPieces } from '@/lib/server/chat/assemble-plan6-prompt'
 import { buildChatSystemPrompt } from '@/lib/server/chat/system-prompt'
 import { logContextInjection } from '@/lib/server/patient-context/telemetry'
+import { enqueueAssessmentGeneration } from '@/lib/server/workflows'
+import { ChatRequestSchema, acceptsClosure, checkContextBudget, readBoundedJson } from '@/lib/server/chat/request-boundary'
+import type { Json } from '@/lib/shared/supabase/types'
 import type { ProtocolPhase } from '@/lib/shared/protocol/render-phase'
+import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
 
 export const maxDuration = 60
 
-const BodySchema = z.object({
-  sessionId: z.string().uuid(),
-  messages: z.array(z.any()),
-})
+function replay(chunks: UIMessageChunk[]) {
+  return createUIMessageStreamResponse({ stream: new ReadableStream({ start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } }), headers: { 'Cache-Control': 'no-store' } })
+}
+function staticReply(id: string, text: string): { parts: UIMessage['parts']; chunks: UIMessageChunk[] } {
+  return { parts: [{ type: 'text', text }], chunks: [{ type: 'start', messageId: id }, { type: 'text-start', id: 'text' }, { type: 'text-delta', id: 'text', delta: text }, { type: 'text-end', id: 'text' }, { type: 'finish', finishReason: 'stop' }] }
+}
 
 export async function POST(req: Request) {
   const supabase = await createAuthenticatedClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return new Response('Unauthorized', { status: 401 })
-
-  // Body validation (defensive). Previously `BodySchema.parse(...)` would
-  // throw on malformed input, leaking 500s + stack traces to clients. Now we
-  // safeParse and answer 400 with a generic message; the technical detail is
-  // logged server-side for ops. We also run `safeValidateUIMessages` so a
-  // malicious or malformed `messages` array can't blow up `convertToModelMessages`
-  // or `streamText` further down. The same validator is used by the session
-  // page for rehydration (see app/app/sesion/[id]/page.tsx).
-  let rawBody: unknown
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return new Response('Unauthorized', { status: 401 })
+  let body: z.infer<typeof ChatRequestSchema>
+  try { body = ChatRequestSchema.parse(await readBoundedJson(req)) }
+  catch { return Response.json({ error: 'Solicitud inválida' }, { status: 400 }) }
+  const { sessionId, requestId } = body
+  const lastUserText = body.messages[0].parts[0].text
+  let owned
+  try { owned = await requireOwnedSession(supabase, sessionId) }
+  catch { return new Response('Session not found', { status: 404 }) }
+  const { session, service } = owned
+  const crisis = detectCrisis(lastUserText)
+  const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: crisis.detected && hasHighSignalTerm(crisis.matchedTerms) })
+  if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
+  const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean }
+  if (turn.replay) return replay(turn.chunks ?? [])
+  const token = turn.token
   try {
-    rawBody = await req.json()
-  } catch (err) {
-    console.warn('[chat] invalid JSON body', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
-  }
-
-  const parsed = BodySchema.safeParse(rawBody)
-  if (!parsed.success) {
-    console.warn('[chat] body schema rejected', {
-      issues: parsed.error.issues,
-    })
-    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
-  }
-
-  const validatedMessages = await safeValidateUIMessages({
-    messages: parsed.data.messages,
-  })
-  if (!validatedMessages.success) {
-    console.warn('[chat] messages failed UIMessage validation', {
-      error: validatedMessages.error.message,
-    })
-    return Response.json({ error: 'Solicitud inválida' }, { status: 400 })
-  }
-
-  const sessionId = parsed.data.sessionId
-  const messages: UIMessage[] = validatedMessages.data
-
-  const { data: session, error } = await supabase
-    .from('clinical_sessions')
-    .select('id, user_id, conversation_id, status, opened_at, last_activity_at, protocol_phase')
-    .eq('id', sessionId)
-    .eq('user_id', user.id)
-    .single()
-  if (error || !session) return new Response('Session not found', { status: 404 })
-  if (session.status !== 'open') return new Response('Session not active', { status: 409 })
-
-  if (isSessionExpired({ opened_at: session.opened_at })) {
-    await closeSession(supabase, sessionId, 'time_limit')
-    return Response.json(
-      {
-        closed: true,
-        reason: 'time_limit',
-        message:
-          'Se ha alcanzado el límite de tiempo de la sesión. He preparado las notas para que tu psicólogo las revise. Nos vemos en la próxima sesión.',
-      },
-      { status: 200 },
-    )
-  }
-
-  await touchSession(supabase, sessionId)
-
-  const lastUser = [...messages].reverse().find((m) => m.role === 'user')
-  const lastUserText = extractText(lastUser)
-  if (lastUserText) {
-    await saveUserMessage(supabase, {
-      conversationId: session.conversation_id,
-      sessionId,
-      text: lastUserText,
-    })
-  }
-
-  const crisis = lastUserText
-    ? detectCrisis(lastUserText)
-    : { detected: false, matchedTerms: [] }
-
-  const elapsedMs = Date.now() - new Date(session.opened_at).getTime()
-  const minutesRemaining = Math.max(
-    0,
-    Math.ceil((60 * 60 * 1000 - elapsedMs) / 60_000),
-  )
-  const timeNotice =
-    minutesRemaining <= 10
-      ? minutesRemaining >= 5
-        ? `[AVISO DE TIEMPO]
-Quedan ${minutesRemaining} minutos de la sesión. Empieza a cerrar con calma: resume lo hablado, pregunta cómo se va el paciente, y llama a propose_close_session con reason='time_limit' junto al texto de propuesta. No llames a confirm_close_session hasta que el paciente acepte.
-
----
-
-`
-        : `[AVISO DE TIEMPO]
-Quedan ${minutesRemaining} minutos de la sesión. Avisa al paciente por texto ("nos quedan X min, ¿cerramos o aprovechas el rato?") pero NO llames a ningún tool de cierre todavía. Si llega el límite duro, el sistema cerrará automáticamente.
-
----
-
-`
-      : ''
-
-  const basePrompt = getSessionTherapistPrompt()
-
-  // Plan 7 T3a v2 — derivamos el `SafetyState` (a partir de la BD de
-  // cuestionarios + fallback heurístico textual) y `buildCrisisNotice`
-  // traduce ese estado a la variante apropiada del bloque.
-  //
-  // El bug del smoke real (Paciente A): tras un ASQ negativo, el LLM
-  // volvía a preguntar por seguridad ante reaparición de palabras
-  // emocionales porque ningún notice le decía "ya cribaste eso". Ahora,
-  // si hay un ASQ scored en la sesión, el notice cambia a la variante
-  // [CONTEXTO DE SEGURIDAD — ASQ ...] que veta repreguntar salvo señal
-  // nueva del subgrupo "alta señal" (override RE-ESCALADA).
-  //
-  // `getSessionSafetyState` traga errores → `never_assessed` (failsafe
-  // seguro: si BD hipa, sigue funcionando como en v1).
-  const safetyState = await getSessionSafetyState(
-    supabase,
-    sessionId,
-    session.opened_at,
-  )
-  const crisisNotice = buildCrisisNotice({ safetyState, crisis })
-
-  const questionnaireNotice = await buildQuestionnaireResultNotice(
-    supabase,
-    session.id,
-    session.opened_at,
-    session.conversation_id,
-  )
-
-  // ── Plan 6 T10: cross-session continuity (feature-flagged) ─────────────────
-  // When FEATURE_CROSS_SESSION_CONTEXT === 'on', build a patient-context block
-  // from prior-session data, derive a risk-state opening notice, and record a
-  // telemetry row via the service role.
-  //
-  // Degradation: if buildPatientContext (or the assembly that follows) throws
-  // — e.g. a DB hiccup, query timeout, unexpected RLS error — we log and fall
-  // back to flag-off behavior (empty block + empty notice) so /api/chat never
-  // 500s on a telemetry/context regression. Pre-Plan-6 the same DB hiccup did
-  // not break the chat; we preserve that contract.
-  //
-  // Telemetry: fire-and-forget — the handler never awaits the insert, so a
-  // service-role lock or latency spike cannot slow down the user's turn.
-  // Failures are logged to stderr; see docs/operations/feature-flags.md.
-  const featureOn = process.env.FEATURE_CROSS_SESSION_CONTEXT === 'on'
-  let patientContextBlock = ''
-  let riskOpeningNotice = ''
-  let intakeBlock = ''
-  let protocolPhaseBlock = ''
-  if (featureOn) {
-    try {
-      // Plan 8 T5.2-bis — protocol_phase del SessionRow ya cargado.
-      // Narrow-cast a `ProtocolPhase`: la columna BD tiene CHECK
-      // (protocol_phase BETWEEN 1 AND 8), así que cualquier valor que
-      // llegue de la BD ya está dentro del rango. Si por algún motivo
-      // (race con migración futura, manual edit) llega fuera, el renderer
-      // lanzará en `assertNeverPhase` y el `catch` de abajo degradará a
-      // bloque vacío como con cualquier otro fallo.
-      const protocolPhase = session.protocol_phase as ProtocolPhase
-
-      const ctx = await buildPatientContext({
-        supabase,
-        userId: user.id,
-        sessionId: session.id,
-        protocolPhase,
-      })
-      const pieces = assemblePlan6ContextPieces(ctx)
-      patientContextBlock = pieces.patientContextBlock
-      riskOpeningNotice = pieces.riskOpeningNotice
-      intakeBlock = pieces.intakeBlock
-      protocolPhaseBlock = pieces.protocolPhaseBlock
-
-      void logContextInjection({
-        userId: user.id,
-        sessionId: session.id,
-        ...pieces.telemetry,
-      }).catch((err) => {
-        console.error('[context-telemetry]', err)
-      })
-    } catch (err) {
-      console.error('[patient-context]', err)
-      patientContextBlock = ''
-      riskOpeningNotice = ''
-      intakeBlock = ''
-      protocolPhaseBlock = ''
+    const expired = isSessionExpired(session)
+    const { data: rows, error: historyError } = await service.from('messages').select('id, role, parts, created_at').eq('session_id', sessionId).eq('conversation_id', session.conversation_id).order('created_at', { ascending: true }).order('id', { ascending: true }).limit(161)
+    if (historyError) throw historyError
+    // Only persisted server data contributes history. Full tool parts are
+    // retained for UI rehydration; model history contains conversational text.
+    const messages: UIMessage[] = (rows ?? []).filter(row => row.role === 'user' || row.role === 'assistant').map(row => ({ id: row.id, role: row.role as 'user' | 'assistant', parts: (Array.isArray(row.parts) ? row.parts : []).flatMap(part => part && typeof part === 'object' && !Array.isArray(part) && part.type === 'text' && typeof part.text === 'string' ? [{ type: 'text' as const, text: part.text }] : []) })).filter(message => message.parts.length > 0)
+    let oversized = false
+    try { checkContextBudget(messages) } catch { oversized = true }
+    // The final input and its risk event have already committed. Safety
+    // therefore cannot disappear behind a timer, context limit, or pending quiz.
+    if (expired || session.status !== 'open' || turn.urgent || (oversized && crisis.detected)) {
+      const text = crisis.detected
+        ? `Lo que cuentas necesita apoyo inmediato. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. No esperes a completar un cuestionario para pedir ayuda. La señal queda registrada para revisión clínica.`
+        : session.status !== 'open' ? 'La sesión ya está cerrada. El informe queda pendiente de revisión clínica.' : 'Se ha alcanzado el límite de tiempo de la sesión. La sesión se cerrará y el informe quedará pendiente de revisión clínica.'
+      const response = staticReply(`assistant-${requestId}`, text)
+      // Assistant, optional closure and outbox commit in one transaction;
+      // persistence failure leaves a retryable turn and no invisible goodbye.
+      const closeReason = session.status !== 'open' || (turn.urgent && !expired && !oversized) ? null : crisis.detected ? 'crisis_detected' : 'time_limit'
+      const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: response.parts as Json, p_chunks: response.chunks as unknown as Json, p_close_reason: closeReason })
+      if (error) throw error
+      if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
+      return replay(response.chunks)
     }
-  }
-
-  const systemPrompt = buildChatSystemPrompt({
-    basePrompt,
-    riskOpeningNotice,
-    crisisNotice,
-    questionnaireNotice,
-    timeNotice,
-    intakeBlock,
-    patientContextBlock,
-    protocolPhaseBlock,
-  })
-
-  // Plan 8 ADR-017: enum derivado del registry (solo cuestionarios paciente-rated).
-  // listPatientCodes() excluye los clinician-rated (HAM-D, en Plan 8 Fase 7).
-  const patientCodes = listPatientCodes()
-  const proposeQuestionnaireTool = tool({
-    description:
-      [
-        'Propone un cuestionario clínico validado cuando la conversación lo justifica. Nunca más de uno por sesión.',
-        'PRIMARIOS (screening): ánimo bajo sostenido ≥2 semanas => PHQ9; ansiedad/preocupación sostenida ≥2 semanas => GAD7.',
-        'SECUNDARIOS (condicionales, profundización): solo tras un primario con banda moderate o superior:',
-        ' · BDI2 si PHQ9 score ≥10 (banda moderate/moderately_severe/severe).',
-        ' · BAI si GAD7 score ≥10 (banda moderate/severe). Por defecto antes que STAI.',
-        ' · STAI solo tras BAI cuando hay sospecha de ansiedad RASGO (>6 meses, no reactiva).',
-        'CRIBADO DE SEGURIDAD: ASQ siempre ante cualquier verbalización de ideación suicida o autolesión, directa o indirecta. NO esperes a que PHQ9 dé positivo. (En Plan 8 Fase 2 ASQ se sustituye por C-SSRS).',
-        'Reglas de uso: nunca en los primeros 2 minutos; primero valida y explora 3-4 turnos; anuncia el cuestionario por texto antes de invocar el tool y espera confirmación del paciente.',
-      ].join('\n'),
-    inputSchema: z.object({
-      code: z.enum(patientCodes as [QuestionnaireCode, ...QuestionnaireCode[]]),
-      reason: z.string().min(10).max(300),
-    }),
-    execute: async ({ code, reason }) => {
-      const existing = await getActiveInstanceForSession(supabase, sessionId)
-      if (existing) {
-        return { skipped: true, reason: 'already_active' as const }
-      }
-      const inst = await createInstance(supabase, {
-        userId: user.id,
-        sessionId,
-        conversationId: session.conversation_id,
-        questionnaireCode: code as QuestionnaireCode,
-        triggerReason: reason,
-      })
-      return { proposed: true, code, instanceId: inst.id }
-    },
-  })
-
-  // ── Session-close tools: two-step for non-crisis, single-step for crisis ────
-  //
-  // `propose_close_session` has NO side-effects on the DB. The IA emits it
-  // alongside a conversational proposal so the patient can accept or reject.
-  // Only after explicit acceptance in the next turn does the IA call
-  // `confirm_close_session`, which actually invokes closeSession() and
-  // triggers the assessment generation.
-  //
-  // `close_session_crisis` is single-step by design: safety first, no
-  // confirmation, closes immediately with reason='crisis_detected'.
-  //
-  // The reason for a confirmed close is passed again by the model (it must
-  // match what it used in propose). We do not persist "pending proposal"
-  // server-side — the argument round-trip is the whole contract.
-  const proposeCloseSessionTool = tool({
-    description:
-      'Propone cerrar la sesión al paciente. NO cierra la sesión: solo señala que la IA ha sugerido el cierre en el texto del mismo turno. Tras llamar a este tool, espera la respuesta del paciente. Si acepta, en el siguiente turno llama a confirm_close_session con el mismo reason. Si rechaza, continúa la conversación sin más tool calls.',
-    inputSchema: z.object({
-      reason: z.enum(['user_request', 'time_limit']),
-    }),
-    execute: async ({ reason }) => {
-      return { proposed: true, reason }
-    },
-  })
-
-  const confirmCloseSessionTool = tool({
-    description:
-      'Cierra la sesión actual tras confirmación explícita del paciente. Solo se llama en el turno siguiente a un propose_close_session, si el paciente aceptó. Pasa el mismo reason que usaste en propose_close_session.',
-    inputSchema: z.object({
-      reason: z.enum(['user_request', 'time_limit']),
-    }),
-    execute: async ({ reason }) => {
-      await closeSession(supabase, sessionId, reason)
+    if (oversized) throw new Error('context_limit')
+    const safetyState = await getSessionSafetyState(supabase, sessionId, session.opened_at)
+    const crisisNotice = buildCrisisNotice({ safetyState, crisis })
+    const questionnaireNotice = await buildQuestionnaireResultNotice(supabase, sessionId, session.opened_at, session.conversation_id)
+    const minutesRemaining = Math.max(0, Math.ceil((60*60*1000 - (Date.now()-new Date(session.opened_at).getTime()))/60_000))
+    const timeNotice = minutesRemaining <= 10 ? `[AVISO DE TIEMPO] Quedan ${minutesRemaining} minutos. Propón un cierre tranquilo y espera aceptación explícita en el siguiente turno. El backend aplica el límite duro después de registrar cualquier señal nueva.\n` : ''
+    let patientContextBlock = '', riskOpeningNotice = '', intakeBlock = '', protocolPhaseBlock = ''
+    if (process.env.FEATURE_CROSS_SESSION_CONTEXT === 'on') {
+      try {
+        // Elevated private context only after getUser + session/conversation
+        // ownership above. This internal snapshot never goes to the client.
+        const ctx = await buildPatientContext({ supabase: service, userId: user.id, sessionId, protocolPhase: session.protocol_phase as ProtocolPhase })
+        const pieces = assemblePlan6ContextPieces(ctx)
+        ;({ patientContextBlock, riskOpeningNotice, intakeBlock, protocolPhaseBlock } = pieces)
+        void logContextInjection({ userId: user.id, sessionId, ...pieces.telemetry }).catch(() => console.error('[context-telemetry] failed'))
+      } catch { console.error('[patient-context] unavailable') }
+    }
+    const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
+    checkContextBudget([systemPrompt, ...messages])
+    const patientCodes = listPatientCodes()
+    let proposal: string | null = null
+    let closeReason: string | null = null
+    const close = async (reason: string) => {
+      const { data, error } = await service.rpc('close_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_reason: reason })
+      if (error) throw error
+      if (!data) return { closed: false, reason: 'confirmation_required' }
+      closeReason = reason
       return { closed: true, reason }
-    },
-  })
-
-  const closeSessionCrisisTool = tool({
-    description:
-      'Cierra la sesión inmediatamente por protocolo de crisis. Usar solo tras haber dado la copy de seguridad (Línea 024) y cuando el riesgo es inmediato. NUNCA confirma: safety first.',
-    inputSchema: z.object({}),
-    execute: async () => {
-      await closeSession(supabase, sessionId, 'crisis_detected')
-      return { closed: true, reason: 'crisis_detected' as const }
-    },
-  })
-
-  const result = streamText({
-    model: llm.conversational(),
-    system: systemPrompt,
-    messages: await convertToModelMessages(messages),
-    tools: {
-      propose_close_session: proposeCloseSessionTool,
-      confirm_close_session: confirmCloseSessionTool,
-      close_session_crisis: closeSessionCrisisTool,
-      propose_questionnaire: proposeQuestionnaireTool,
-    },
-  })
-
-  return result.toUIMessageStreamResponse({
-    originalMessages: messages,
-    onFinish: async ({ responseMessage }) => {
-      // Persist the FULL UIMessage parts payload — text, tool calls, tool
-      // results, reasoning, etc. Without this, reloads or rehydration drop
-      // every tool part and `detectServerClose(messages)` (and any other
-      // tool-call-aware logic) breaks. See plan-7 T1.
-      if (
-        responseMessage.role !== 'assistant' ||
-        !Array.isArray(responseMessage.parts) ||
-        responseMessage.parts.length === 0
-      ) {
-        return
-      }
-      try {
-        await saveAssistantMessage(supabase, {
-          conversationId: session.conversation_id,
-          sessionId,
-          parts: responseMessage.parts,
-        })
-      } catch (err) {
-        // onFinish runs in the stream flush; throwing here swallows silently
-        // and produces a "ghost" turn (cliente ve la respuesta, BD no la
-        // tiene). Log loud so we notice in stderr / observability.
-        console.error('[chat-onfinish-persist]', {
-          sessionId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-
-      // Plan 7 T3c — audit: si el asistente emitió frase de despedida
-      // ("lo dejamos aquí", "cuídate", "hasta la próxima") sin haber
-      // llamado a un tool de cierre en el mismo turno, dejamos rastro.
-      // No bloquea; el primer fix es endurecer el prompt.
-      try {
-        if (detectFarewellWithoutCloseTool(responseMessage.parts)) {
-          console.warn('[chat-onfinish] assistant emitió despedida sin tool de cierre', {
-            sessionId,
-          })
-        }
-      } catch {
-        // Defensa: nunca dejar que la heurística rompa onFinish.
-      }
-    },
-  })
-}
-
-function extractText(message: UIMessage | undefined): string {
-  if (!message) return ''
-  if (!Array.isArray(message.parts)) return ''
-  return message.parts
-    .filter((p): p is { type: 'text'; text: string } => p?.type === 'text')
-    .map((p) => p.text ?? '')
-    .join('')
+    }
+    const result = streamText({
+      model: llm.conversational(), system: systemPrompt,
+      messages: await convertToModelMessages(messages),
+      maxOutputTokens: 2500, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
+      tools: {
+        propose_close_session: tool({ description: 'Propone cierre por user_request o time_limit. Espera aceptación explícita del siguiente turno antes de confirmar.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => { proposal = reason; return { proposed: true, reason } } }),
+        confirm_close_session: tool({ description: 'Confirma exclusivamente la propuesta anterior con el mismo motivo y aceptación explícita del turno siguiente.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => acceptsClosure(lastUserText) ? close(reason) : { closed: false, reason: 'confirmation_required' } }),
+        close_session_crisis: tool({ description: 'Cierra por señal de crisis registrada, sin pedir aceptación. Da primero los recursos de seguridad.', inputSchema: z.object({}), execute: async () => close('crisis_detected') }),
+        propose_questionnaire: tool({ description: 'Propone PHQ9 o GAD7 para screening y BDI2/BAI para profundización tras primario moderado. C-SSRS (CSSRS) tiene prioridad ante señal suicida/autolesión. Los cuestionarios scored no bloquean otros; como máximo un cuestionario pendiente. Anuncia por texto y espera consentimiento, excepto la atención urgente a seguridad.', inputSchema: z.object({ code: z.enum(patientCodes as [QuestionnaireCode,...QuestionnaireCode[]]), reason: z.string().min(10).max(300) }), execute: async ({ code, reason }) => {
+          if (code !== 'CSSRS' && await getActiveInstanceForSession(supabase, sessionId)) return { skipped: true, reason: 'already_active' }
+          const instance = await createInstance(supabase, { userId: user.id, sessionId, conversationId: session.conversation_id, questionnaireCode: code, triggerReason: reason, requestId, turnToken: token })
+          return { proposed: true, code, instanceId: instance.id }
+        } }),
+      },
+    })
+    let responseMessage: UIMessage | undefined
+    const chunks: UIMessageChunk[] = []
+    const reader = result.toUIMessageStream({ originalMessages: messages, onFinish: ({ responseMessage: message }) => { responseMessage = message }, onError: () => 'No se pudo generar una respuesta. Reintenta el mismo mensaje.' }).getReader()
+    // Buffer the AI SDK stream until its final assistant message commits.
+    // A disconnect does not cancel accepted server work. Failed persistence
+    // produces an observable HTTP error, never a displayed ghost assistant.
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value.type === 'error' || value.type === 'abort') throw new Error('generation_failed')
+      chunks.push(value)
+      if (JSON.stringify(chunks).length > 100_000) { await reader.cancel(); throw new Error('response_limit') }
+    }
+    if (!responseMessage?.parts.length) throw new Error('empty_response')
+    const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: responseMessage.parts as Json, p_chunks: chunks as unknown as Json, p_proposal: proposal, p_close_reason: closeReason })
+    if (error) throw error
+    if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
+    return replay(chunks)
+  } catch (error) {
+    const { error: persistenceError } = await service.rpc('fail_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_error: error instanceof Error && error.message === 'context_limit' ? 'context_limit' : 'turn_failed' })
+    console.error('[chat] turn failed', { requestId, failureRecorded: !persistenceError })
+    return Response.json({ error: 'No se pudo completar el turno. Reintenta el mismo mensaje o recarga.', requestId }, { status: 503 })
+  }
 }
 
 type SupabaseClient = Awaited<ReturnType<typeof createAuthenticatedClient>>
@@ -440,9 +190,9 @@ async function buildQuestionnaireResultNotice(
     : []
   const acute = flags.some((f) => f.reason === 'acute_risk')
 
-  if (def.code === 'ASQ' && acute) {
-    return `[RESULTADO DE CUESTIONARIO — ASQ — RIESGO AGUDO]
-El item 5 del ASQ es positivo. Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session_crisis si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal. NUNCA confirmes un cierre por crisis: es single-step.
+  if (def.code === 'CSSRS' && acute) {
+    return `[RESULTADO DE CUESTIONARIO — C-SSRS — RIESGO AGUDO]
+El cribado C-SSRS registra una señal de riesgo agudo. Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session_crisis si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal. NUNCA confirmes un cierre por crisis: es single-step.
 
 ---
 

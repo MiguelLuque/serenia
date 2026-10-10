@@ -243,13 +243,13 @@ describe('buildCrisisNotice — cssrs_pending', () => {
     expect(out).toContain('Si rechaza')
   })
 
-  it('crisis con alta señal → variante pending sigue prevaleciendo (sin RE-ESCALADA)', () => {
+  it('crisis con alta señal reabre seguridad aunque CSSRS esté pendiente', () => {
     const out = buildCrisisNotice({
       safetyState: state,
       crisis: crisisWith(['suicid']),
     })
-    expect(out).toContain('[C-SSRS PROPUESTO PENDIENTE]')
-    expect(out).not.toContain('[RE-ESCALADA')
+    expect(out).not.toContain('[C-SSRS PROPUESTO PENDIENTE]')
+    expect(out).toContain('[RE-ESCALADA')
   })
 })
 

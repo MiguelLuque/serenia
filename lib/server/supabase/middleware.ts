@@ -4,6 +4,13 @@ import type { Database } from '@/lib/shared/supabase/types'
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
+  const refreshHeaders = new Headers()
+  function redirect(path: string) {
+    const redirected = NextResponse.redirect(new URL(path, request.url))
+    response.cookies.getAll().forEach(cookie => redirected.cookies.set(cookie))
+    refreshHeaders.forEach((value, name) => redirected.headers.set(name, value))
+    return redirected
+  }
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,9 +18,13 @@ export async function updateSession(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) => {
+        setAll: (cookiesToSet, headers) => {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          const previousCookies = response.cookies.getAll()
           response = NextResponse.next({ request })
+          previousCookies.forEach(cookie => response.cookies.set(cookie))
+          Object.entries(headers).forEach(([name, value]) => refreshHeaders.set(name, value))
+          refreshHeaders.forEach((value, name) => response.headers.set(name, value))
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           )
@@ -32,11 +43,11 @@ export async function updateSession(request: NextRequest) {
     path === '/'
 
   if (!user && !isPublic) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirect('/login')
   }
 
   if (user && (path === '/login' || path === '/registro')) {
-    return NextResponse.redirect(new URL('/app', request.url))
+    return redirect('/app')
   }
 
   if (user && path.startsWith('/app')) {
@@ -46,7 +57,7 @@ export async function updateSession(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     if (profile?.onboarding_status !== 'complete') {
-      return NextResponse.redirect(new URL('/onboarding', request.url))
+      return redirect('/onboarding')
     }
   }
 
@@ -57,7 +68,7 @@ export async function updateSession(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     if (profile?.onboarding_status === 'complete') {
-      return NextResponse.redirect(new URL('/app', request.url))
+      return redirect('/app')
     }
   }
 

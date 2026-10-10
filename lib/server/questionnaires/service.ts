@@ -1,3 +1,6 @@
+import 'server-only'
+import { requireOwnedSession } from '@/lib/server/sessions/authorization'
+import { validateAnswers } from './validation'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
 import type { AnswerInput, ScoringResult } from '@/lib/shared/questionnaires/types'
@@ -20,6 +23,8 @@ export interface CreateInstanceInput {
   conversationId: string
   questionnaireCode: QuestionnaireCode
   triggerReason: string
+  requestId?: string
+  turnToken?: string
 }
 
 /**
@@ -30,31 +35,15 @@ export async function createInstance(
   supabase: Supabase,
   input: CreateInstanceInput,
 ): Promise<QuestionnaireInstanceRow> {
-  const { data: definition, error: defError } = await supabase
-    .from('questionnaire_definitions')
-    .select()
-    .eq('code', input.questionnaireCode)
-    .single()
-
-  if (defError) throw defError
-
-  const { data: instance, error: instanceError } = await supabase
-    .from('questionnaire_instances')
-    .insert({
-      user_id: input.userId,
-      session_id: input.sessionId,
-      conversation_id: input.conversationId,
-      questionnaire_id: definition.id,
-      triggered_by: 'ai',
-      status: 'proposed',
-      trigger_reason: input.triggerReason,
-    })
-    .select()
-    .single()
-
-  if (instanceError) throw instanceError
-
-  return instance
+  const { user, service } = await requireOwnedSession(supabase, input.sessionId, input.conversationId)
+  if (input.userId !== user.id) throw new Error('Unauthorized')
+  const { data, error } = await service.rpc('create_questionnaire_atomic', {
+    p_session_id: input.sessionId, p_user_id: user.id, p_conversation_id: input.conversationId,
+    p_code: input.questionnaireCode, p_reason: input.triggerReason,
+    ...(input.requestId ? { p_request_id: input.requestId, p_token: input.turnToken } : {}),
+  })
+  if (error || !data) throw error ?? new Error('Questionnaire not created')
+  return data
 }
 
 /**
@@ -64,15 +53,11 @@ export async function startInstance(
   supabase: Supabase,
   instanceId: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('questionnaire_instances')
-    .update({
-      status: 'in_progress',
-      started_at: new Date().toISOString(),
-    })
-    .eq('id', instanceId)
-    .eq('status', 'proposed')
-
+  const { data: instance, error: fetchError } = await supabase.from('questionnaire_instances').select().eq('id', instanceId).single()
+  if (fetchError || !instance || !instance.session_id) throw fetchError ?? new Error('Instance not found')
+  const { user, service } = await requireOwnedSession(supabase, instance.session_id, instance.conversation_id ?? undefined)
+  if (instance.user_id !== user.id) throw new Error('Unauthorized')
+  const { error } = await service.rpc('start_questionnaire_atomic', { p_instance_id: instanceId, p_user_id: user.id })
   if (error) throw error
 }
 
@@ -94,7 +79,7 @@ export async function getActiveInstanceForSession(
     .from('questionnaire_instances')
     .select()
     .eq('session_id', sessionId)
-    .in('status', ['proposed', 'in_progress', 'scored'])
+    .in('status', ['proposed', 'in_progress'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -167,102 +152,21 @@ export async function submitAnswers(
 
   if (itemsError) throw itemsError
 
-  // Build a map from order_index → item_id
-  const itemByOrder = new Map<number, QuestionnaireItemRow>()
-  for (const item of items ?? []) {
-    itemByOrder.set(item.order_index, item)
-  }
-
-  // 2. Insert answers
-  const answerRows = input.answers.map((a) => {
-    const item = itemByOrder.get(a.itemOrder)
-    if (!item) throw new Error(`No item found for order_index ${a.itemOrder}`)
-    return {
-      instance_id: input.instanceId,
-      item_id: item.id,
-      answer_raw: a.valueRaw,
-      answer_numeric: a.valueNumeric,
-    }
-  })
-
-  const { error: answersError } = await supabase
-    .from('questionnaire_answers')
-    .insert(answerRows)
-
-  if (answersError) throw answersError
-
-  // 3. Sort answers by order_index and run scoring via the registry.
-  // Plan 8 ADR-017: no per-code if/else; getDefinition() resolves the
-  // scorer or throws fast for unknown codes.
-  const sorted = [...input.answers].sort((a, b) => a.itemOrder - b.itemOrder)
-  const numericValues = sorted.map((a) => a.valueNumeric)
+  if (!instance.session_id || !instance.conversation_id) throw new Error('Instance parent missing')
+  const { user, service } = await requireOwnedSession(supabase, instance.session_id, instance.conversation_id)
+  if (instance.user_id !== user.id || definition.is_clinician_rated) throw new Error('Unauthorized questionnaire')
   const code = definition.code as QuestionnaireCode
-
-  const def = getDefinition(code)
-  if (!def) {
-    throw new Error(`Unknown questionnaire code: ${code}`)
-  }
-  const scoringResult: ScoringResult = def.scorer(numericValues)
-
-  // 4. Insert questionnaire_results
-  const { error: resultError } = await supabase
-    .from('questionnaire_results')
-    .insert({
-      instance_id: input.instanceId,
-      total_score: scoringResult.totalScore,
-      severity_band: scoringResult.severityBand,
-      subscores_json: scoringResult.subscores as Json,
-      flags_json: scoringResult.flags as unknown as Json,
-      requires_review: scoringResult.requiresReview,
-    })
-
-  if (resultError) throw resultError
-
-  // 5. Update instance status → scored
-  const now = new Date().toISOString()
-  const { error: updateError } = await supabase
-    .from('questionnaire_instances')
-    .update({
-      status: 'scored',
-      submitted_at: now,
-      scored_at: now,
-    })
-    .eq('id', input.instanceId)
-
-  if (updateError) throw updateError
-
-  // 6. Insert a single risk_event with highest applicable severity
-  //    - C-SSRS acute_risk band con flag acute_risk (item 6b reciente) → critical
-  //    - C-SSRS acute_risk band con flag suicidality (5/6 lifetime)    → critical
-  //    - C-SSRS high_risk band                                         → high
-  //    - PHQ-9 / BDI-II item suicidalidad flag                         → high
-  const hasAcute = scoringResult.flags.some((f) => f.reason === 'acute_risk')
-  const hasSuicidality =
-    scoringResult.flags.some((f) => f.reason === 'suicidality') ||
-    (code === 'CSSRS' && scoringResult.severityBand === 'high_risk')
-
-  if (hasAcute || hasSuicidality) {
-    const severity = hasAcute ? 'critical' : 'high'
-    const { error: riskError } = await supabase
-      .from('risk_events')
-      .insert({
-        user_id: instance.user_id,
-        session_id: instance.session_id,
-        conversation_id: instance.conversation_id,
-        risk_type: 'suicidal_ideation',
-        severity,
-        source_type: 'questionnaire',
-        payload_json: {
-          questionnaire_code: code,
-          instance_id: input.instanceId,
-          flags: scoringResult.flags as unknown as Json,
-          total_score: scoringResult.totalScore,
-          severity_band: scoringResult.severityBand,
-        } as Json,
-      })
-
-    if (riskError) throw riskError
-  }
-
+  const normalized = validateAnswers(code, items ?? [], input.answers)
+  const scorer = getDefinition(code)
+  if (!scorer) throw new Error('Unsupported questionnaire')
+  const scoringResult = scorer.scorer(normalized.map(a => a.valueNumeric))
+  const acute = scoringResult.flags.some(f => f.reason === 'acute_risk')
+  const suicidality = scoringResult.flags.some(f => f.reason === 'suicidality') || (code === 'CSSRS' && scoringResult.severityBand === 'high_risk')
+  const { error } = await service.rpc('submit_questionnaire_atomic', {
+    p_instance_id: instance.id, p_user_id: user.id,
+    p_answers: normalized as unknown as Json, p_result: scoringResult as unknown as Json,
+    p_risk_severity: acute ? 'critical' : suicidality ? 'high' : null,
+  })
+  if (error) throw error
   return scoringResult
 }

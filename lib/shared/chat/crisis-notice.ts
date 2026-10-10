@@ -56,7 +56,7 @@ const HIGH_SIGNAL_LABELS = new Set<string>([
   'tirarme (desde|por)',
 ])
 
-function hasHighSignalTerm(matchedTerms: string[]): boolean {
+export function hasHighSignalTerm(matchedTerms: string[]): boolean {
   return matchedTerms.some((label) => HIGH_SIGNAL_LABELS.has(label))
 }
 
@@ -202,10 +202,9 @@ export function buildCrisisNotice(input: CrisisNoticeInput): string {
       return cssrsHighRiskBlock()
 
     case 'cssrs_pending':
-      // Pending: vetamos otra propuesta y otra pregunta textual. Si llega
-      // crisis con alta señal, igualmente prevalece la regla de pending —
-      // el psicólogo verá la señal en el chat. (No metemos RE-ESCALADA
-      // aquí porque el cribado aún no está completado.)
+      if (crisis.detected && hasHighSignalTerm(crisis.matchedTerms)) {
+        return reEscalationBlock(crisis.matchedTerms) + neverAssessedBlock(crisis.matchedTerms)
+      }
       return cssrsPendingBlock()
 
     case 'cssrs_negative': {

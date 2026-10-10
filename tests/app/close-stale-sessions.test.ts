@@ -1,337 +1,66 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-
-// ---------------------------------------------------------------------------
-// Mocks (hoisted so the route's module-init imports use them)
-// ---------------------------------------------------------------------------
-
-const { createServiceRoleClientMock, enqueueAssessmentGenerationMock } =
-  vi.hoisted(() => ({
-    createServiceRoleClientMock: vi.fn(),
-    enqueueAssessmentGenerationMock: vi.fn(),
-  }))
-
-vi.mock('@/lib/server/supabase/server', () => ({
-  createServiceRoleClient: createServiceRoleClientMock,
-}))
-
-vi.mock('@/lib/server/workflows', () => ({
-  enqueueAssessmentGeneration: enqueueAssessmentGenerationMock,
-}))
-
-import { GET, POST } from '@/app/api/internal/close-stale-sessions/route'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-type QueryResult = { data: unknown; error: unknown }
-
-/**
- * Build a chainable Supabase query mock. Any combination of `.select().eq().lt().limit()`
- * resolves to the given { data, error } shape. The chain is also awaitable
- * directly (workflow code does `await supabase.from(...).update(...).in(...)`).
- */
-function makeChain(result: QueryResult) {
-  const chain: Record<string, unknown> = {}
-  const methods = [
-    'select',
-    'insert',
-    'update',
-    'delete',
-    'upsert',
-    'eq',
-    'neq',
-    'gt',
-    'gte',
-    'lt',
-    'lte',
-    'in',
-    'order',
-    'limit',
-    'single',
-    'maybeSingle',
-  ]
-  for (const m of methods) {
-    chain[m] = vi.fn(() => chain)
-  }
-  ;(chain as { then: unknown }).then = (
-    resolve: (v: unknown) => unknown,
-    reject?: (e: unknown) => unknown,
-  ) => Promise.resolve(result).then(resolve, reject)
-  return chain
-}
-
-/**
- * Builds a Supabase mock that returns one chain per `.from()` call so the
- * test can assert which chain handled the SELECT and which handled the
- * UPDATE — and in what order.
- */
-function makeSupabase(
-  selectResult: QueryResult,
-  updateResult: QueryResult = { data: null, error: null },
-) {
-  const chains: ReturnType<typeof makeChain>[] = []
-  let callIndex = 0
-  const fromMock = vi.fn((name: string) => {
-    void name
-    callIndex++
-    const result = callIndex === 1 ? selectResult : updateResult
-    const chain = makeChain(result)
-    chains.push(chain)
-    return chain
-  })
-  return { from: fromMock, _chains: chains }
-}
-
-function authedRequest(method: 'GET' | 'POST', secret = 'test-secret'): Request {
-  return new Request('https://serenia.test/api/internal/close-stale-sessions', {
-    method,
-    headers: { authorization: `Bearer ${secret}` },
-  })
-}
-
-function unauthedRequest(method: 'GET' | 'POST'): Request {
-  return new Request('https://serenia.test/api/internal/close-stale-sessions', {
-    method,
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-const ORIGINAL_CRON_SECRET = process.env.CRON_SECRET
-
-beforeEach(() => {
-  createServiceRoleClientMock.mockReset()
-  enqueueAssessmentGenerationMock.mockReset()
-  process.env.CRON_SECRET = 'test-secret'
+/* eslint-disable @typescript-eslint/no-explicit-any -- database doubles */
+import { describe,expect,it,vi,beforeEach,afterEach } from 'vitest'
+const {createServiceRoleClient,dispatchAssessmentJob}=vi.hoisted(()=>({createServiceRoleClient:vi.fn(),dispatchAssessmentJob:vi.fn()}))
+vi.mock('@/lib/server/supabase/server',()=>({createServiceRoleClient}))
+vi.mock('@/lib/server/workflows',()=>({dispatchAssessmentJob,enqueueAssessmentGeneration:vi.fn()}))
+import {POST,GET} from '@/app/api/internal/close-stale-sessions/route'
+const previous=process.env.CRON_SECRET
+let rows:any[],jobs:any[],query:any,rpc:ReturnType<typeof vi.fn>
+beforeEach(()=>{
+  process.env.CRON_SECRET='synthetic-secret';rows=[];jobs=[]
+  query={};for(const method of ['select','eq','lt','order','limit'])query[method]=vi.fn(()=>query)
+  query.then=(resolve:any,reject:any)=>Promise.resolve({data:rows,error:null}).then(resolve,reject)
+  rpc=vi.fn(async(name:string)=>({data:name==='claim_assessment_jobs'?jobs:null,error:null}))
+  createServiceRoleClient.mockReturnValue({from:vi.fn(()=>query),rpc})
+  dispatchAssessmentJob.mockReset().mockResolvedValue({runId:'synthetic-run'})
 })
-
-afterEach(() => {
-  if (ORIGINAL_CRON_SECRET === undefined) {
+afterEach(()=>{process.env.CRON_SECRET=previous})
+const request=(authorized=true)=>new Request('http://localhost/api/internal/close-stale-sessions',{method:'POST',headers:authorized?{authorization:'Bearer synthetic-secret'}:{}})
+describe('bounded authorized closure and recovery sweep',()=>{
+  it('accepts the correct secret without a browser cookie',async()=>{expect((await POST(request())).status).toBe(200)})
+  it('rejects missing, invalid and unconfigured secrets before service-role creation',async()=>{
+    createServiceRoleClient.mockClear()
+    expect((await POST(request(false))).status).toBe(401)
+    expect((await POST(new Request('http://localhost',{headers:{authorization:'Bearer wrong'}}))).status).toBe(401)
     delete process.env.CRON_SECRET
-  } else {
-    process.env.CRON_SECRET = ORIGINAL_CRON_SECRET
-  }
-})
-
-describe('POST /api/internal/close-stale-sessions — auth', () => {
-  it('returns 401 when no Authorization header is provided', async () => {
-    const res = await POST(unauthedRequest('POST'))
-    expect(res.status).toBe(401)
-    expect(createServiceRoleClientMock).not.toHaveBeenCalled()
-    expect(enqueueAssessmentGenerationMock).not.toHaveBeenCalled()
+    expect((await POST(request())).status).toBe(401)
+    expect(createServiceRoleClient).not.toHaveBeenCalled()
   })
-
-  it('returns 401 with an incorrect Bearer token', async () => {
-    const res = await POST(authedRequest('POST', 'wrong-secret'))
-    expect(res.status).toBe(401)
-    expect(createServiceRoleClientMock).not.toHaveBeenCalled()
-    expect(enqueueAssessmentGenerationMock).not.toHaveBeenCalled()
+  it('closes through the same atomic RPC and separately claims recovery jobs',async()=>{
+    rows=[{id:'stale',user_id:'owner'}];jobs=[{session_id:'stale',token:'lease'}]
+    expect(await (await POST(request())).json()).toEqual({ok:true,closed:1,enqueued:1,failed:0})
+    expect(rpc).toHaveBeenCalledWith('close_session_atomic',{p_session_id:'stale',p_user_id:'owner',p_reason:'inactivity'})
+    expect(rpc).toHaveBeenCalledWith('recover_assessment_jobs',{p_limit:10})
+    expect(query.limit).toHaveBeenCalledWith(10)
   })
-
-  it('returns 401 (refuse-by-default) when CRON_SECRET is not configured', async () => {
-    delete process.env.CRON_SECRET
-    // Even with a Bearer header that "looks valid", missing CRON_SECRET must
-    // fail closed — the endpoint never falls back to "no auth required".
-    const res = await POST(authedRequest('POST', 'anything'))
-    expect(res.status).toBe(401)
-    expect(createServiceRoleClientMock).not.toHaveBeenCalled()
-    expect(enqueueAssessmentGenerationMock).not.toHaveBeenCalled()
+  it('recovers closed sessions even when the stale-open query is empty',async()=>{
+    jobs=[{session_id:'closed-from-failed-enqueue',token:'lease'}]
+    const res=await POST(request());expect(await res.json()).toMatchObject({closed:0,enqueued:1})
+    expect(dispatchAssessmentJob).toHaveBeenCalledWith(jobs[0])
   })
-})
-
-describe('POST /api/internal/close-stale-sessions — happy paths', () => {
-  it('returns 200 with closed=0 and skips enqueue when no stale sessions exist', async () => {
-    const supabase = makeSupabase({ data: [], error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-
-    const res = await POST(authedRequest('POST'))
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 0, enqueued: 0 })
-    expect(enqueueAssessmentGenerationMock).not.toHaveBeenCalled()
+  it('reports partial enqueue failure and continues the bounded batch',async()=>{
+    jobs=[{session_id:'one',token:'a'},{session_id:'two',token:'b'}]
+    dispatchAssessmentJob.mockRejectedValueOnce(new Error('synthetic failure'))
+    expect(await (await POST(request())).json()).toMatchObject({enqueued:1,failed:1})
   })
-
-  it('closes N stale sessions and enqueues a workflow per session', async () => {
-    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }, { id: 'sess-c' }]
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-    enqueueAssessmentGenerationMock.mockResolvedValue({ runId: 'run-x' })
-
-    const res = await POST(authedRequest('POST'))
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 3, enqueued: 3, failed: 0 })
-
-    expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(3)
-    expect(enqueueAssessmentGenerationMock).toHaveBeenNthCalledWith(1, {
-      sessionId: 'sess-a',
-    })
-    expect(enqueueAssessmentGenerationMock).toHaveBeenNthCalledWith(2, {
-      sessionId: 'sess-b',
-    })
-    expect(enqueueAssessmentGenerationMock).toHaveBeenNthCalledWith(3, {
-      sessionId: 'sess-c',
-    })
+  it('never has more than two enqueue calls in flight',async()=>{
+    jobs=Array.from({length:10},(_,i)=>({session_id:String(i),token:'lease'}))
+    let active=0,max=0
+    dispatchAssessmentJob.mockImplementation(async()=>{active++;max=Math.max(max,active);await new Promise(resolve=>setTimeout(resolve,2));active--;return{runId:'run'}})
+    expect(await (await POST(request())).json()).toMatchObject({enqueued:10})
+    expect(max).toBe(2)
   })
-
-  it('issues the bulk-close UPDATE before any workflow enqueue', async () => {
-    // Order matters: a failing enqueue still leaves the session closed (which
-    // the user cron next tick can pick back up via the existence check). If
-    // we enqueued first, a crash between enqueue and update would leave the
-    // session open while a workflow runs against an open session.
-    const stale = [{ id: 'sess-a' }]
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-
-    const callOrder: string[] = []
-    // Capture the moment the UPDATE chain resolves.
-    const origFrom = supabase.from
-    supabase.from = vi.fn((name: string) => {
-      const chain = origFrom(name) as Record<string, unknown>
-      const originalIn = chain.in as (...a: unknown[]) => unknown
-      chain.in = vi.fn((...args: unknown[]) => {
-        callOrder.push('update.in')
-        return originalIn(...args)
-      })
-      return chain
-    })
-    enqueueAssessmentGenerationMock.mockImplementation(async () => {
-      callOrder.push('enqueue')
-      return { runId: 'run-x' }
-    })
-
-    await POST(authedRequest('POST'))
-    const updateIdx = callOrder.indexOf('update.in')
-    const enqueueIdx = callOrder.indexOf('enqueue')
-    expect(updateIdx).toBeGreaterThanOrEqual(0)
-    expect(enqueueIdx).toBeGreaterThanOrEqual(0)
-    expect(updateIdx).toBeLessThan(enqueueIdx)
+  it('does not start workflows without an outbox claim',async()=>{
+    expect(await (await POST(request())).json()).toMatchObject({enqueued:0})
+    expect(dispatchAssessmentJob).not.toHaveBeenCalled()
   })
-
-  it('applies a .limit(200) cap on the stale-session SELECT', async () => {
-    const stale = Array.from({ length: 200 }, (_, i) => ({ id: `sess-${i}` }))
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-
-    const res = await POST(authedRequest('POST'))
-    expect(res.status).toBe(200)
-
-    // The SELECT chain is the first .from() call. Verify .limit(200) was applied.
-    const selectChain = supabase._chains[0] as { limit: ReturnType<typeof vi.fn> }
-    expect(selectChain.limit).toHaveBeenCalledWith(200)
-
-    // Sanity: enqueue runs once per row returned by the (capped) SELECT.
-    expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(200)
+  it('returns an observable error on failed SQL recovery',async()=>{
+    rpc.mockResolvedValue({data:null,error:{code:'XX000'}})
+    expect((await POST(request())).status).toBe(503)
+    expect(dispatchAssessmentJob).not.toHaveBeenCalled()
   })
-})
-
-describe('POST /api/internal/close-stale-sessions — parallel enqueue (Plan 8 Bloque 2 Fix 2)', () => {
-  it('reports partial work when some enqueues fail (allSettled, no abort)', async () => {
-    // Three sessions: enqueue resolves for the first two and rejects for
-    // the third. The handler MUST NOT abort — the work for sess-a/sess-b
-    // is the whole point. We track `failed: 1` so ops sees the loss.
-    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }, { id: 'sess-c' }]
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-    enqueueAssessmentGenerationMock.mockImplementation(
-      async ({ sessionId }: { sessionId: string }) => {
-        if (sessionId === 'sess-c') {
-          throw new Error('workflow service unavailable')
-        }
-        return { runId: `run-${sessionId}` }
-      },
-    )
-
-    const res = await POST(authedRequest('POST'))
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 3, enqueued: 2, failed: 1 })
-    expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(3)
-  })
-
-  it('runs enqueues in parallel (not sequentially)', async () => {
-    // Sequential `await` would resolve enqueues in serial order; with
-    // Promise.allSettled all three are kicked off before any completes,
-    // so the `started` count reaches 3 before any `finished` does. We
-    // observe this by holding all three pending until we explicitly let
-    // them resolve.
-    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }, { id: 'sess-c' }]
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-
-    let started = 0
-    let observedStartedBeforeAnyFinish = 0
-    let firstFinish = false
-    const releasers: Array<() => void> = []
-    enqueueAssessmentGenerationMock.mockImplementation(() => {
-      started += 1
-      if (!firstFinish) observedStartedBeforeAnyFinish = started
-      return new Promise<{ runId: string }>((resolve) => {
-        releasers.push(() => {
-          firstFinish = true
-          resolve({ runId: 'r' })
-        })
-      })
-    })
-
-    const pending = POST(authedRequest('POST'))
-    // Wait until all three enqueue() calls have fired. With sequential
-    // `await` only one would start; with Promise.allSettled all three are
-    // kicked off synchronously inside `ids.map(...)`. We wait for `started`
-    // to reach 3 (with a generous spin cap to keep the test deterministic
-    // under load) instead of relying on a single setTimeout(0) tick.
-    for (let i = 0; i < 50 && started < 3; i++) {
-      await new Promise((r) => setTimeout(r, 0))
-    }
-    expect(started).toBe(3)
-    // The key invariant: nothing finished before all three started.
-    expect(observedStartedBeforeAnyFinish).toBe(3)
-
-    // Now release each and let the handler complete.
-    for (const release of releasers) release()
-    const res = await pending
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 3, enqueued: 3, failed: 0 })
-  })
-
-  it('still returns 200 with failed=N when ALL enqueues reject', async () => {
-    // Edge: every enqueue fails. We still close the sessions and return
-    // 200 — the next cron tick cannot recover them because they are no
-    // longer `status='open'`, so reporting `failed=N` to ops is the
-    // primary obs hook.
-    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }]
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-    enqueueAssessmentGenerationMock.mockRejectedValue(new Error('boom'))
-
-    const res = await POST(authedRequest('POST'))
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 2, enqueued: 0, failed: 2 })
-  })
-})
-
-describe('GET /api/internal/close-stale-sessions', () => {
-  it('GET also runs the same close-and-enqueue flow (Vercel Cron uses GET)', async () => {
-    const stale = [{ id: 'sess-a' }, { id: 'sess-b' }]
-    const supabase = makeSupabase({ data: stale, error: null })
-    createServiceRoleClientMock.mockReturnValue(supabase)
-    enqueueAssessmentGenerationMock.mockResolvedValue({ runId: 'run-x' })
-
-    const res = await GET(authedRequest('GET'))
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ ok: true, closed: 2, enqueued: 2, failed: 0 })
-    expect(enqueueAssessmentGenerationMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('GET also rejects unauthenticated requests with 401', async () => {
-    const res = await GET(unauthedRequest('GET'))
-    expect(res.status).toBe(401)
-    expect(createServiceRoleClientMock).not.toHaveBeenCalled()
+  it('supports GET cron with the same independent secret authentication',async()=>{
+    expect((await GET(request())).status).toBe(200)
+    expect((await GET(request(false))).status).toBe(401)
   })
 })

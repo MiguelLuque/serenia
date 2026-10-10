@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--baseline-security', action='store_true', help='Historical baseline without the two nonportable data operations or hardening migration')
+parser.add_argument('--baseline-chat', action='store_true', help='Task 1 schema with Task 2 regressions and no Task 2 migration')
 args = parser.parse_args()
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 
@@ -38,9 +39,15 @@ try:
         raise RuntimeError('PostgreSQL startup timed out:\n' + docker('logs', name, check=False).stdout)
     query((ROOT / 'supabase/tests/bootstrap.sql').read_text())
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
+        if args.baseline_chat and 'robust_chat_questionnaires_recovery' in path.name:
+            continue
         if args.baseline_security and (path.name.startswith('202610') or path.name.startswith('20260502000004') or path.name.startswith('20260502000005')):
             continue
         try:
+            if 'robust_chat_questionnaires_recovery' in path.name:
+                # New table grants must survive a hosted installation without
+                # bootstrap's historical permissive default privileges.
+                query('alter default privileges in schema public revoke all on tables from anon,authenticated,service_role;')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
         except RuntimeError as error:
             raise RuntimeError(f'Migration {path.name}: {error}') from error
@@ -91,5 +98,65 @@ try:
     if results[0] != results[1]:
         raise RuntimeError('Concurrent retry returned different revision IDs')
     print('PASS concurrent confirm/modify and duplicate modify retry')
+    query((ROOT / 'supabase/tests/chat-questionnaire-recovery.sql').read_text())
+    print('PASS atomic questionnaire validation/retry/rollback, CSSRS priority, chat consent/leases and durable recovery')
+    # Independent connections contend for the same questionnaire/turn/job.
+    sid = '20000000-0000-0000-0000-000000000020'
+    cid = '10000000-0000-0000-0000-000000000020'
+    uid = '00000000-0000-0000-0000-000000000001'
+    query(f"insert into conversations(id,user_id) values('{cid}','{uid}'); insert into clinical_sessions(id,user_id,conversation_id) values('{sid}','{uid}','{cid}');")
+    server = 'set role service_role;'
+    quiz = server + f"select create_questionnaire_atomic('{sid}','{uid}','{cid}','PHQ9','Synthetic concurrency');"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(query, [quiz, quiz]))
+    query(f"do $$ begin if (select count(*) from questionnaire_instances where session_id='{sid}')<>1 then raise exception 'Concurrent duplicate quiz'; end if; end $$;")
+    submission = server + f"""select submit_questionnaire_atomic(
+      (select id from questionnaire_instances where session_id='{sid}'),'{uid}',
+      (select jsonb_agg(jsonb_build_object('itemOrder',order_index,'valueNumeric',2,'valueRaw','2') order by order_index) from questionnaire_items where questionnaire_id=(select questionnaire_id from questionnaire_instances where session_id='{sid}')),
+      '{{"totalScore":18,"severityBand":"moderately_severe","subscores":{{}},"flags":[{{"itemOrder":9,"reason":"suicidality"}}],"requiresReview":true}}','high');"""
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(query, [submission, submission]))
+    query(f"do $$ begin if (select count(*) from questionnaire_results r join questionnaire_instances i on i.id=r.instance_id where i.session_id='{sid}')<>1 or (select count(*) from risk_events where session_id='{sid}')<>1 then raise exception 'Concurrent scoring duplicated effects'; end if; end $$;")
+    turn = server + f"select begin_chat_turn('{sid}','{uid}','same','Quiero matarme esta noche',true);"
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for attempt in [pool.submit(query, turn), pool.submit(query, turn)]:
+            try:
+                attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'turn_in_progress' not in str(error): raise
+    if successes != 1: raise RuntimeError('Concurrent generation lease not exclusive')
+    urgent = server + f"select begin_chat_turn('{sid}','{uid}','urgent','Voy a quitarme la vida',true,true);"
+    old_token = query(f"select token from chat_turns where session_id='{sid}' and request_id='same';").splitlines()[2].strip()
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for attempt in [pool.submit(query, urgent), pool.submit(query, urgent)]:
+            try:
+                attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'turn_in_progress' not in str(error): raise
+    if successes != 1: raise RuntimeError('Urgent concurrent claim not exclusive')
+    query(server + f"""do $$ begin
+      begin
+        perform finish_chat_turn('{sid}','same','{old_token}','[{{"type":"text","text":"stale"}}]','[]');
+        raise exception 'Interrupted owner persisted';
+      exception when insufficient_privilege then null; end;
+    end $$;""")
+    query(server + f"""select finish_chat_turn('{sid}','urgent',(select token from chat_turns where session_id='{sid}' and request_id='urgent'),'[{{"type":"text","text":"Línea 024"}}]','[]',null,'crisis_detected');""")
+    claim = server + f"select count(*) from claim_assessment_jobs(1,'{sid}');"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(query, [claim, claim]))
+    query(f"do $$ begin if (select attempts from assessment_jobs where session_id='{sid}')<>1 or (select count(*) from messages where session_id='{sid}' and role='user')<>2 then raise exception 'Concurrent chat/outbox duplicate'; end if; end $$;")
+    begin_worker = server + f"select update_assessment_job('{sid}',(select token from assessment_jobs where session_id='{sid}'),'start');"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        starts = list(pool.map(query, [begin_worker, begin_worker]))
+    import re
+    if sum(bool(re.search(r'\n\s+t\s*\n', result)) for result in starts) != 1:
+        raise RuntimeError('Concurrent workflow starts not exclusive')
+    complete = server + f"select finish_assessment_job('{sid}',(select token from assessment_jobs where session_id='{sid}'),'draft_ai','{{}}');"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(query, [complete, complete]))
+    query(f"do $$ begin if (select count(*) from assessments where session_id='{sid}' and status='draft_ai')<>1 or (select status from assessment_jobs where session_id='{sid}')<>'completed' then raise exception 'Concurrent completion duplicate/lost job'; end if; end $$;")
+    print('PASS concurrent quiz create/score, urgent chat fencing, assessment enqueue/worker claim and atomic completion')
 finally:
     docker('rm', '--force', name, check=False)

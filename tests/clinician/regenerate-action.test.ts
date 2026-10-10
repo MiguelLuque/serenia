@@ -126,7 +126,7 @@ describe('regenerateAssessmentAction', () => {
     expect(rollbackRegenerationMock).not.toHaveBeenCalled()
   })
 
-  it('rolls back the row and returns a friendly error when the workflow enqueue fails', async () => {
+  it('preserves durable regeneration context and reports pending recovery on enqueue failure', async () => {
     const supabase = makeAuthSupabase('reviewer-1')
     createAuthenticatedClientMock.mockResolvedValue(supabase)
 
@@ -149,20 +149,16 @@ describe('regenerateAssessmentAction', () => {
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('unreachable')
     expect(result.error).toMatch(
-      /informe queda como estaba.*intenta de nuevo/i,
+      /guardado.*recuperación automática/i,
     )
     // Salvedad #2: the row must be restored to its original status so the
     // clinician can retry without an orphaned superseded row.
-    expect(rollbackRegenerationMock).toHaveBeenCalledWith(
-      supabase,
-      'a-1',
-      'rejected',
-    )
+    expect(rollbackRegenerationMock).not.toHaveBeenCalled()
     expect(revalidatePathMock).not.toHaveBeenCalled()
     consoleSpy.mockRestore()
   })
 
-  it('rolls back to requires_manual_review when that was the original status', async () => {
+  it('preserves a manual-review regeneration for durable recovery', async () => {
     const supabase = makeAuthSupabase('reviewer-1')
     createAuthenticatedClientMock.mockResolvedValue(supabase)
 
@@ -183,11 +179,7 @@ describe('regenerateAssessmentAction', () => {
     const result = await regenerateAssessmentAction({ assessmentId: 'a-mr' })
 
     expect(result.ok).toBe(false)
-    expect(rollbackRegenerationMock).toHaveBeenCalledWith(
-      supabase,
-      'a-mr',
-      'requires_manual_review',
-    )
+    expect(rollbackRegenerationMock).not.toHaveBeenCalled()
     consoleSpy.mockRestore()
   })
 })

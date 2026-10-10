@@ -1,33 +1,35 @@
+import 'server-only'
 import { start } from 'workflow/api'
-import {
-  generateAssessmentWorkflow,
-  type GenerateAssessmentInput,
-  type RejectionContext,
-} from '@/lib/server/workflows/generate-assessment'
+import { createServiceRoleClient } from '@/lib/server/supabase/server'
+import { generateAssessmentWorkflow, type GenerateAssessmentInput, type RejectionContext } from './generate-assessment'
+import type { Database } from '@/lib/shared/supabase/types'
 
-export type { RejectionContext } from '@/lib/server/workflows/generate-assessment'
+export type { GenerateAssessmentInput, RejectionContext }
+export type ClaimedAssessmentJob = Database['public']['Functions']['claim_assessment_jobs']['Returns'][number]
 
-/**
- * Enqueue the background workflow that generates a clinical assessment for a
- * closed session. Returns immediately (does not wait for the LLM) — callers
- * should NOT await assessment availability before responding to the user.
- *
- * Idempotency: if an assessment already exists, the workflow short-circuits.
- * If the workflow is enqueued twice for the same sessionId (retry, double
- * fire from cron + user action), the second run becomes a no-op.
- *
- * Used by:
- *  - `closeSession` (lib/sessions/service.ts) after marking the session closed.
- *  - `getOrResolveActiveSession` when it lazily closes an inactive session.
- *  - The Vercel cron at `/api/internal/close-stale-sessions` for sessions
- *    abandoned without any user-driven trigger.
- *  - T-B's "regenerate after rejection" flow (passes `rejectionContext`).
- */
-export async function enqueueAssessmentGeneration(
-  input: GenerateAssessmentInput,
-): Promise<{ runId: string }> {
-  const run = await start(generateAssessmentWorkflow, [input])
-  return { runId: run.runId }
+export async function dispatchAssessmentJob(job: ClaimedAssessmentJob): Promise<{ runId: string }> {
+  const service = createServiceRoleClient()
+  try {
+    const run = await start(generateAssessmentWorkflow, [{
+      sessionId: job.session_id,
+      jobToken: job.token,
+      ...(job.context_json ? { rejectionContext: job.context_json as RejectionContext } : {}),
+    }])
+    const { error } = await service.rpc('update_assessment_job', { p_session_id: job.session_id, p_token: job.token, p_action: 'enqueued', p_run_id: run.runId })
+    if (error) throw error
+    return { runId: run.runId }
+  } catch (error) {
+    // Durable backoff; a failed release is also recoverable by lease expiry.
+    const { error: releaseError } = await service.rpc('update_assessment_job', { p_session_id: job.session_id, p_token: job.token, p_action: 'failed' })
+    if (releaseError) console.error('[assessment-outbox] release failed', { code: releaseError.code })
+    throw error
+  }
 }
 
-export type { GenerateAssessmentInput }
+export async function enqueueAssessmentGeneration(input: GenerateAssessmentInput): Promise<{ runId: string }> {
+  const service = createServiceRoleClient()
+  const { data: jobs, error } = await service.rpc('claim_assessment_jobs', { p_session_id: input.sessionId, p_limit: 1 })
+  if (error) throw error
+  if (!jobs?.[0]) throw new Error('Assessment job unavailable; recovery will check its state')
+  return dispatchAssessmentJob(jobs[0])
+}

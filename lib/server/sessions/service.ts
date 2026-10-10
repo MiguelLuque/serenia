@@ -39,31 +39,7 @@ export async function getOrResolveActiveSession(
   const inactiveDuration = Date.now() - lastActivity
 
   if (inactiveDuration >= SESSION_INACTIVITY_MS) {
-    const { error: updateError } = await supabase
-      .from('clinical_sessions')
-      .update({
-        status: 'closed',
-        closed_at: new Date().toISOString(),
-        closure_reason: 'inactivity',
-      })
-      .eq('id', session.id)
-      .eq('status', 'open')
-
-    if (updateError) throw updateError
-
-    // Plan 7 T6: lazy-close path used to drop the assessment entirely. Now
-    // we enqueue the same async generator so abandoned sessions still surface
-    // in the clinician inbox. Failures here are non-fatal — getOrResolve must
-    // not throw if the workflow enqueue fails (e.g. WDK misconfigured); the
-    // primary contract is "return null after marking the session closed".
-    try {
-      await enqueueAssessmentGeneration({ sessionId: session.id })
-    } catch (err) {
-      console.error('[getOrResolveActiveSession] enqueue failed', {
-        sessionId: session.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
+    await closeSession(supabase, session.id, 'inactivity')
     return null
   }
 
@@ -106,45 +82,11 @@ export async function createSession(
   supabase: Supabase,
   userId: string,
 ): Promise<SessionRow> {
-  // Plan 8 T5.2: contar sesiones cerradas del usuario para fijar la fase.
-  // Si el count falla, dejamos el default de la columna (1) y avisamos.
-  // Decisión: el cálculo vive aquí (no en trigger SQL) — más legible y
-  // testeable; la columna BD tiene default 1 como red de seguridad.
-  const { count, error: countError } = await supabase
-    .from('clinical_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('status', 'closed')
-
-  if (countError) throw countError
-
-  const protocolPhase = computeProtocolPhase(count ?? 0)
-
-  const { data: conversation, error: convError } = await supabase
-    .from('conversations')
-    .insert({ user_id: userId, status: 'active', started_at: new Date().toISOString() })
-    .select()
-    .single()
-
-  if (convError) throw convError
-
-  const { data: session, error: sessionError } = await supabase
-    .from('clinical_sessions')
-    .insert({
-      user_id: userId,
-      conversation_id: conversation.id,
-      protocol_phase: protocolPhase,
-    })
-    .select()
-    .single()
-
-  if (sessionError) {
-    // Clean up orphan conversation
-    await supabase.from('conversations').delete().eq('id', conversation.id)
-    throw sessionError
-  }
-
-  return session
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user || user.id !== userId) throw new Error('Unauthorized')
+  const { data, error } = await supabase.rpc('create_session_atomic', { p_user_id: user.id })
+  if (error || !data) throw error ?? new Error('Session not created')
+  return data
 }
 
 /**
@@ -154,11 +96,9 @@ export async function touchSession(
   supabase: Supabase,
   sessionId: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('clinical_sessions')
-    .update({ last_activity_at: new Date().toISOString() })
-    .eq('id', sessionId)
-    .eq('status', 'open')
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) throw new Error('Unauthorized')
+  const { error } = await supabase.rpc('touch_session_atomic', { p_session_id: sessionId })
 
   if (error) throw error
 }
@@ -192,9 +132,9 @@ export async function closeSession(
   // un mensaje específico de la auth-getUser → user.id, en línea con el
   // contrato anterior.
   const {
-    data: { user },
+    data: { user }, error: authError,
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('No authenticated user')
+  if (authError || !user) throw new Error('No authenticated user')
 
   const { error: rpcError } = await supabase.rpc('close_session_atomic', {
     p_session_id: sessionId,

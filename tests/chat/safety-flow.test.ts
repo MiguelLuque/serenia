@@ -1,255 +1,57 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { SafetyState } from '@/lib/server/chat/safety-state'
-
-// =============================================================================
-// Plan 7 T3a v2 — POST /api/chat con `getSessionSafetyState` + `buildCrisisNotice`
-// integrados. Capturamos el `system` que recibe `streamText` y verificamos que
-// el bloque del crisisNotice corresponda al SafetyState mockeado y al detector
-// léxico.
-// =============================================================================
-
-const NOW_ISO = '2026-04-28T12:00:00Z'
-const SESSION_ID = '11111111-1111-4111-8111-111111111111'
-
-function makeBuilder(resolvedData: unknown) {
-  const builder: Record<string, unknown> = {}
-  const passthrough = () => builder
-  builder.select = passthrough
-  builder.eq = passthrough
-  builder.gt = passthrough
-  builder.gte = passthrough
-  builder.in = passthrough
-  builder.order = passthrough
-  builder.limit = passthrough
-  builder.single = vi.fn().mockResolvedValue({ data: resolvedData, error: null })
-  builder.maybeSingle = vi
-    .fn()
-    .mockResolvedValue({ data: resolvedData, error: null })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(builder as any).then = (onFulfilled: (v: unknown) => unknown) =>
-    Promise.resolve({ data: resolvedData, error: null, count: 0 }).then(
-      onFulfilled,
-    )
-  return builder
-}
-
-interface RunHandlerOpts {
-  safetyState: SafetyState
-  // Texto crudo del último mensaje del usuario (lo recibe `detectCrisis` real,
-  // así dejamos que el detector léxico decida si triggea o no).
-  lastUserText: string
-}
-
-describe('POST /api/chat — safety flow integration (T3a v2)', () => {
-  const OLD_LLM_MODEL = process.env.LLM_CONVERSATIONAL_MODEL
-  const capturedSystemPrompts: string[] = []
-
-  beforeEach(() => {
-    process.env.LLM_CONVERSATIONAL_MODEL = 'test-model'
-    capturedSystemPrompts.length = 0
-    vi.resetModules()
+import { describe, expect, it } from 'vitest'
+import { chatHarness } from '../helpers/chat-harness'
+describe('safety notices and final input precedence',()=>{
+  it.each([
+    [{kind:'cssrs_negative'},'C-SSRS NEGATIVO YA APLICADO'],
+    [{kind:'cssrs_pending'},'C-SSRS PROPUESTO PENDIENTE'],
+    [{kind:'cssrs_acute_risk',behaviorRecent:false},'RIESGO AGUDO'],
+    [{kind:'cssrs_acute_risk',behaviorRecent:true},'CONDUCTA RECIENTE'],
+  ])('preserves safety variant %j',async(safety,label)=>{
+    const h=await chatHarness(); h.state.safety=safety as never
+    expect((await h.post('Hoy me siento mejor')).status).toBe(200)
+    expect(h.state.captured[0].system).toContain(label)
   })
-
-  afterEach(() => {
-    if (OLD_LLM_MODEL === undefined) delete process.env.LLM_CONVERSATIONAL_MODEL
-    else process.env.LLM_CONVERSATIONAL_MODEL = OLD_LLM_MODEL
-    vi.restoreAllMocks()
-    vi.doUnmock('@/lib/server/supabase/server')
-    vi.doUnmock('@/lib/server/sessions/service')
-    vi.doUnmock('@/lib/server/sessions/messages')
-    vi.doUnmock('@/lib/server/chat/safety-state')
-    vi.doUnmock('@/lib/server/questionnaires/service')
-    vi.doUnmock('@/lib/server/patient-context/telemetry')
-    vi.doUnmock('ai')
+  it('does not suppress a new explicit crisis while CSSRS is pending',async()=>{
+    const h=await chatHarness(); h.state.safety={kind:'cssrs_pending',proposedAt:new Date().toISOString()}
+    expect((await h.post('Quiero matarme esta noche')).status).toBe(200)
+    expect(h.state.captured[0].system).toContain('RE-ESCALADA')
+    expect(h.state.captured[0].system).not.toContain('C-SSRS PROPUESTO PENDIENTE')
+    expect(h.state.writes[0].args.p_crisis).toBe(true)
   })
-
-  async function runHandler(opts: RunHandlerOpts): Promise<string> {
-    const fakeSession = {
-      id: SESSION_ID,
-      user_id: 'user-1',
-      conversation_id: 'conv-1',
-      status: 'open',
-      opened_at: NOW_ISO,
-      last_activity_at: NOW_ISO,
-    }
-
-    const supabaseStub = {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }),
-      },
-      from: vi.fn((table: string) => {
-        if (table === 'clinical_sessions') return makeBuilder(fakeSession)
-        return makeBuilder(null)
-      }),
-    }
-    vi.doMock('@/lib/server/supabase/server', () => ({
-      createAuthenticatedClient: async () => supabaseStub,
-    }))
-    vi.doMock('@/lib/server/sessions/service', () => ({
-      touchSession: vi.fn().mockResolvedValue(undefined),
-      closeSession: vi.fn().mockResolvedValue(undefined),
-      isSessionExpired: vi.fn().mockReturnValue(false),
-    }))
-    vi.doMock('@/lib/server/sessions/messages', () => ({
-      saveUserMessage: vi.fn().mockResolvedValue(undefined),
-      saveAssistantMessage: vi.fn().mockResolvedValue(undefined),
-    }))
-    // SafetyState lo controlamos directamente desde el test.
-    vi.doMock('@/lib/server/chat/safety-state', () => ({
-      getSessionSafetyState: vi.fn().mockResolvedValue(opts.safetyState),
-    }))
-    vi.doMock('@/lib/server/questionnaires/service', () => ({
-      createInstance: vi.fn(),
-      getActiveInstanceForSession: vi.fn().mockResolvedValue(null),
-    }))
-    vi.doMock('@/lib/server/patient-context/telemetry', () => ({
-      logContextInjection: vi.fn().mockResolvedValue(undefined),
-    }))
-
-    const fakeStreamResponse = new Response('streamed', {
-      status: 200,
-      headers: { 'content-type': 'text/plain' },
-    })
-    vi.doMock('ai', async (importOriginal) => {
-      const mod = await importOriginal<typeof import('ai')>()
-      return {
-        ...mod,
-        streamText: (apiOpts: { system: string }) => {
-          capturedSystemPrompts.push(apiOpts.system)
-          return {
-            toUIMessageStreamResponse: () => fakeStreamResponse,
-          }
-        },
-        convertToModelMessages: async (msgs: unknown) => msgs as never,
-      }
-    })
-
-    const { POST } = await import('@/app/api/chat/route')
-    const req = new Request('http://localhost/api/chat', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: SESSION_ID,
-        messages: [
-          {
-            id: 'msg-user-1',
-            role: 'user',
-            parts: [{ type: 'text', text: opts.lastUserText }],
-          },
-        ],
-      }),
-    })
-
-    const res = await POST(req)
-    expect(res.status).toBe(200)
-    expect(capturedSystemPrompts.length).toBe(1)
-    return capturedSystemPrompts[0]!
-  }
-
-  it('C-SSRS scored negativo + texto neutro → variante "C-SSRS NEGATIVO YA APLICADO" (no [AVISO])', async () => {
-    const prompt = await runHandler({
-      safetyState: {
-        kind: 'cssrs_negative',
-        scoredAt: NOW_ISO,
-      },
-      lastUserText: 'estoy un poco cansada',
-    })
-
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
-    expect(prompt).not.toContain('[AVISO DE SEGURIDAD — POSIBLE SEÑAL]')
+  it('keeps negative-screen emotional vocabulary without re-escalation; reopens on a new specific signal',async()=>{
+    const h=await chatHarness(); h.state.safety={kind:'cssrs_negative',scoredAt:new Date().toISOString()}
+    await h.post('Estoy desbordado','neutral')
+    expect(h.state.captured[0].system).not.toContain('RE-ESCALADA')
+    await h.post('Voy a quitarme la vida esta noche','signal')
+    expect(h.state.captured[1].system).toContain('RE-ESCALADA')
   })
-
-  it('C-SSRS acute lifetime → variante "RIESGO AGUDO"', async () => {
-    const prompt = await runHandler({
-      safetyState: {
-        kind: 'cssrs_acute_risk',
-        scoredAt: NOW_ISO,
-        flags: [{ reason: 'suicidality', itemOrder: 6 }],
-        behaviorRecent: false,
-      },
-      lastUserText: 'no sé qué hacer',
-    })
-
-    expect(prompt).toContain('[RESULTADO C-SSRS — RIESGO AGUDO]')
-    expect(prompt).toContain('Activa el protocolo de crisis AHORA')
+  it('serves and replays a persisted urgent turn without another LLM call or automatic early closure',async()=>{
+    const h=await chatHarness(); h.state.urgentReply=true; h.state.persistFailures=1
+    expect((await h.post('Quiero matarme esta noche')).status).toBe(503)
+    const response=await h.post('Quiero matarme esta noche')
+    expect(response.status).toBe(200); expect(await response.text()).toContain('024')
+    expect((await h.post('Quiero matarme esta noche')).status).toBe(200)
+    expect(h.state.captured).toHaveLength(0)
+    expect(h.state.session.status).toBe('open')
+    expect(h.state.rows.filter(row=>row.role==='assistant')).toHaveLength(1)
+    expect(h.state.writes.find(w=>w.name==='begin_chat_turn').args.p_urgent).toBe(true)
   })
-
-  it('C-SSRS acute + behaviorRecent (override 6b) → variante CONDUCTA RECIENTE', async () => {
-    const prompt = await runHandler({
-      safetyState: {
-        kind: 'cssrs_acute_risk',
-        scoredAt: NOW_ISO,
-        flags: [{ reason: 'acute_risk', itemOrder: 7 }],
-        behaviorRecent: true,
-      },
-      lastUserText: 'sí, fue hace un mes',
-    })
-
-    expect(prompt).toContain('[RESULTADO C-SSRS — RIESGO AGUDO + CONDUCTA RECIENTE]')
-    expect(prompt).toContain('alerta URGENTE')
+  it('records crisis before a hard time limit and responds with safety resources',async()=>{
+    const h=await chatHarness(); h.state.session.opened_at=new Date(Date.now()-61*60*1000).toISOString()
+    const response=await h.post('Quiero matarme esta noche')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('024')
+    expect(h.state.rows[0].parts[0].text).toContain('matarme')
+    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+    expect(h.state.captured).toHaveLength(0)
   })
-
-  it('C-SSRS pending → variante "C-SSRS PROPUESTO PENDIENTE"', async () => {
-    const prompt = await runHandler({
-      safetyState: { kind: 'cssrs_pending', proposedAt: NOW_ISO },
-      lastUserText: 'no quiero hacerlo ahora',
-    })
-
-    expect(prompt).toContain('[C-SSRS PROPUESTO PENDIENTE]')
-    expect(prompt).toContain('NO propongas otro cuestionario')
-  })
-
-  it('never_assessed + último mensaje con palabra alta-señal "suicidarme" → variante "primera vez" no imperativa', async () => {
-    const prompt = await runHandler({
-      safetyState: { kind: 'never_assessed' },
-      lastUserText: 'a veces pienso en suicidarme',
-    })
-
-    expect(prompt).toContain('[AVISO DE SEGURIDAD — POSIBLE SEÑAL]')
-    expect(prompt).toContain('Lee el contexto')
-    // El imperativo viejo NO debe aparecer.
-    expect(prompt).not.toContain('Activa el protocolo de crisis AHORA')
-  })
-
-  it('never_assessed + sin crisis → notice vacío', async () => {
-    const prompt = await runHandler({
-      safetyState: { kind: 'never_assessed' },
-      lastUserText: 'estoy bien, gracias',
-    })
-
-    expect(prompt).not.toContain('[AVISO DE SEGURIDAD')
-    expect(prompt).not.toContain('[CONTEXTO DE SEGURIDAD')
-    expect(prompt).not.toContain('[RE-ESCALADA')
-  })
-
-  it('C-SSRS negativo + último mensaje "voy a quitarme la vida esta noche" → prepende RE-ESCALADA', async () => {
-    const prompt = await runHandler({
-      safetyState: {
-        kind: 'cssrs_negative',
-        scoredAt: NOW_ISO,
-      },
-      lastUserText: 'voy a quitarme la vida esta noche',
-    })
-
-    expect(prompt).toContain('[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]')
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
-    // RE-ESCALADA debe ir ANTES de la variante negativo en el prompt final.
-    const idxReEsc = prompt.indexOf('[RE-ESCALADA')
-    const idxBase = prompt.indexOf('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
-    expect(idxReEsc).toBeLessThan(idxBase)
-  })
-
-  it('C-SSRS negativo + último mensaje "totalmente desbordado" (sin alta señal) → variante negativo sin RE-ESCALADA', async () => {
-    const prompt = await runHandler({
-      safetyState: {
-        kind: 'cssrs_negative',
-        scoredAt: NOW_ISO,
-      },
-      lastUserText: 'estoy totalmente desbordado',
-    })
-
-    expect(prompt).toContain('[CONTEXTO DE SEGURIDAD — C-SSRS NEGATIVO YA APLICADO]')
-    expect(prompt).not.toContain('[RE-ESCALADA')
-    expect(prompt).not.toContain('[AVISO DE SEGURIDAD')
+  it('does not silently drop early context; crisis has a deterministic safe response even over budget',async()=>{
+    const h=await chatHarness(); h.state.rows.push({id:'early',role:'user',parts:[{type:'text',text:'x'.repeat(80001)}]})
+    expect((await h.post()).status).toBe(503)
+    // Resolve the pending failed turn with the same ID in a fresh bounded fixture.
+    const crisis=await chatHarness(); crisis.state.rows.push(...h.state.rows.slice(0,1))
+    const response=await crisis.post('Voy a matarme')
+    expect(response.status).toBe(200); expect(await response.text()).toContain('024')
+    expect(crisis.state.captured).toHaveLength(0)
   })
 })

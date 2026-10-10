@@ -23,6 +23,7 @@ export type RejectionContext = {
 export type GenerateAssessmentInput = {
   sessionId: string
   rejectionContext?: RejectionContext
+  jobToken?: string
 }
 
 type LoadedSession = {
@@ -54,7 +55,8 @@ export async function generateAssessmentWorkflow(
 ) {
   'use workflow'
 
-  const { sessionId, rejectionContext } = input
+  const { sessionId, rejectionContext, jobToken } = input
+  if (jobToken && !(await assessmentJobStep(sessionId, jobToken, 'start'))) return { status: 'skipped' as const, reason: 'job_claim_lost' as const }
 
   console.info('[assessment-workflow]', {
     sessionId,
@@ -79,12 +81,13 @@ export async function generateAssessmentWorkflow(
       step: 'already_exists',
       action: 'terminate',
     })
+    if (jobToken) await assessmentJobStep(sessionId, jobToken, 'completed')
     return { status: 'skipped' as const, reason: 'already_exists' as const }
   }
 
   let summary: AssessmentSummary
   try {
-    summary = await generateAssessmentStep(session, rejectionContext)
+    summary = await generateAssessmentStep(session, rejectionContext, jobToken)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[assessment-workflow]', {
@@ -92,11 +95,13 @@ export async function generateAssessmentWorkflow(
       step: 'generate_failed_final',
       error: message,
     })
-    await recordManualReviewStep(session, message)
+    await recordManualReviewStep(session, message, jobToken)
+    if (jobToken) await assessmentJobStep(sessionId, jobToken, 'completed')
     return { status: 'manual_review' as const, error: message }
   }
 
-  await persistAssessmentStep(session, summary)
+  await persistAssessmentStep(session, summary, jobToken)
+  if (jobToken) await assessmentJobStep(sessionId, jobToken, 'completed')
   console.info('[assessment-workflow]', {
     sessionId,
     step: 'completed',
@@ -198,10 +203,13 @@ export async function assessmentExistsStep(
 export async function generateAssessmentStep(
   session: LoadedSession,
   rejectionContext?: RejectionContext,
+  jobToken?: string,
 ): Promise<AssessmentSummary> {
   'use step'
 
   const supabase = serviceClient()
+
+  if (jobToken && !(await checkAssessmentJob(supabase, session.id, jobToken, 'check'))) throw new FatalError('Assessment job claim lost')
 
   // Each durable retry rechecks the relationship before elevated reads.
   const { data: current, error: sessionError } = await supabase.from('clinical_sessions')
@@ -229,8 +237,8 @@ export async function generateAssessmentStep(
     )
   }
 
+  if (messages.length > MAX_TRANSCRIPT_MESSAGES || JSON.stringify(messages).length > 80000) throw new FatalError('Transcript exceeds safe context limit; manual review required')
   const transcript = messages
-    .slice(-MAX_TRANSCRIPT_MESSAGES)
     .map((m) => {
       const text = extractText(m.parts)
       const speaker = m.role === 'user' ? 'Paciente' : 'Serenia'
@@ -333,6 +341,8 @@ export async function generateAssessmentStep(
   const { object: summary, usage } = await generateObject({
     model: llm.structured(),
     schema: AssessmentGenerationSchema,
+    abortSignal: AbortSignal.timeout(45_000),
+    maxOutputTokens: 6000,
     system: systemPrompt,
     prompt: userPrompt,
   })
@@ -355,10 +365,15 @@ generateAssessmentStep.maxRetries = 3
 export async function persistAssessmentStep(
   session: LoadedSession,
   summary: AssessmentSummary,
+  jobToken?: string,
 ): Promise<void> {
   'use step'
 
   const supabase = serviceClient()
+  if (jobToken) {
+    await finishAssessmentJob(supabase, session.id, jobToken, 'draft_ai', summary as unknown as Json)
+    return
+  }
   const { error } = await supabase.from('assessments').insert({
     user_id: session.user_id,
     session_id: session.id,
@@ -388,6 +403,7 @@ export async function persistAssessmentStep(
 export async function recordManualReviewStep(
   session: LoadedSession,
   errorMessage: string,
+  jobToken?: string,
 ): Promise<void> {
   'use step'
 
@@ -397,6 +413,11 @@ export async function recordManualReviewStep(
       error: errorMessage,
       occurred_at: new Date().toISOString(),
     },
+  }
+
+  if (jobToken) {
+    await finishAssessmentJob(supabase, session.id, jobToken, 'requires_manual_review', failurePayload as unknown as Json)
+    return
   }
 
   const { error } = await supabase.from('assessments').insert({
@@ -509,4 +530,22 @@ async function assertConversationOwner(supabase: Supabase, conversationId: strin
     .select('id, user_id').eq('id', conversationId).maybeSingle()
   if (error) throw error
   if (!data || data.user_id !== userId) throw new FatalError('Conversation ownership mismatch')
+}
+
+export async function assessmentJobStep(sessionId: string, token: string, action: string): Promise<boolean> {
+  'use step'
+  return checkAssessmentJob(serviceClient(), sessionId, token, action)
+}
+
+async function checkAssessmentJob(supabase: Supabase, sessionId: string, token: string, action: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('update_assessment_job', { p_session_id: sessionId, p_token: token, p_action: action })
+  if (error) throw error
+  return Boolean(data)
+}
+
+
+async function finishAssessmentJob(supabase: Supabase, sessionId: string, token: string, status: string, summary: Json): Promise<void> {
+  const { data, error } = await supabase.rpc('finish_assessment_job', { p_session_id: sessionId, p_token: token, p_status: status, p_summary: summary })
+  if (error) throw error
+  if (!data) throw new FatalError('Assessment job claim lost')
 }

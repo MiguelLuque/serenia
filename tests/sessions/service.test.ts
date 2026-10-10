@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   isSessionExpired,
   getOrResolveActiveSession,
@@ -90,40 +90,25 @@ describe('getOrResolveActiveSession', () => {
 
     const chain = makeChain({ data: session, error: null })
     const fromMock = vi.fn(() => chain)
-    const supabase = { from: fromMock } as any
+    const supabase = { from: fromMock } as never
 
     const result = await getOrResolveActiveSession(supabase, 'user-1')
     expect(result).toEqual(session)
     expect(fromMock).toHaveBeenCalledWith('clinical_sessions')
   })
 
-  it('marks session inactive and returns null when last_activity_at >= 30 min ago', async () => {
-    const session = makeSession({
-      last_activity_at: new Date(Date.now() - SESSION_INACTIVITY_MS - 1000).toISOString(),
-    })
-
-    // First call: fetch (maybeSingle resolves with session)
-    // Second call: update (resolves with no error)
-    let callCount = 0
-    const fromMock = vi.fn(() => {
-      callCount++
-      if (callCount === 1) {
-        return makeChain({ data: session, error: null })
-      }
-      return makeChain({ data: null, error: null })
-    })
-    const supabase = { from: fromMock } as any
-
-    const result = await getOrResolveActiveSession(supabase, 'user-1')
-    expect(result).toBeNull()
-    expect(fromMock).toHaveBeenCalledTimes(2)
-    expect(fromMock).toHaveBeenNthCalledWith(2, 'clinical_sessions')
+  it('closes an inactive session through the same atomic RPC as manual close',async()=>{
+    const session=makeSession({last_activity_at:new Date(Date.now()-SESSION_INACTIVITY_MS-1000).toISOString()})
+    const rpc=vi.fn().mockResolvedValue({error:null})
+    const client={from:vi.fn(()=>makeChain({data:session,error:null})),auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}}})},rpc}
+    expect(await getOrResolveActiveSession(client as never,'user-1')).toBeNull()
+    expect(rpc).toHaveBeenCalledWith('close_session_atomic',{p_session_id:'session-1',p_user_id:'user-1',p_reason:'inactivity'})
   })
 
   it('returns null when no open session exists', async () => {
     const chain = makeChain({ data: null, error: null })
     const fromMock = vi.fn(() => chain)
-    const supabase = { from: fromMock } as any
+    const supabase = { from: fromMock } as never
 
     const result = await getOrResolveActiveSession(supabase, 'user-1')
     expect(result).toBeNull()
@@ -132,7 +117,7 @@ describe('getOrResolveActiveSession', () => {
   it('throws when the fetch query returns an error', async () => {
     const chain = makeChain({ data: null, error: new Error('db error') })
     const fromMock = vi.fn(() => chain)
-    const supabase = { from: fromMock } as any
+    const supabase = { from: fromMock } as never
 
     await expect(getOrResolveActiveSession(supabase, 'user-1')).rejects.toThrow('db error')
   })
@@ -142,160 +127,26 @@ describe('getOrResolveActiveSession', () => {
 // 3. createSession
 // ---------------------------------------------------------------------------
 
-describe('createSession', () => {
-  // Plan 8 T5.2: createSession ahora primero hace un count de sesiones
-  // cerradas (call 1) para fijar protocol_phase, luego inserta la
-  // conversación (call 2) y la sesión (call 3).
-
-  it('inserts conversation then clinical_session and returns session row', async () => {
-    const conversation = { id: 'conv-1', user_id: 'user-1' }
-    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 1 })
-
-    let callCount = 0
-    const fromMock = vi.fn(() => {
-      callCount++
-      if (callCount === 1) return makeChain({ data: null, error: null, count: 0 })
-      if (callCount === 2) return makeChain({ data: conversation, error: null })
-      return makeChain({ data: session, error: null })
-    })
-    const supabase = { from: fromMock } as any
-
-    const result = await createSession(supabase, 'user-1')
-    expect(result).toEqual(session)
-    expect(fromMock).toHaveBeenNthCalledWith(1, 'clinical_sessions') // count
-    expect(fromMock).toHaveBeenNthCalledWith(2, 'conversations')
-    expect(fromMock).toHaveBeenNthCalledWith(3, 'clinical_sessions') // insert
+describe('createSession — authenticated atomic RPC', () => {
+  it('authenticates the requested owner and delegates pair/phase/concurrency to SQL', async () => {
+    const row=makeSession({protocol_phase:8})
+    const rpc=vi.fn().mockResolvedValue({data:row,error:null})
+    const client={auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc,from:vi.fn()}
+    expect(await createSession(client as never,'user-1')).toEqual(row)
+    expect(rpc).toHaveBeenCalledWith('create_session_atomic',{p_user_id:'user-1'})
+    expect(client.from).not.toHaveBeenCalled()
   })
-
-  it('passes protocol_phase = 1 when no closed sessions exist', async () => {
-    const conversation = { id: 'conv-1', user_id: 'user-1' }
-    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 1 })
-
-    let callCount = 0
-    const chains: ReturnType<typeof makeChain>[] = []
-    const fromMock = vi.fn(() => {
-      callCount++
-      const chain = makeChain({
-        data: callCount === 1 ? null : callCount === 2 ? conversation : session,
-        error: null,
-        count: callCount === 1 ? 0 : undefined,
-      })
-      chains.push(chain)
-      return chain
-    })
-    const supabase = { from: fromMock } as any
-
-    await createSession(supabase, 'user-1')
-
-    // 3rd chain is the clinical_sessions insert
-    expect(chains[2].insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_id: 'user-1',
-        conversation_id: 'conv-1',
-        protocol_phase: 1,
-      }),
-    )
+  it('rejects a forged user identity before the RPC',async()=>{
+    const rpc=vi.fn()
+    const client={auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc}
+    await expect(createSession(client as never,'foreign')).rejects.toThrow('Unauthorized')
+    expect(rpc).not.toHaveBeenCalled()
   })
-
-  it('passes protocol_phase = 8 when 7 sessions already closed', async () => {
-    const conversation = { id: 'conv-1', user_id: 'user-1' }
-    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 8 })
-
-    let callCount = 0
-    const chains: ReturnType<typeof makeChain>[] = []
-    const fromMock = vi.fn(() => {
-      callCount++
-      const chain = makeChain({
-        data: callCount === 1 ? null : callCount === 2 ? conversation : session,
-        error: null,
-        count: callCount === 1 ? 7 : undefined,
-      })
-      chains.push(chain)
-      return chain
-    })
-    const supabase = { from: fromMock } as any
-
-    await createSession(supabase, 'user-1')
-
-    expect(chains[2].insert).toHaveBeenCalledWith(
-      expect.objectContaining({ protocol_phase: 8 }),
-    )
-  })
-
-  it('caps protocol_phase at 8 when 10 sessions already closed (mantenimiento)', async () => {
-    const conversation = { id: 'conv-1', user_id: 'user-1' }
-    const session = makeSession({ conversation_id: 'conv-1', protocol_phase: 8 })
-
-    let callCount = 0
-    const chains: ReturnType<typeof makeChain>[] = []
-    const fromMock = vi.fn(() => {
-      callCount++
-      const chain = makeChain({
-        data: callCount === 1 ? null : callCount === 2 ? conversation : session,
-        error: null,
-        count: callCount === 1 ? 10 : undefined,
-      })
-      chains.push(chain)
-      return chain
-    })
-    const supabase = { from: fromMock } as any
-
-    await createSession(supabase, 'user-1')
-
-    expect(chains[2].insert).toHaveBeenCalledWith(
-      expect.objectContaining({ protocol_phase: 8 }),
-    )
-  })
-
-  it('throws when count of closed sessions fails', async () => {
-    const countError = new Error('count failed')
-    const fromMock = vi.fn(() =>
-      makeChain({ data: null, error: countError, count: null }),
-    )
-    const supabase = { from: fromMock } as any
-
-    await expect(createSession(supabase, 'user-1')).rejects.toThrow('count failed')
-    expect(fromMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('deletes orphan conversation if session insert fails', async () => {
-    const conversation = { id: 'conv-1', user_id: 'user-1' }
-    const sessionError = new Error('session insert failed')
-
-    let callCount = 0
-    const fromMock = vi.fn(() => {
-      callCount++
-      if (callCount === 1) return makeChain({ data: null, error: null, count: 0 }) // count
-      if (callCount === 2) return makeChain({ data: conversation, error: null }) // conv insert
-      if (callCount === 3) return makeChain({ data: null, error: sessionError }) // session insert
-      // 4th call: delete orphan conversation
-      return makeChain({ data: null, error: null })
-    })
-    const supabase = { from: fromMock } as any
-
-    await expect(createSession(supabase, 'user-1')).rejects.toThrow('session insert failed')
-    expect(fromMock).toHaveBeenCalledTimes(4)
-    expect(fromMock).toHaveBeenNthCalledWith(4, 'conversations')
-  })
-
-  it('throws when conversation insert fails', async () => {
-    const convError = new Error('conv insert failed')
-    let callCount = 0
-    const fromMock = vi.fn(() => {
-      callCount++
-      if (callCount === 1) return makeChain({ data: null, error: null, count: 0 })
-      return makeChain({ data: null, error: convError })
-    })
-    const supabase = { from: fromMock } as any
-
-    await expect(createSession(supabase, 'user-1')).rejects.toThrow('conv insert failed')
-    expect(fromMock).toHaveBeenCalledTimes(2)
+  it('propagates atomic RPC failures without creating an orphan',async()=>{
+    const client={auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc:vi.fn().mockResolvedValue({data:null,error:new Error('atomic failed')})}
+    await expect(createSession(client as never,'user-1')).rejects.toThrow('atomic failed')
   })
 })
-
-// ---------------------------------------------------------------------------
-// 3b. computeProtocolPhase — pure function (Plan 8 T5.2)
-// ---------------------------------------------------------------------------
 
 describe('computeProtocolPhase', () => {
   it('returns 1 when 0 closed sessions', () => {
@@ -324,28 +175,20 @@ describe('computeProtocolPhase', () => {
 // 4. touchSession
 // ---------------------------------------------------------------------------
 
-describe('touchSession', () => {
-  it('issues an update with now() filter on id and status=open', async () => {
-    const chain = makeChain({ data: null, error: null })
-    const fromMock = vi.fn(() => chain)
-    const supabase = { from: fromMock } as any
-
-    await touchSession(supabase, 'session-1')
-
-    expect(fromMock).toHaveBeenCalledWith('clinical_sessions')
-    expect(chain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ last_activity_at: expect.any(String) }),
-    )
-    expect(chain.eq).toHaveBeenCalledWith('id', 'session-1')
-    expect(chain.eq).toHaveBeenCalledWith('status', 'open')
+describe('touchSession — owner-checked RPC',()=>{
+  it('rejects revoked authentication before touching a session',async()=>{
+    const rpc=vi.fn().mockResolvedValue({error:null})
+    const client={auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:new Error('revoked')})},rpc}
+    await expect(touchSession(client as never,'session-1')).rejects.toThrow('Unauthorized')
+    expect(rpc).not.toHaveBeenCalled()
   })
-
-  it('throws when the update returns an error', async () => {
-    const chain = makeChain({ data: null, error: new Error('update failed') })
-    const fromMock = vi.fn(() => chain)
-    const supabase = { from: fromMock } as any
-
-    await expect(touchSession(supabase, 'session-1')).rejects.toThrow('update failed')
+  it('uses the authenticated RPC instead of revoked table DML',async()=>{
+    const rpc=vi.fn().mockResolvedValue({error:null})
+    await touchSession({auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc} as never,'session-1')
+    expect(rpc).toHaveBeenCalledWith('touch_session_atomic',{p_session_id:'session-1'})
+  })
+  it('propagates RPC errors',async()=>{
+    await expect(touchSession({auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc:vi.fn().mockResolvedValue({error:new Error('denied')})} as never,'session-1')).rejects.toThrow('denied')
   })
 })
 
@@ -367,7 +210,7 @@ describe('closeSession', () => {
       supabase: {
         auth: { getUser: getUserMock },
         rpc: rpcMock,
-      } as any,
+      } as never,
       rpcMock,
       getUserMock,
     }
@@ -384,6 +227,13 @@ describe('closeSession', () => {
       p_user_id: 'user-1',
       p_reason: 'user_request',
     })
+  })
+
+  it('rejects an auth error even when stale user data is present',async()=>{
+    const {supabase,rpcMock,getUserMock}=makeAuthedSupabase()
+    getUserMock.mockResolvedValue({data:{user:{id:'user-1'}},error:new Error('revoked')})
+    await expect(closeSession(supabase,'session-1','user_request')).rejects.toThrow('No authenticated user')
+    expect(rpcMock).not.toHaveBeenCalled()
   })
 
   it('passes closure_reason correctly to the RPC', async () => {
@@ -411,12 +261,12 @@ describe('closeSession', () => {
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
       rpc: vi.fn(),
-    } as any
+    } as never
 
     await expect(
       closeSession(supabase, 'session-1', 'user_request'),
     ).rejects.toThrow('No authenticated user')
-    expect(supabase.rpc).not.toHaveBeenCalled()
+    expect((supabase as {rpc: ReturnType<typeof vi.fn>}).rpc).not.toHaveBeenCalled()
   })
 
   it('does NOT propagate errors from enqueueAssessmentGeneration (fire-and-forget)', async () => {

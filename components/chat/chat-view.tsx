@@ -79,6 +79,10 @@ export function ChatView({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       body: { sessionId },
+      prepareSendMessagesRequest: ({ messages }) => {
+        const message = [...messages].reverse().find(message => message.role === 'user')
+        return { body: { sessionId, requestId: message?.id, messages: message ? [message] : [] } }
+      },
     }),
   })
 

@@ -32,7 +32,7 @@ vi.mock('@/lib/server/supabase/server', () => ({
 // idempotency short-circuits, FatalError flow, etc.). The actual durable
 // retry machinery is owned by `@workflow/core` and out of scope here.
 import { generateAssessmentWorkflow } from '@/lib/server/workflows/generate-assessment'
-import { generateAssessmentStep } from '@/lib/server/workflows/generate-assessment'
+import { generateAssessmentStep, persistAssessmentStep, recordManualReviewStep } from '@/lib/server/workflows/generate-assessment'
 
 // ---------------------------------------------------------------------------
 // Supabase mock helpers
@@ -755,5 +755,28 @@ describe('generateAssessmentWorkflow', () => {
     expect((result as { status: 'manual_review'; error: string }).error).toBe(
       'LLM unavailable',
     )
+  })
+})
+
+
+describe('durable assessment result fencing', () => {
+  it.each(['draft', 'manual'])('rejects a stale %s result before table writes', async (kind) => {
+    const rpc = vi.fn().mockResolvedValue({ data: false, error: null })
+    const from = vi.fn(() => makeChain({ data: null, error: null }))
+    createServiceRoleClientMock.mockReturnValue({ rpc, from })
+    const action = kind === 'draft'
+      ? persistAssessmentStep(makeSession() as never, summaryResult as never, 'stale-token')
+      : recordManualReviewStep(makeSession() as never, 'synthetic failure', 'stale-token')
+    await expect(action).rejects.toThrow('Assessment job claim lost')
+    expect(rpc).toHaveBeenCalledWith('finish_assessment_job', expect.objectContaining({ p_token: 'stale-token', p_status: kind === 'draft' ? 'draft_ai' : 'requires_manual_review' }))
+    expect(from).not.toHaveBeenCalled()
+  })
+  it('commits a valid result and its job together', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null })
+    const from = vi.fn()
+    createServiceRoleClientMock.mockReturnValue({ rpc, from })
+    await persistAssessmentStep(makeSession() as never, summaryResult as never, 'valid-token')
+    expect(rpc).toHaveBeenCalledWith('finish_assessment_job', { p_session_id: 'session-1', p_token: 'valid-token', p_status: 'draft_ai', p_summary: summaryResult })
+    expect(from).not.toHaveBeenCalled()
   })
 })
