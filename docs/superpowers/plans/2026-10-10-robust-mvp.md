@@ -61,7 +61,7 @@
 
 - [ ] Regresiones RED sobre 18.º cumpleaños, menor/futuro/fecha imposible; errores del chat recuperables; cuestionario nuevo sin estado heredado; riesgos visibles/editables; informe rejected/superseded oculto y nombre disponible.
 - [ ] Implementar validación adulta, registro de aceptación y gating coherente con usuarios existentes; mensajes precisos sin promesa inventada de revisión actual.
-- [ ] Implementar recuperación del chat preservando texto, estados accesibles y selección semántica; C-SSRS con ramas documentadas y normalización compatible con Task 2. Conservar ventana temporal vigente y registrar discrepancia para acuerdo clínico.
+- [ ] Implementar recuperación del chat preservando texto, estados accesibles y selección semántica; permitir escribir mientras existe cribado pendiente para no bloquear una señal urgente. C-SSRS con ramas documentadas y normalización compatible con Task 2. Conservar ventana temporal vigente y registrar discrepancia para acuerdo clínico.
 - [ ] Mostrar/editar heteroaggression/substance_use_acute y actualizar la prioridad de bandeja conservando reglas aprobadas; resolver revisión antigua oculta por limit prematuro.
 - [ ] Usar la versión autorizada de informes y fallback de nombre informal; verificar recarga/navegación/error con fixtures sintéticos de paciente/clínico.
 - [ ] Informe, tests de componentes/navegador y revisión independiente.
