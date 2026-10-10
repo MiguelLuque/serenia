@@ -101,3 +101,7 @@ Corrección: texto aprobado y versionado; registro de aceptación auditable asoc
 Ejecutar migraciones desde cero y pruebas RLS con anon, paciente A/B y clínicos ficticios. Probar acceso directo Supabase, no solo UI/Server Actions. Probar transiciones concurrentes revisión/cierre/cuestionarios y fallos entre commit/enqueue. No considerar la suite mock de aplicación evidencia de RLS ni de constraints reales.
 
 Documentación primaria contrastada: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [funciones Supabase](https://supabase.com/docs/guides/database/functions), [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html). Se leyó la documentación de autenticación de la versión Next instalada en node_modules y la skill Supabase. Cambios recientes del changelog no alteran los defectos de autorización identificados aquí.
+
+## Hallazgo adicional durante integración (10/10)
+
+La policy owner SELECT de `assessments` (migración `20260419000008_rls_owner_only.sql:89`) permite al paciente consultar la fila completa con sus notas clínicas y `preliminary_impression`, aunque la interfaz sólo muestra `patient_facing_summary`. La interfaz no constituye una frontera de campos privados. Task 3 restringirá la lectura directa y expondrá una proyección explícita del resumen revisado; probará roles en SQL. Este hallazgo es de exposición al propio paciente, distinto del acceso entre pacientes. No se consultó la BD remota.

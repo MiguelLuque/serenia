@@ -49,7 +49,7 @@
 - [ ] Regresiones RED: rechazo de system/assistant/tool falsificados, confirmación sin propuesta/aceptación, segundo cuestionario tras scored, respuesta parcial sin escrituras, señal nueva con CSSRS pendiente, crisis al límite, cron sin cookie y enqueue fallido recuperado.
 - [ ] Implementar frontera de mensajes, límites e idempotencia; validar cierres server-side. Procesar el último turno y señal antes del límite temporal.
 - [ ] Validar opciones y conjunto de respuestas antes de writes; transacción respuestas/resultado/riesgos/estado. Retrys seguros y prioridad de CSSRS; corregir descripción de tool obsoleta ASQ.
-- [ ] Unificar cierre manual/lazy/cron; hacer llegar cron a autenticación CRON_SECRET; recuperar closed sin trabajo/informe y limitar la concurrencia/coste del sweep.
+- [ ] Unificar cierre manual/lazy/cron; hacer llegar cron a autenticación CRON_SECRET; recuperar closed sin trabajo/informe y limitar la concurrencia/coste del sweep. Conservar cookies de refresh y cabeceras de caché SSR al construir redirects del proxy.
 - [ ] Ejecutar pruebas focalizadas y ampliar SQL real para atomicidad y concurrencia; informar compatibilidad con contratos de Task 1.
 - [ ] Informe del bloque y revisión independiente; resolver hallazgos antes de integración siguiente.
 
@@ -63,7 +63,7 @@
 - [ ] Implementar validación adulta, registro de aceptación y gating coherente con usuarios existentes; mensajes precisos sin promesa inventada de revisión actual.
 - [ ] Implementar recuperación del chat preservando texto, estados accesibles y selección semántica; permitir escribir mientras existe cribado pendiente para no bloquear una señal urgente. C-SSRS con ramas documentadas y normalización compatible con Task 2. Conservar ventana temporal vigente y registrar discrepancia para acuerdo clínico.
 - [ ] Mostrar/editar heteroaggression/substance_use_acute y actualizar la prioridad de bandeja conservando reglas aprobadas; resolver revisión antigua oculta por limit prematuro.
-- [ ] Usar la versión autorizada de informes y fallback de nombre informal; verificar recarga/navegación/error con fixtures sintéticos de paciente/clínico.
+- [ ] Usar la versión autorizada de informes y fallback de nombre informal; aplicar también la frontera de lectura en BD: paciente accede únicamente a la proyección autorizada del resumen, sin `clinical_notes` ni informe interno completo vía Data API. Conservar lecturas del clínico y contexto privado server-side validado. Verificar recarga/navegación/error con fixtures sintéticos de paciente/clínico.
 - [ ] Informe, tests de componentes/navegador y revisión independiente.
 
 ## Task 4: Dependencias, gates y evaluación de modelos
@@ -73,7 +73,7 @@
 **Interfaces:** Mantener roles conversational/structured/fast compatibles; no habilitar decisiones en pacientes sin evaluación. Harness de modelos usa entradas sintéticas, versión/modelo registrados, límites de gasto explícitos y no imprime entradas privadas. Si no hay credenciales aprobadas, evaluación offline pasa y comparación online queda no ejecutada.
 
 - [ ] Fijar dependencias corregidas tras investigar advisories y uso real; retirar herramientas CLI del runtime si corresponde, sin `audit fix --force`. No instalar en el node_modules de otro checkout.
-- [ ] Resolver errores lint de fuente y pruebas con tipos útiles, raíz Turbopack explícita y scripts de typecheck/verify/DB. Añadir CI con gates fail-closed y reporte de vulnerabilidades.
+- [ ] Resolver errores lint de fuente y pruebas con tipos útiles, raíz Turbopack explícita y scripts de typecheck/verify/DB. Añadir CI con gates fail-closed y reporte de vulnerabilidades. Actualizar SDK/CLI Supabase y el uso de skills oficiales fijadas por commit; documentación y comandos locales de tipos/advisors con límites de entorno explícitos.
 - [ ] Documentar comparativa de modelos con fuentes primarias, precio de entrada/salida, capacidades y límites; evaluar Jev/Decisions como capa auxiliar. Separar ahorro proyectado y rendimiento medido.
 - [ ] Añadir escenarios y procedimiento de evaluación en español con errores críticos, abstención/calibración, latencia/coste y estabilidad de esquema; bandera de decisiones apagada por defecto.
 - [ ] Consolidar auditoría con estado de cada hallazgo y roadmap de gates externos. Actualizar README con configuración, arranque y comandos exactos.

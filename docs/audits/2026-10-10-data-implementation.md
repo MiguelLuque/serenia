@@ -1,5 +1,7 @@
 # Task 1 — Permisos, relaciones y revisión clínica
 
+Estado de revisión final del bloque: aprobado tras corrección `0354e9c`. Revisión independiente completa y segunda revisión focalizada confirman que editar notas conserva el progreso de tareas y no introduce nuevos problemas importantes. Las limitaciones de integración Task 2/3 siguen pendientes.
+
 Fecha: 2026-10-10. Rama: `codex/serenia-robust-mvp`. Base: `6f0a65e`.
 Commit local: `44c0c4c09cae9a59160b7c5f1132474337191f12` (15 ficheros de Task 1).
 
@@ -142,3 +144,45 @@ anteriores se ejecutaron directamente con logs privados en `/private/tmp`.
 El informe permanece en `.superpowers/sdd/`, directorio de evidencias locales
 ignorado por el repositorio; el commit incluye únicamente implementación y tests
 de Task 1, excluyendo auditorías y plan del coordinador.
+
+## Corrección de revisión independiente — ronda 1
+
+Commit de corrección: `0354e9c86e580c2ca0bd75cd1a6893c6a52dc85a` (3 ficheros).
+
+Hallazgo Important verificado: al editar notas de un informe A, la RPC volvía
+a materializar sus propuestas, duplicando una tarea completada en B o cerrando
+una tarea parcial y recreándola como pendiente.
+
+Corrección sobre base `33c66a3`: una revisión cuyo `proposed_tasks` es igual al
+del informe ya revisado mantiene los IDs, estado, notas, timestamps, relaciones
+de origen y cierre de todas sus tareas. Se crea la revisión del informe, pero
+no se actualiza ni rematerializa ningún acuerdo sin cambios.
+
+Cuando los acuerdos sí cambian, SQL bloquea las tareas de la sesión de origen
+antes de comprobar progreso. Si alguna conserva progreso registrado, rechaza
+la edición con `Task agreements have later progress; keep the original agreements
+and record changes in a later session`. El error es transaccional y accionable:
+conservar acuerdos originales y registrar cambios en una sesión posterior.
+Tareas `no_abordada` que fueron cerradas por una revisión de la propia sesión
+son historia de sustitución interna y no bloquean futuras revisiones válidas.
+
+Regresión nueva `supabase/tests/review-task-progress.sql`, con fixtures aislados
+en BEGIN/ROLLBACK, ejecutada por el harness SQL existente:
+
+- RED antes del cambio: exit 1, `PROGRESS REGRESSION: cumplida task duplicated on
+  note-only edit`; log `/private/tmp/serenia-task1-progress-red.log`.
+- GREEN después del cambio: `rtk proxy python3 scripts/test-database.py`, exit 0,
+  seis PASS; log `/private/tmp/serenia-task1-progress-green.log`. Verifica A
+  confirmado → B completa o avanza parcialmente → nota-only de A, comparando
+  la fila completa de T, sin nuevas pendientes ni duplicados. Comprueba retry
+  con el mismo ID de revisión, segunda edición de notas, rollback de cambio
+  incompatible de acuerdos tras progreso y dos sustituciones internas válidas
+  sin bloquearse por sus tareas históricas cerradas.
+- `rtk proxy npm test -- tests/clinician/review-actions.test.ts tests/clinician/save-assessment.test.ts`:
+  2 ficheros, 14 tests, exit 0; log `/private/tmp/serenia-task1-progress-unit.log`.
+- `rtk proxy git diff --check -- scripts/test-database.py supabase/migrations/20261010075359_robust_authorization_review.sql supabase/tests/review-task-progress.sql`: exit 0.
+
+Esta ronda cambia solo SQL/harness; no cambian TypeScript ni firmas públicas.
+No se repitió la suite global de 511 tests, tipos ni lint: sus resultados previos
+siguen siendo evidencia del bloque anterior, no nuevas ejecuciones de esta ronda.
+Revisión independiente de esta corrección pendiente del coordinador.
