@@ -379,6 +379,8 @@ function AssessmentSections({
               {SELF_HARM_LABEL[risk.self_harm] ?? risk.self_harm}
             </Badge>
           </div>
+          <div><span className="font-medium">Heteroagresión: </span>{({ none: 'Sin heteroagresión', verbal: 'Agresión verbal', plan: 'Plan de agresión' })[risk.heteroaggression]}</div>
+          <div><span className="font-medium">Consumo agudo de sustancias: </span>{risk.substance_use_acute === null ? 'Sin evaluar' : ({ none: 'Sin consumo agudo', suspected: 'Consumo agudo sospechado', confirmed: 'Consumo agudo confirmado' })[risk.substance_use_acute]}</div>
           {risk.notes && (
             <div>
               <div className="font-medium">Notas</div>

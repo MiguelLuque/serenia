@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
@@ -9,6 +9,8 @@ import { MessageBubble } from './message-bubble'
 import { ChatInput } from './chat-input'
 import { CrisisBanner } from './crisis-banner'
 import { QuestionnaireCard } from './questionnaire-card'
+import { getOwnedChatState } from '@/app/app/chat-recovery-actions'
+import type { ChatRecovery } from '@/lib/shared/chat/recovery'
 import { endSessionAction } from '@/app/app/actions'
 
 interface ActiveQuestionnaire {
@@ -28,6 +30,7 @@ interface ChatViewProps {
   initialMessages: UIMessage[]
   expiresAt: Date
   activeQuestionnaire?: ActiveQuestionnaire | null
+  initialRecovery?: ChatRecovery | null
 }
 
 function minutesRemaining(expiresAt: Date, now = Date.now()): number {
@@ -64,6 +67,7 @@ export function ChatView({
   initialMessages,
   expiresAt,
   activeQuestionnaire,
+  initialRecovery = null,
 }: ChatViewProps) {
   const router = useRouter()
   const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt))
@@ -73,15 +77,38 @@ export function ChatView({
   const refreshedToolsRef = useRef<Set<string>>(new Set())
   const crisisRedirectRef = useRef(false)
 
-  const { messages, sendMessage, status } = useChat({
+  const [recovery, setRecovery] = useState(initialRecovery)
+  const [recoveryError, setRecoveryError] = useState(false)
+  const [externallyClosed, setExternallyClosed] = useState(false)
+  const [urgentMode, setUrgentMode] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const failedRef = useRef(false)
+  const lastAttemptRef = useRef<ChatRecovery | null>(initialRecovery)
+  const activeRequestRef = useRef<string | null>(null)
+  const cancelledRequestsRef = useRef(new Set<string>())
+  const httpStatusRef = useRef<number | null>(null)
+
+  const trackedFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const response = await fetch(url, init)
+    httpStatusRef.current = response.status
+    return response
+  }, [])
+
+  const { messages, sendMessage, status, error, stop, setMessages, clearError } = useChat({
     id: sessionId,
     messages: initialMessages,
+    onError: () => { failedRef.current = true; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
+    // The installed SDK constructor stores fetch; it runs only when sending.
+    // eslint-disable-next-line react-hooks/refs
     transport: new DefaultChatTransport({
       api: '/api/chat',
+      fetch: trackedFetch,
       body: { sessionId },
-      prepareSendMessagesRequest: ({ messages }) => {
+      prepareSendMessagesRequest: ({ messages, body }) => {
         const message = [...messages].reverse().find(message => message.role === 'user')
-        return { body: { sessionId, requestId: message?.id, messages: message ? [message] : [] } }
+        const requestId = typeof body?.requestId === 'string' ? body.requestId : message?.id
+        const text = typeof body?.retryText === 'string' ? body.retryText : message?.parts.filter(part => part.type === 'text').map(part => part.text).join('')
+        return { body: { sessionId, requestId, messages: requestId && typeof text === 'string' ? [{ id: requestId, role: 'user', parts: [{ type: 'text', text }] }] : [] } }
       },
     }),
   })
@@ -92,8 +119,65 @@ export function ChatView({
   // the client knows the server closed the session before the next POST
   // would 409.
   const closeSignal = detectServerClose(messages)
-  const isClosed = closeSignal !== 'none'
+  const isClosed = closeSignal !== 'none' || externallyClosed
   const isExpired = isTimeExpired || isClosed
+
+  async function rehydrate(allowLocalFallback = true) {
+    try {
+      const state = await getOwnedChatState(sessionId)
+      setRecoveryError(false)
+      if (state.closed) {
+        setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
+        router.refresh()
+        return
+      }
+      setRecovery(state.recovery ?? (allowLocalFallback && status === 'error' && lastAttemptRef.current ? { ...lastAttemptRef.current, canRetry: httpStatusRef.current !== 422 } : null))
+      setMessages(state.messages)
+    } catch { setRecoveryError(true) }
+  }
+
+  useEffect(() => {
+    if (status === 'error') {
+      if (error?.message.includes('onboardingRequired')) router.replace('/onboarding')
+      // An interrupted/closed turn is never inferred to be retryable.
+      const timer = setTimeout(() => void rehydrate(), 0)
+      return () => clearTimeout(timer)
+    }
+    // Rehydrate at the transport boundary; do not refetch on every message.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, sessionId])
+
+  useEffect(() => {
+    if (!recovery || recovery.status !== 'generating' || recovery.canRetry) return
+    const delay = Math.max(1000, new Date(recovery.leaseUntil).getTime() - Date.now() + 100)
+    const timer = setTimeout(() => void rehydrate(), delay)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recovery])
+
+  async function retry() {
+    if (!recovery?.canRetry || retrying) return
+    const attempt = recovery
+    activeRequestRef.current = attempt.requestId
+    lastAttemptRef.current = attempt
+    failedRef.current = false; setRetrying(true); clearError()
+    try {
+      const existing = messages.find(message => message.id === attempt.userMessageId || message.id === attempt.requestId)
+      await sendMessage(existing ? { text: attempt.text, messageId: existing.id } : undefined, { body: { requestId: attempt.requestId, retryText: attempt.text } })
+      if (!failedRef.current && !cancelledRequestsRef.current.has(attempt.requestId)) { await rehydrate(false); setRecovery(null); setUrgentMode(false) }
+    } finally { setRetrying(false) }
+  }
+
+  async function send(text: string): Promise<boolean> {
+    if (recovery && !urgentMode) return false
+    failedRef.current = false; clearError()
+    const requestId = crypto.randomUUID()
+    activeRequestRef.current = requestId
+    lastAttemptRef.current = { requestId, userMessageId: requestId, text, status: 'failed', canRetry: true, leaseUntil: new Date().toISOString() }
+    await sendMessage({ id: requestId, role: 'user', parts: [{ type: 'text', text }] })
+    if (!failedRef.current && !cancelledRequestsRef.current.has(requestId)) { setRecovery(null); setUrgentMode(false) }
+    return !failedRef.current && !cancelledRequestsRef.current.has(requestId)
+  }
 
   useEffect(() => {
     if (status !== 'ready') return
@@ -203,33 +287,30 @@ export function ChatView({
           {activeQuestionnaire &&
             activeQuestionnaire.status !== 'scored' && (
               <QuestionnaireCard
+                key={activeQuestionnaire.instanceId}
                 instanceId={activeQuestionnaire.instanceId}
                 definition={activeQuestionnaire.definition}
                 items={activeQuestionnaire.items}
                 onSubmitted={() => {
-                  // Synthetic user turn so the assistant reacts to the
-                  // scored result. The next POST to /api/chat picks up the
-                  // [RESULTADO DE CUESTIONARIO — ...] notice assembled by
-                  // buildQuestionnaireResultNotice (app/api/chat/route.ts),
-                  // which is how the ASQ acute-risk protocol (Línea 024 +
-                  // close_session_crisis) gets triggered.
-                  void sendMessage({ text: 'He completado el cuestionario.' })
+                  // A scored result is durable. If another turn is pending,
+                  // its notice is consumed by the next admitted turn.
+                  if (!recovery && status === 'ready') void send('He completado el cuestionario.')
+                  router.refresh()
                 }}
               />
             )}
+          {(recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
+            <p role="status" aria-live="polite">{recovery ? recovery.canRetry ? 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'No se completó la respuesta. Tu texto se conserva; estamos comprobando el turno guardado.' : 'Esperando respuesta. Puedes seguir escribiendo.'}</p>
+            {recovery?.canRetry && !urgentMode && <button type="button" disabled={retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
+            <button type="button" onClick={() => { if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
+            <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
+            {recoveryError && <p role="alert">No se pudo comprobar el estado. Conserva tu texto y vuelve a comprobarlo o recarga.</p>}
+          </div>}
+          {urgentMode && <p role="status" className="px-3 text-sm">Escribe una señal nueva de peligro inmediato para ti o para otra persona. Solo una señal de seguridad puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
           <ChatInput
-            status={status}
-            // Block the input while a questionnaire card is active so the
-            // user cannot create a second concurrent turn while the
-            // synthetic "He completado el cuestionario." is flying.
-            disabled={
-              isExpired ||
-              (activeQuestionnaire != null &&
-                activeQuestionnaire.status !== 'scored')
-            }
-            onSend={(text) => {
-              void sendMessage({ text })
-            }}
+            status={recovery && !urgentMode ? 'submitted' : status}
+            disabled={isExpired}
+            onSend={send}
           />
         </>
       )}

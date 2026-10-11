@@ -1,0 +1,102 @@
+[
+  {
+    "name": "legacy defaults",
+    "summary": {
+      "chief_complaint": "",
+      "presenting_issues": [],
+      "mood_affect": "",
+      "cognitive_patterns": [],
+      "risk_assessment": {
+        "suicidality": "none",
+        "self_harm": "none",
+        "notes": ""
+      },
+      "questionnaires": [],
+      "areas_for_exploration": [],
+      "preliminary_impression": "",
+      "recommended_actions_for_clinician": [],
+      "patient_facing_summary": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "missing main fields",
+    "summary": {
+      "risk_assessment": {
+        "suicidality": "none",
+        "self_harm": "none",
+        "notes": ""
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "invalid main list",
+    "summary": {
+      "chief_complaint": "",
+      "presenting_issues": [
+        1
+      ],
+      "mood_affect": "",
+      "cognitive_patterns": [],
+      "risk_assessment": {
+        "suicidality": "none",
+        "self_harm": "none",
+        "notes": ""
+      },
+      "questionnaires": [],
+      "areas_for_exploration": [],
+      "preliminary_impression": "",
+      "recommended_actions_for_clinician": [],
+      "patient_facing_summary": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "invalid task",
+    "summary": {
+      "chief_complaint": "",
+      "presenting_issues": [],
+      "mood_affect": "",
+      "cognitive_patterns": [],
+      "risk_assessment": {
+        "suicidality": "none",
+        "self_harm": "none",
+        "notes": ""
+      },
+      "questionnaires": [],
+      "areas_for_exploration": [],
+      "preliminary_impression": "",
+      "recommended_actions_for_clinician": [],
+      "patient_facing_summary": "",
+      "proposed_tasks": [
+        {
+          "descripcion": "x",
+          "nota": null
+        }
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "invalid new risk",
+    "summary": {
+      "chief_complaint": "",
+      "presenting_issues": [],
+      "mood_affect": "",
+      "cognitive_patterns": [],
+      "risk_assessment": {
+        "suicidality": "none",
+        "self_harm": "none",
+        "notes": "",
+        "heteroaggression": "unknown"
+      },
+      "questionnaires": [],
+      "areas_for_exploration": [],
+      "preliminary_impression": "",
+      "recommended_actions_for_clinician": [],
+      "patient_facing_summary": ""
+    },
+    "expected": false
+  }
+]

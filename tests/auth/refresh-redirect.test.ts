@@ -16,6 +16,7 @@ describe('refresh cookies/cache headers survive proxy redirects', () => {
         options.cookies.setAll([{ name: 'refresh', value: 'b', options: { httpOnly: true } }], { 'Cache-Control': 'private, no-store', Expires: '0', Pragma: 'no-cache' })
         return { data: { user: signedIn ? { id: 'user' } : null } }
       } },
+      rpc: async () => ({ data: false, error: null }),
       from: () => ({ select() { return this }, eq() { return this }, single: async () => ({ data: { onboarding_status: 'pending' } }) }),
     }))
     const response = await updateSession(new NextRequest(`http://localhost${path}`))

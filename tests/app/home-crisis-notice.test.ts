@@ -36,7 +36,7 @@ describe('home crisis notice — copy clínicamente crítica de crisis', () => {
   // alguno de estos cambia, el test falla para forzar una revisión consciente
   // de la ruta de seguridad a Línea 024.
   const SIGNED_TITLE = 'Tu última sesión se cerró por seguridad.'
-  const SIGNED_DESCRIPTION_FRAGMENT_1 = 'Tu psicólogo la está revisando hoy.'
+  const SIGNED_DESCRIPTION_FRAGMENT_1 = 'No hay revisión humana inmediata garantizada.'
   const SIGNED_DESCRIPTION_FRAGMENT_2 = 'Si necesitas ayuda ahora,'
   const SIGNED_LINE_024_MENTION = 'Línea 024'
 
@@ -44,9 +44,10 @@ describe('home crisis notice — copy clínicamente crítica de crisis', () => {
     expect(pageSrc).toContain(SIGNED_TITLE)
   })
 
-  it('includes the signed description fragments exactly', () => {
+  it('keeps immediate help and does not invent a review deadline', () => {
     expect(pageSrc).toContain(SIGNED_DESCRIPTION_FRAGMENT_1)
     expect(pageSrc).toContain(SIGNED_DESCRIPTION_FRAGMENT_2)
+    expect(pageSrc).not.toContain('Tu psicólogo la está revisando hoy.')
   })
 
   it('directs the patient to Línea 024 via SAFETY_RESOURCES (centralised)', () => {

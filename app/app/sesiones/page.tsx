@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { getPatientReports, REPORT_STATE_COPY } from '@/lib/server/assessments/patient-reports'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import {
   Card,
@@ -26,33 +28,20 @@ function formatDate(iso: string): string {
 
 export default async function SesionesPage() {
   const supabase = await createAuthenticatedClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  const { data: sessions } = await supabase
+  if (authError || !user) redirect('/login')
+  const { data: sessions, error: sessionsError } = await supabase
     .from('clinical_sessions')
     .select('id, opened_at, closed_at, closure_reason')
-    .eq('user_id', user!.id)
+    .eq('user_id', user.id)
     .eq('status', 'closed')
     .order('closed_at', { ascending: false })
     .limit(50)
 
   const sessionIds = (sessions ?? []).map((s) => s.id)
-  const { data: assessments } = sessionIds.length
-    ? await supabase
-        .from('assessments')
-        .select('session_id, summary_json')
-        .eq('assessment_type', 'closure')
-        .in('session_id', sessionIds)
-    : { data: [] as Array<{ session_id: string; summary_json: unknown }> }
-
-  const summaryBySession = new Map<string, string | null>()
-  for (const a of assessments ?? []) {
-    if (!a.session_id) continue
-    const summary = a.summary_json as
-      | { patient_facing_summary?: string }
-      | null
-    summaryBySession.set(a.session_id, summary?.patient_facing_summary ?? null)
-  }
+  if (sessionsError) throw sessionsError
+  const reports = await getPatientReports(supabase, sessionIds)
 
   return (
     <div className="space-y-6">
@@ -72,7 +61,8 @@ export default async function SesionesPage() {
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => {
-            const summary = summaryBySession.get(session.id) ?? null
+            const report = reports.get(session.id)
+            const summary = report?.state === 'available' ? report.summary : null
             const isCrisis = session.closure_reason === 'crisis_detected'
             return (
               <Card
@@ -95,7 +85,7 @@ export default async function SesionesPage() {
                   </div>
                   {isCrisis && (
                     <CardDescription className="text-red-900">
-                      Tu psicólogo la está revisando. Si necesitas ayuda ahora,
+                      No hay revisión humana inmediata garantizada. Si necesitas ayuda ahora,
                       llama a la <strong>{SAFETY_RESOURCES.suicide.name}</strong>.
                     </CardDescription>
                   )}
@@ -105,7 +95,7 @@ export default async function SesionesPage() {
                     <p className="text-sm text-slate-700">{summary}</p>
                   ) : (
                     <p className="text-sm italic text-slate-500">
-                      Esta sesión no tiene resumen disponible.
+                      {report && report.state !== 'available' ? REPORT_STATE_COPY[report.state] : REPORT_STATE_COPY.unavailable}
                     </p>
                   )}
                 </CardContent>

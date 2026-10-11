@@ -8,12 +8,14 @@ import argparse
 import pathlib
 import subprocess
 import uuid
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--baseline-security', action='store_true', help='Historical baseline without the two nonportable data operations or hardening migration')
 parser.add_argument('--baseline-chat', action='store_true', help='Task 1 schema with Task 2 regressions and no Task 2 migration')
+parser.add_argument('--baseline-flows', action='store_true', help='Task 2 schema with Task 3 functional regressions')
 args = parser.parse_args()
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 
@@ -39,6 +41,8 @@ try:
         raise RuntimeError('PostgreSQL startup timed out:\n' + docker('logs', name, check=False).stdout)
     query((ROOT / 'supabase/tests/bootstrap.sql').read_text())
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
+        if args.baseline_flows and 'patient_flows_acceptance' in path.name:
+            continue
         if args.baseline_chat and 'robust_chat_questionnaires_recovery' in path.name:
             continue
         if args.baseline_security and (path.name.startswith('202610') or path.name.startswith('20260502000004') or path.name.startswith('20260502000005')):
@@ -73,6 +77,25 @@ try:
       if (select count(*) from clinical_sessions)<>2 then raise exception 'historical wipe lost sessions'; end if;
     end $$;""")
     print('PASS historical repair preserves accounts, roles, sessions and patient default')
+    query((ROOT / 'supabase/tests/patient-flows.sql').read_text())
+    print('PASS adult acceptance and private report projections')
+    parity = json.loads((ROOT / 'tests/fixtures/risk-parity.json').read_text())
+    def literal(value):
+        return 'null' if value is None else "'" + str(value).replace("'", "''") + "'"
+    for v in parity['vectors']:
+        latest = max((e['createdAt'] for e in v['events']), default=None)
+        high = max((e['createdAt'] for e in v['events'] if e['severity']=='high'), default=None)
+        prev = v['previous'] or {}
+        params = [v['reviewedAt'],v['suicidality'],None,latest,high,prev.get('closedAt'),prev.get('closureReason'),parity['now']]
+        terms = [literal(x) for x in params]
+        terms[2] = 'true' if any(e['severity']=='critical' for e in v['events']) else 'false'
+        query("do $$ begin if derive_patient_risk_state_sql(" + ','.join(terms) + ")<>" + literal(v['expected']) + " then raise exception 'SQL risk parity failed: " + v['name'] + "'; end if; end $$;")
+    for item in json.loads((ROOT / 'tests/fixtures/assessment-risk-parity.json').read_text()):
+        query("do $$ begin if assessment_summary_valid_for_risk(" + literal(json.dumps(item['summary'])) + "::jsonb) is distinct from " + ('true' if item['expected'] else 'false') + " then raise exception 'Full schema parity failed: " + item['name'] + "'; end if; end $$;")
+    query((ROOT / 'supabase/tests/clinician-inbox-page.sql').read_text())
+    print('PASS globally prioritized bounded inbox, old pending pagination, snapshots and 12 SQL/TypeScript parity vectors')
+    # Non-binding synthetic acknowledgement for existing Task 2 actor fixtures.
+    query("update user_profiles set informal_name='Synthetic',pronouns='elle',birth_date='1990-01-01',reason_for_consulting='Synthetic test reason'; insert into consents(user_id,consent_version,server_recorded,payload_json) select user_id,'technical-draft-2026-10-11',true,'{\"birthDate\":\"1990-01-01\"}'::jsonb from user_profiles;")
     # Two independent database connections compete for the same row lock.
     actor = "set role authenticated; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);"
     session = '20000000-0000-0000-0000-000000000002'

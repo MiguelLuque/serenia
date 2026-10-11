@@ -1,3 +1,4 @@
+import { patientDisplayName } from '@/lib/shared/clinician/display-name'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/shared/supabase/types'
 
@@ -58,14 +59,14 @@ export async function getClinicianPatients(
   const userIds = Array.from(agg.keys())
   const { data: profiles, error: profilesError } = await supabase
     .from('user_profiles')
-    .select('user_id, display_name')
+    .select('user_id, display_name, informal_name')
     .in('user_id', userIds)
 
   if (profilesError) throw profilesError
 
   const nameByUser = new Map<string, string | null>()
   for (const p of profiles ?? []) {
-    nameByUser.set(p.user_id, p.display_name ?? null)
+    nameByUser.set(p.user_id, patientDisplayName(p))
   }
 
   const rows: ClinicianPatientRow[] = userIds.map((userId) => {

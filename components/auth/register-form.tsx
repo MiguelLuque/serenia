@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState } from 'react'
 import { registerAction } from '@/app/(auth)/actions'
 import { Button } from '@/components/ui/button'
@@ -39,7 +40,7 @@ export function RegisterForm() {
       </div>
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="consent" className="mt-1" />
-        <span>Acepto los términos de uso y la política de privacidad.</span>
+        <span>Entiendo que es un entorno de pruebas con <Link href="/terminos" className="underline">borrador técnico de uso</Link> e <Link href="/privacidad" className="underline">información provisional de privacidad</Link>. La aceptación vigente se completa en el perfil.</span>
       </label>
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? 'Creando…' : 'Crear cuenta'}

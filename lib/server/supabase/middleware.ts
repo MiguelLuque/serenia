@@ -33,13 +33,16 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user: sessionUser }, error: authError } = await supabase.auth.getUser()
+  const user = authError ? null : sessionUser
   const path = request.nextUrl.pathname
 
   const isPublic =
     path.startsWith('/login') ||
     path.startsWith('/registro') ||
     path.startsWith('/auth/callback') ||
+    path === '/privacidad' ||
+    path === '/terminos' ||
     path === '/'
 
   if (!user && !isPublic) {
@@ -50,26 +53,10 @@ export async function updateSession(request: NextRequest) {
     return redirect('/app')
   }
 
-  if (user && path.startsWith('/app')) {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('onboarding_status')
-      .eq('user_id', user.id)
-      .single()
-    if (profile?.onboarding_status !== 'complete') {
-      return redirect('/onboarding')
-    }
-  }
-
-  if (user && path === '/onboarding') {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('onboarding_status')
-      .eq('user_id', user.id)
-      .single()
-    if (profile?.onboarding_status === 'complete') {
-      return redirect('/app')
-    }
+  if (user && (path.startsWith('/app') || path === '/onboarding')) {
+    const { data: ready, error } = await supabase.rpc('get_onboarding_ready')
+    if (path.startsWith('/app') && (error || ready !== true)) return redirect('/onboarding')
+    if (path === '/onboarding' && !error && ready === true) return redirect('/app')
   }
 
   return response

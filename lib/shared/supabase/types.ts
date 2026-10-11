@@ -316,6 +316,7 @@ export type Database = {
         Row: {
           accepted_at: string
           consent_version: string
+          server_recorded: boolean
           id: string
           payload_json: Json
           user_id: string
@@ -1043,6 +1044,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_clinician_inbox_page: { Args: { p_offset?: number; p_limit?: number; p_pending_only?: boolean }; Returns: Json }
+      get_onboarding_ready: { Args: Record<PropertyKey, never>; Returns: boolean }
+      complete_patient_onboarding: { Args: { p_informal_name: string; p_pronouns: string; p_birth_date: string; p_reason: string; p_version: string; p_accepted: boolean }; Returns: undefined }
+      get_patient_session_reports: { Args: { p_session_ids: string[] }; Returns: Json }
+
       review_assessment_atomic: {
         Args: { p_session_id: string; p_assessment_id: string; p_action: string; p_summary?: Json; p_notes?: string | null; p_inherited_updates?: Json; p_reason?: string }
         Returns: string

@@ -6,6 +6,7 @@ export async function chatHarness() {
   vi.resetModules()
   const state = {
     session: { id: SESSION_ID, user_id: 'user-1', conversation_id: 'conv-1', status: 'open', opened_at: new Date().toISOString(), protocol_phase: 1 },
+    onboardingReady: true,
     user: { id: 'user-1' } as { id: string } | null,
     conversationOwner: 'user-1',
     rows: [] as any[], turns: new Map<string, any>(), proposal: null as { requestId: string; reason: string } | null,
@@ -51,7 +52,7 @@ export async function chatHarness() {
     }
     return { data: null, error: null }
   }) }
-  const authClient = { auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
+  const authClient = { rpc: vi.fn(async () => ({ data: state.onboardingReady, error: null })), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
   vi.doMock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => authClient, createServiceRoleClient: () => service }))
   vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
   vi.doMock('@/lib/shared/llm/models', () => ({ llm: { conversational: () => 'synthetic-model' } }))

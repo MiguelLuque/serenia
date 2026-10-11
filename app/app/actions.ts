@@ -15,6 +15,9 @@ export async function startSessionAction() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: ready, error: readinessError } = await supabase.rpc('get_onboarding_ready')
+  if (readinessError || ready !== true) redirect('/onboarding')
+
   const existing = await getOrResolveActiveSession(supabase, user.id)
   if (existing) redirect(`/app/sesion/${existing.id}`)
 

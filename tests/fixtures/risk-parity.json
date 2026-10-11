@@ -1,0 +1,140 @@
+{
+  "now": "2026-10-11T12:00:00Z",
+  "vectors": [
+    {
+      "name": "critical even old",
+      "reviewedAt": null,
+      "suicidality": null,
+      "events": [
+        {
+          "severity": "critical",
+          "createdAt": "2020-01-01T00:00:00Z"
+        }
+      ],
+      "previous": null,
+      "expected": "acute"
+    },
+    {
+      "name": "validated acute",
+      "reviewedAt": "2020-01-01T00:00:00Z",
+      "suicidality": "acute",
+      "events": [],
+      "previous": null,
+      "expected": "acute"
+    },
+    {
+      "name": "validated active",
+      "reviewedAt": "2020-01-01T00:00:00Z",
+      "suicidality": "active",
+      "events": [],
+      "previous": null,
+      "expected": "active"
+    },
+    {
+      "name": "none clears older high and crisis",
+      "reviewedAt": "2026-10-10T12:00:00Z",
+      "suicidality": "none",
+      "events": [
+        {
+          "severity": "high",
+          "createdAt": "2026-10-09T12:00:00Z"
+        }
+      ],
+      "previous": {
+        "closedAt": "2026-10-09T12:00:00Z",
+        "closureReason": "crisis_detected"
+      },
+      "expected": "none"
+    },
+    {
+      "name": "new high after none",
+      "reviewedAt": "2026-10-09T12:00:00Z",
+      "suicidality": "none",
+      "events": [
+        {
+          "severity": "high",
+          "createdAt": "2026-10-10T12:00:00Z"
+        }
+      ],
+      "previous": null,
+      "expected": "watch"
+    },
+    {
+      "name": "passive recent",
+      "reviewedAt": "2026-09-20T12:00:01Z",
+      "suicidality": "passive",
+      "events": [],
+      "previous": null,
+      "expected": "watch"
+    },
+    {
+      "name": "passive boundary21d",
+      "reviewedAt": "2026-09-20T12:00:00Z",
+      "suicidality": "passive",
+      "events": [],
+      "previous": null,
+      "expected": "none"
+    },
+    {
+      "name": "high boundary21d",
+      "reviewedAt": null,
+      "suicidality": null,
+      "events": [
+        {
+          "severity": "high",
+          "createdAt": "2026-09-20T12:00:00Z"
+        }
+      ],
+      "previous": null,
+      "expected": "none"
+    },
+    {
+      "name": "recent crisis",
+      "reviewedAt": null,
+      "suicidality": null,
+      "events": [],
+      "previous": {
+        "closedAt": "2026-09-20T12:00:01Z",
+        "closureReason": "crisis_detected"
+      },
+      "expected": "watch"
+    },
+    {
+      "name": "crisis boundary21d",
+      "reviewedAt": null,
+      "suicidality": null,
+      "events": [],
+      "previous": {
+        "closedAt": "2026-09-20T12:00:00Z",
+        "closureReason": "crisis_detected"
+      },
+      "expected": "none"
+    },
+    {
+      "name": "none equal event cannot clear",
+      "reviewedAt": "2026-10-10T12:00:00Z",
+      "suicidality": "none",
+      "events": [
+        {
+          "severity": "high",
+          "createdAt": "2026-10-10T12:00:00Z"
+        }
+      ],
+      "previous": null,
+      "expected": "watch"
+    },
+    {
+      "name": "moderate no new cutoff",
+      "reviewedAt": null,
+      "suicidality": null,
+      "events": [
+        {
+          "severity": "moderate",
+          "createdAt": "2026-10-10T12:00:00Z"
+        }
+      ],
+      "previous": null,
+      "expected": "none"
+    }
+  ]
+}

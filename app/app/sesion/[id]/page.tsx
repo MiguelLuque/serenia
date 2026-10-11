@@ -7,6 +7,7 @@ import {
   SESSION_MAX_DURATION_MS,
 } from '@/lib/server/sessions/service'
 import { getActiveInstanceForSession } from '@/lib/server/questionnaires/service'
+import { ChatRecoverySchema } from '@/lib/shared/chat/recovery'
 import { ChatView } from '@/components/chat/chat-view'
 
 type MessageRow = { id: string; role: string; parts: unknown }
@@ -105,6 +106,10 @@ export default async function SessionPage({
     new Date(session.opened_at).getTime() + SESSION_MAX_DURATION_MS,
   )
 
+  const { data: recoveryData, error: recoveryError } = await supabase.rpc('get_chat_turn_recovery', { p_session_id: session.id })
+  if (recoveryError) throw recoveryError
+  const recovery = recoveryData === null ? null : ChatRecoverySchema.parse(recoveryData)
+
   const active = await getActiveInstanceForSession(supabase, session.id)
   const activeQuestionnaire =
     active && active.instance.status !== 'scored'
@@ -126,7 +131,9 @@ export default async function SessionPage({
 
   return (
     <ChatView
+      key={session.id}
       sessionId={session.id}
+      initialRecovery={recovery}
       initialMessages={initialMessages}
       expiresAt={expiresAt}
       activeQuestionnaire={activeQuestionnaire}

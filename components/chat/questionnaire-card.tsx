@@ -49,7 +49,11 @@ function parseOptions(raw: unknown): Option[] {
   )
 }
 
-export function QuestionnaireCard({
+export function QuestionnaireCard(props: QuestionnaireCardProps) {
+  return <QuestionnaireInstance key={props.instanceId} {...props} />
+}
+
+function QuestionnaireInstance({
   instanceId,
   definition,
   items,
@@ -64,6 +68,7 @@ export function QuestionnaireCard({
   const [error, setError] = useState<string | null>(null)
 
   const sorted = [...items].sort((a, b) => a.order_index - b.order_index)
+  const isCssrs = definition.code === 'CSSRS'
   const isAsq = definition.code === 'ASQ'
   // ASQ item 5 is conditional: only ask if any of items 1-4 is positive.
   const visibleItems = isAsq
@@ -74,7 +79,9 @@ export function QuestionnaireCard({
         )
         return anyPositive
       })
-    : sorted
+    : isCssrs
+      ? sorted.filter(item => !([3, 4, 5].includes(item.order_index) && answers[2]?.value === 0) && !(item.order_index === 7 && answers[6]?.value === 0))
+      : sorted
 
   const current = visibleItems[currentIdx]
   const isLast = currentIdx === visibleItems.length - 1
@@ -110,15 +117,12 @@ export function QuestionnaireCard({
           body: JSON.stringify({ answers: payload }),
         },
       )
-      if (!res.ok) throw new Error(await res.text())
+      if (!res.ok) throw new Error('No se pudieron guardar las respuestas. Puedes reintentar sin perderlas.')
       setSubmitted(true)
-      // Fire the synthetic user turn first so the assistant stream starts
-      // immediately; the timed router.refresh() below then clears the
-      // server-rendered `activeQuestionnaire` (page.tsx) so this card
-      // disappears. Without the sendMessage, the ASQ acute-risk protocol in
-      // buildQuestionnaireResultNotice is unreachable.
+      // Notify the parent after durable scoring. It sends immediately only
+      // when no turn is outstanding; otherwise the next admitted turn sees it.
       onSubmitted?.()
-      setTimeout(() => router.refresh(), 1500)
+      router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error enviando respuestas')
       setSubmitting(false)
@@ -128,7 +132,7 @@ export function QuestionnaireCard({
   if (submitted) {
     return (
       <Card className="mx-3 mb-2 border-emerald-200 bg-emerald-50">
-        <CardContent className="py-3 text-sm text-emerald-900">
+        <CardContent role="status" className="py-3 text-sm text-emerald-900">
           Enviado. Serenia tiene tu resultado.
         </CardContent>
       </Card>
@@ -151,27 +155,25 @@ export function QuestionnaireCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm">{current.prompt}</p>
-        <div className="flex flex-col gap-2">
+        <div role="radiogroup" aria-label={current.prompt} className="flex flex-col gap-2">
           {options.map((opt) => {
             const isSelected = selected?.value === opt.value
             return (
-              <button
+              <label
                 key={opt.value}
-                type="button"
-                onClick={() => selectOption(opt)}
-                disabled={submitting}
                 className={`rounded border px-3 py-2 text-left text-sm transition ${
                   isSelected
                     ? 'border-slate-900 bg-slate-900 text-white'
                     : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
                 }`}
               >
+                <input type="radio" name={`question-${instanceId}-${current.order_index}`} value={opt.value} checked={isSelected} disabled={submitting} onChange={() => selectOption(opt)} className="mr-2" />
                 {opt.label}
-              </button>
+              </label>
             )
           })}
         </div>
-        {error && <p className="text-xs text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
         <div className="flex justify-end">
           <Button
             type="button"

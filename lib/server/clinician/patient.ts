@@ -1,4 +1,5 @@
 import 'server-only'
+import { patientDisplayName } from '@/lib/shared/clinician/display-name'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/shared/supabase/types'
 import type { AssessmentStatus } from '@/lib/shared/clinician/assessment-labels'
@@ -70,7 +71,7 @@ export async function getPatientDetail(
     await Promise.all([
       supabase
         .from('user_profiles')
-        .select('user_id, display_name, birth_date')
+        .select('user_id, display_name, informal_name, birth_date')
         .eq('user_id', userId)
         .maybeSingle(),
       // Scored instances of the trend questionnaires, joined with their result.
@@ -114,7 +115,7 @@ export async function getPatientDetail(
 
   const profile: PatientProfile = {
     userId,
-    displayName: profileRes.data?.display_name ?? null,
+    displayName: patientDisplayName(profileRes.data),
     birthDate: profileRes.data?.birth_date ?? null,
   }
 

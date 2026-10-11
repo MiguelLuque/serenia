@@ -1,6 +1,7 @@
 'use server'
 import { redirect } from 'next/navigation'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { CURRENT_ACCEPTANCE_VERSION } from '@/lib/shared/onboarding/acceptance'
 import { ClinicalIntakeSchema } from '@/lib/shared/onboarding/schema'
 
 type ActionState = { error?: string } | undefined
@@ -25,23 +26,20 @@ export async function submitProfile(_prev: ActionState, formData: FormData): Pro
     return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
   }
 
-  const supabase = await createAuthenticatedClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'No autenticado' }
+  if (formData.get('acceptance') !== 'on' || formData.get('acceptanceVersion') !== CURRENT_ACCEPTANCE_VERSION) return { error: 'Lee y acepta el borrador técnico vigente para continuar' }
 
-  const { error } = await supabase
-    .from('user_profiles')
-    .upsert(
-      {
-        user_id: user.id,
-        informal_name: parsed.data.informalName,
-        pronouns: parsed.data.pronouns,
-        birth_date: parsed.data.birthDate,
-        reason_for_consulting: parsed.data.reasonForConsulting,
-        onboarding_status: 'complete',
-      },
-      { onConflict: 'user_id' },
-    )
+  const supabase = await createAuthenticatedClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'No autenticado' }
+
+  const { error } = await supabase.rpc('complete_patient_onboarding', {
+    p_informal_name: parsed.data.informalName,
+    p_pronouns: parsed.data.pronouns,
+    p_birth_date: parsed.data.birthDate,
+    p_reason: parsed.data.reasonForConsulting,
+    p_version: CURRENT_ACCEPTANCE_VERSION,
+    p_accepted: true,
+  })
 
   if (error) return { error: 'No se pudo guardar el perfil' }
   redirect('/app')

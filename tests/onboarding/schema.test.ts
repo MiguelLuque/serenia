@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { ClinicalIntakeSchema } from '@/lib/shared/onboarding/schema'
 
 const validInput = {
@@ -52,5 +52,13 @@ describe('ClinicalIntakeSchema', () => {
       reasonForConsulting: 'a'.repeat(2001),
     })
     expect(r.success).toBe(false)
+  })
+})
+
+afterEach(() => vi.useRealTimers())
+describe('adult civil date boundary', () => {
+  it.each([['2008-10-11', true], ['2008-10-12', false], ['2027-01-01', false], ['2000-02-30', false], ['2000-13-01', false]])('%s adult validity = %s', (birthDate, expected) => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T12:00:00Z'))
+    expect(ClinicalIntakeSchema.safeParse({ ...validInput, birthDate }).success).toBe(expected)
   })
 })

@@ -351,6 +351,18 @@ export function AssessmentEditor({
           </div>
 
           <div className="flex flex-col gap-2">
+            <Label htmlFor="risk-heteroaggression">Heteroagresión</Label>
+            <select id="risk-heteroaggression" value={draft.risk_assessment.heteroaggression} onChange={e => updateRisk('heteroaggression', e.target.value as AssessmentSummary['risk_assessment']['heteroaggression'])} className="rounded border p-2">
+              <option value="none">Sin heteroagresión</option><option value="verbal">Agresión verbal</option><option value="plan">Plan de agresión</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="risk-substance">Consumo agudo de sustancias</Label>
+            <select id="risk-substance" value={draft.risk_assessment.substance_use_acute ?? ''} onChange={e => updateRisk('substance_use_acute', e.target.value === '' ? null : e.target.value as AssessmentSummary['risk_assessment']['substance_use_acute'])} className="rounded border p-2">
+              <option value="">Sin evaluar</option><option value="none">Sin consumo agudo</option><option value="suspected">Consumo agudo sospechado</option><option value="confirmed">Consumo agudo confirmado</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
             <Label htmlFor="risk-notes">Notas</Label>
             <Textarea
               id="risk-notes"

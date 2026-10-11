@@ -1,3 +1,4 @@
+import { patientDisplayName } from '@/lib/shared/clinician/display-name'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/shared/supabase/types'
 import {
@@ -126,7 +127,7 @@ export async function getSessionDetail(
   const [profileRes, assessmentRes, latestSupersededRes, messagesRes, inheritedTasksRes] = await Promise.all([
     supabase
       .from('user_profiles')
-      .select('user_id, display_name')
+      .select('user_id, display_name, informal_name')
       .eq('user_id', sessionRow.user_id)
       .maybeSingle(),
     // "Vigente" = the latest closure assessment whose status isn't
@@ -264,7 +265,7 @@ export async function getSessionDetail(
     patient: profileRes.data
       ? {
           userId: profileRes.data.user_id,
-          displayName: profileRes.data.display_name ?? null,
+          displayName: patientDisplayName(profileRes.data),
         }
       : { userId: sessionRow.user_id, displayName: null },
     assessment,

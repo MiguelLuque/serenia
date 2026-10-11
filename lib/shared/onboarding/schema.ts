@@ -15,6 +15,16 @@ import { z } from 'zod'
 export const PronounsSchema = z.enum(['el', 'ella', 'elle', 'prefer_not_say'])
 export type Pronouns = z.infer<typeof PronounsSchema>
 
+/** Civil date in UTC, also used by the DB acceptance gate (no elapsed-ms age). */
+export function isAdultBirthDate(value: string, now = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const birth = new Date(`${value}T00:00:00Z`)
+  if (!Number.isFinite(birth.getTime()) || birth.toISOString().slice(0, 10) !== value) return false
+  const today = now.toISOString().slice(0, 10)
+  const threshold = `${now.getUTCFullYear() - 18}${today.slice(4)}`
+  return value <= threshold
+}
+
 export const ClinicalIntakeSchema = z.object({
   informalName: z
     .string()
@@ -24,7 +34,8 @@ export const ClinicalIntakeSchema = z.object({
   pronouns: PronounsSchema,
   birthDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+    .refine(isAdultBirthDate, 'Debes tener al menos 18 años e indicar una fecha válida'),
   reasonForConsulting: z
     .string()
     .trim()
