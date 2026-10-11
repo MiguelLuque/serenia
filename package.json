@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "ai:evaluate:offline": "node --conditions=react-server --import tsx scripts/evaluate-ai.ts",
+    "ai:evaluate:offline": "node scripts/evaluate-ai-launcher.mjs",
     "verify": "node scripts/verify.mjs",
     "build:isolated": "node scripts/build-isolated.mjs",
     "workflow:wire": "node scripts/workflow-wire.mjs verify",
