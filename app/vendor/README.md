@@ -1,0 +1,1 @@
+Vendored unchanged from shadcn 4.3.0, dist/tailwind.css. MIT copyright 2023 shadcn; license alongside. SHA-256: 146941ac3ff65496fdf1cb306e697255328e4dadc7c105d66e36bb031b00f6d6. Only this stylesheet was used by Serenia; the development CLI is removed from the dependency graph.

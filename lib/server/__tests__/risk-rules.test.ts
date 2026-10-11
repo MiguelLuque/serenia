@@ -5,7 +5,6 @@ const now = new Date('2026-04-22T12:00:00Z')
 const nowMs = now.getTime()
 const DAY_MS = 24 * 60 * 60 * 1000
 const ago = (days: number) => new Date(nowMs - days * DAY_MS).toISOString()
-const future = (days: number) => new Date(nowMs + days * DAY_MS).toISOString()
 
 describe('derivePatientRiskState', () => {
   it('rule 1: critical event → acute even if assessment says none', () => {

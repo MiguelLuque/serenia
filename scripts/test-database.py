@@ -9,6 +9,7 @@ import pathlib
 import subprocess
 import uuid
 import json
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -20,7 +21,11 @@ args = parser.parse_args()
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 
 def docker(*argv, sql=None, check=True):
-    return subprocess.run(['rtk', 'proxy', 'docker', *argv], input=sql, text=True, capture_output=True, check=check)
+    executable = ['rtk', 'proxy', 'docker'] if shutil.which('rtk') else ['docker']
+    result = subprocess.run([*executable, *argv], input=sql, text=True, capture_output=True)
+    if check and result.returncode:
+        raise RuntimeError('Docker failed (exit ' + str(result.returncode) + '):\n' + result.stdout + result.stderr)
+    return result
 
 def query(sql):
     result = docker('exec', '-i', name, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=False)
@@ -56,6 +61,10 @@ try:
         except RuntimeError as error:
             raise RuntimeError(f'Migration {path.name}: {error}') from error
     print('PASS migrations from empty auth.users')
+    query((ROOT / 'supabase/seed.sql').read_text())
+    query((ROOT / 'supabase/seed.sql').read_text())
+    query("do $$ begin if exists(select 1 from questionnaire_definitions where code='ASQ') or (select count(*) from questionnaire_definitions where code in ('PHQ9','GAD7','BDI2','BAI','CSSRS'))<>5 or exists(select 1 from auth.users) then raise exception 'Seed lost instruments, reenabled ASQ or created accounts'; end if; end $$;")
+    print('PASS seed from empty, repeatable and without ASQ/accounts')
     # Keep the temporary must_deny helper and fixtures on one SQL connection.
     query((ROOT / 'supabase/tests/authorization-review.sql').read_text() + '\n' +
           (ROOT / 'supabase/tests/relationships.sql').read_text() + '\n' +

@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/supabase/agent-skills",
+  "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+  "license": "MIT copyright Supabase 2026",
+  "files": [
+    {
+      "name": "supabase",
+      "source": "https://raw.githubusercontent.com/supabase/agent-skills/c9be0e931b7930f7d02126d04774d904c381e7d7/skills/supabase/SKILL.md",
+      "sha256": "697e0e949f97621c6fc1784169eb3ccbf673747d6bb8299a52962d3d84d93dc6"
+    },
+    {
+      "name": "supabase-postgres-best-practices",
+      "source": "https://raw.githubusercontent.com/supabase/agent-skills/c9be0e931b7930f7d02126d04774d904c381e7d7/skills/supabase-postgres-best-practices/SKILL.md",
+      "sha256": "ad65e776f45e761bafc609d3f506c77c1032225aa65e0c4c02f241b8071e5855"
+    }
+  ],
+  "mode": "project-local operational guide and pinned official references; no global plugin/skill installation"
+}

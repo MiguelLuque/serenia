@@ -48,3 +48,7 @@ docs/handoff/*.zip
 # Respuestas crudas del psicólogo asesor (PDFs con copy clínico + .txt UTF-16).
 # Procesadas a docs/agents/questionnaires/*.md + ADR-024. No subir originales.
 docs/handoff/respuesta de pablo/
+
+# Isolated CLI/cache and generated Workflow artifacts
+/.cache/
+/app/.well-known/workflow/

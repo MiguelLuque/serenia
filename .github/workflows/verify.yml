@@ -1,0 +1,45 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+  SUPABASE_TELEMETRY_DISABLED: '1'
+jobs:
+  local-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+          cache: npm
+      - name: Install exact lock
+        run: npm ci --no-fund --no-audit
+        env:
+          SUPABASE_HOME: ${{ github.workspace }}/.cache/supabase
+      - name: All source, SQL, wire, audit and isolated build gates
+        run: npm run verify
+      - name: Preserve full verification and audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-verification-evidence
+          path: /tmp/serenia-verify-*/*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Initialize isolated local CLI telemetry state
+        run: |
+          npm run supabase:local -- telemetry disable
+          npm run supabase:local -- telemetry status
+      - name: Start Supabase local stack and apply migrations and seed
+        run: |
+          npm run supabase:local -- start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          npm run supabase:local -- db reset --local > "$RUNNER_TEMP/supabase-reset.log" 2>&1
+      - name: Local SQL lint, advisors and generated type parity
+        run: npm run db:verify
+      - name: Stop local stack
+        if: always()
+        run: npm run supabase:local -- stop > "$RUNNER_TEMP/supabase-stop.log" 2>&1

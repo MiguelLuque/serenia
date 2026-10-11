@@ -1,0 +1,268 @@
+{
+  "marker": "SERENIA_WORKFLOW_SDK_WIRE_BASELINE_V1",
+  "createdAt": "2026-10-10T23:17:15.448Z",
+  "node": "v24.14.1",
+  "versions": {
+    "workflow": {
+      "version": "4.2.4",
+      "packagePath": "/Users/miguelluque/git/serenia/node_modules/workflow/package.json"
+    },
+    "@workflow/core": {
+      "version": "4.2.4",
+      "packagePath": "/Users/miguelluque/git/serenia/node_modules/@workflow/core/package.json"
+    },
+    "@workflow/serde": {
+      "version": "4.1.1",
+      "packagePath": "/Users/miguelluque/git/serenia/node_modules/@workflow/serde/package.json"
+    },
+    "devalue": {
+      "version": "5.6.3",
+      "packagePath": "/Users/miguelluque/git/serenia/node_modules/devalue/package.json"
+    },
+    "nanoid": {
+      "version": "5.1.6",
+      "packagePath": "/Users/miguelluque/git/serenia/node_modules/@workflow/core/node_modules/nanoid/package.json"
+    }
+  },
+  "serializerPath": "/Users/miguelluque/git/serenia/node_modules/@workflow/core/dist/serialization.js",
+  "serializerSha256": "74e6d5d1f98e2533c84aa9077bd930e2aabb50b77441c681519010a4959c6777",
+  "limits": [
+    "SDK wire/reducers only; no compiler, worker, queue, World, VM or durable replay",
+    "unencrypted devl format; no stream operations; no clinical model validation",
+    "Buffer revival expected as Uint8Array; offsets may normalize but visible bytes must match"
+  ],
+  "results": [
+    {
+      "boundary": "workflow-arguments",
+      "case": "graph",
+      "status": "PASS",
+      "file": "workflow-arguments--graph.bin",
+      "sha256": "8439930e396bf0db5e72d84cf7f9c7e76b28e643c234e0eeee10ac43d77806a7",
+      "bytes": 394
+    },
+    {
+      "boundary": "workflow-arguments",
+      "case": "uint8-offset",
+      "status": "PASS",
+      "file": "workflow-arguments--uint8-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "workflow-arguments",
+      "case": "buffer-offset",
+      "status": "PASS",
+      "file": "workflow-arguments--buffer-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "workflow-arguments",
+      "case": "dataview-offset",
+      "status": "FAIL",
+      "error": {
+        "name": "WorkflowRuntimeError",
+        "message": "Failed to serialize workflow arguments. Ensure you're passing serializable types (plain objects, arrays, primitives, Date, RegExp, Map, Set).\n\nLearn more: https://useworkflow.dev/err/serialization-failed",
+        "cause": "Cannot stringify arbitrary non-POJOs"
+      }
+    },
+    {
+      "boundary": "workflow-arguments",
+      "case": "custom-serde",
+      "status": "PASS",
+      "file": "workflow-arguments--custom-serde.bin",
+      "sha256": "20451c6ecf67f8b5ad3de41295bba714bf783a250293da889e72c8cf8d2be469",
+      "bytes": 518
+    },
+    {
+      "boundary": "workflow-arguments",
+      "case": "assessment-shape",
+      "status": "PASS",
+      "file": "workflow-arguments--assessment-shape.bin",
+      "sha256": "a24fc48f41f01b0c115cbe40a7624768aa7925978295731b3006d680ec3746bb",
+      "bytes": 756
+    },
+    {
+      "boundary": "workflow-return",
+      "case": "graph",
+      "status": "PASS",
+      "file": "workflow-return--graph.bin",
+      "sha256": "8439930e396bf0db5e72d84cf7f9c7e76b28e643c234e0eeee10ac43d77806a7",
+      "bytes": 394
+    },
+    {
+      "boundary": "workflow-return",
+      "case": "uint8-offset",
+      "status": "PASS",
+      "file": "workflow-return--uint8-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "workflow-return",
+      "case": "buffer-offset",
+      "status": "PASS",
+      "file": "workflow-return--buffer-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "workflow-return",
+      "case": "dataview-offset",
+      "status": "FAIL",
+      "error": {
+        "name": "WorkflowRuntimeError",
+        "message": "Failed to serialize workflow return value. Ensure you're returning serializable types (plain objects, arrays, primitives, Date, RegExp, Map, Set).\n\nLearn more: https://useworkflow.dev/err/serialization-failed",
+        "cause": "Cannot stringify arbitrary non-POJOs"
+      }
+    },
+    {
+      "boundary": "workflow-return",
+      "case": "custom-serde",
+      "status": "PASS",
+      "file": "workflow-return--custom-serde.bin",
+      "sha256": "20451c6ecf67f8b5ad3de41295bba714bf783a250293da889e72c8cf8d2be469",
+      "bytes": 518
+    },
+    {
+      "boundary": "workflow-return",
+      "case": "assessment-shape",
+      "status": "PASS",
+      "file": "workflow-return--assessment-shape.bin",
+      "sha256": "a24fc48f41f01b0c115cbe40a7624768aa7925978295731b3006d680ec3746bb",
+      "bytes": 756
+    },
+    {
+      "boundary": "step-arguments",
+      "case": "graph",
+      "status": "PASS",
+      "file": "step-arguments--graph.bin",
+      "sha256": "8439930e396bf0db5e72d84cf7f9c7e76b28e643c234e0eeee10ac43d77806a7",
+      "bytes": 394
+    },
+    {
+      "boundary": "step-arguments",
+      "case": "uint8-offset",
+      "status": "PASS",
+      "file": "step-arguments--uint8-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "step-arguments",
+      "case": "buffer-offset",
+      "status": "PASS",
+      "file": "step-arguments--buffer-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "step-arguments",
+      "case": "dataview-offset",
+      "status": "FAIL",
+      "error": {
+        "name": "WorkflowRuntimeError",
+        "message": "Failed to serialize step arguments. Ensure you're passing serializable types (plain objects, arrays, primitives, Date, RegExp, Map, Set).\n\nLearn more: https://useworkflow.dev/err/serialization-failed",
+        "cause": "Cannot stringify arbitrary non-POJOs"
+      }
+    },
+    {
+      "boundary": "step-arguments",
+      "case": "custom-serde",
+      "status": "PASS",
+      "file": "step-arguments--custom-serde.bin",
+      "sha256": "20451c6ecf67f8b5ad3de41295bba714bf783a250293da889e72c8cf8d2be469",
+      "bytes": 518
+    },
+    {
+      "boundary": "step-arguments",
+      "case": "assessment-shape",
+      "status": "PASS",
+      "file": "step-arguments--assessment-shape.bin",
+      "sha256": "a24fc48f41f01b0c115cbe40a7624768aa7925978295731b3006d680ec3746bb",
+      "bytes": 756
+    },
+    {
+      "boundary": "step-return",
+      "case": "graph",
+      "status": "PASS",
+      "file": "step-return--graph.bin",
+      "sha256": "8439930e396bf0db5e72d84cf7f9c7e76b28e643c234e0eeee10ac43d77806a7",
+      "bytes": 394
+    },
+    {
+      "boundary": "step-return",
+      "case": "uint8-offset",
+      "status": "PASS",
+      "file": "step-return--uint8-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "step-return",
+      "case": "buffer-offset",
+      "status": "PASS",
+      "file": "step-return--buffer-offset.bin",
+      "sha256": "5f4a761503bd047b5fdc668a0115bd0c7f9bad09c3ce2e206ba774a76dab8606",
+      "bytes": 33,
+      "revivedType": "Uint8Array",
+      "byteOffset": 0,
+      "backingByteLength": 4,
+      "byteExposure": "PASS"
+    },
+    {
+      "boundary": "step-return",
+      "case": "dataview-offset",
+      "status": "FAIL",
+      "error": {
+        "name": "WorkflowRuntimeError",
+        "message": "Failed to serialize step return value. Ensure you're returning serializable types (plain objects, arrays, primitives, Date, RegExp, Map, Set).\n\nLearn more: https://useworkflow.dev/err/serialization-failed",
+        "cause": "Cannot stringify arbitrary non-POJOs"
+      }
+    },
+    {
+      "boundary": "step-return",
+      "case": "custom-serde",
+      "status": "PASS",
+      "file": "step-return--custom-serde.bin",
+      "sha256": "20451c6ecf67f8b5ad3de41295bba714bf783a250293da889e72c8cf8d2be469",
+      "bytes": 518
+    },
+    {
+      "boundary": "step-return",
+      "case": "assessment-shape",
+      "status": "PASS",
+      "file": "step-return--assessment-shape.bin",
+      "sha256": "a24fc48f41f01b0c115cbe40a7624768aa7925978295731b3006d680ec3746bb",
+      "bytes": 756
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { buildPatientContext } from '@/lib/server/patient-context/builder'
 
 const NOW = new Date('2026-04-22T12:00:00Z')
@@ -65,12 +65,6 @@ function noRows(): TableResponse {
   return { data: null, error: null, count: null }
 }
 
-// Default table factory: no data anywhere (fresh patient)
-function emptyFactory(table: string): TableResponse {
-  if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
-  return noRows()
-}
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('buildPatientContext', () => {
@@ -101,15 +95,6 @@ describe('buildPatientContext', () => {
       summary_json: baseSummary,
       clinical_sessions: { closed_at: sessionClosedAt, status: 'closed' },
     }
-
-    const supabase = makeSupabase((table) => {
-      if (table === 'assessments') return ok(draftAssessmentRow)
-      if (table === 'clinical_sessions') {
-        // count query — 1 closed session
-        return { data: null, error: null, count: 1 }
-      }
-      return noRows()
-    })
 
     // assessments is queried twice: validated (Q1) returns null, draft (Q2) returns row
     let assessmentsCallCount = 0
