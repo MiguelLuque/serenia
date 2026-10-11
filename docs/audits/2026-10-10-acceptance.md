@@ -1,6 +1,6 @@
 # Aceptación local del MVP robusto
 
-Estado: Tasks 1–3 implementadas y revisadas, incluyendo los dos fixes de Task3. Tasks 4–6 conservan los gates de dependencias, IA y aceptación integral. Esta matriz define la evidencia requerida; no certifica todavía el ciclo completo.
+Estado: Tasks 1–3 implementadas y revisadas, incluyendo los dos fixes de Task3. Task4 completa y revisada tras corregir tres guards; Tasks5–6 conservan los gates de IA y aceptación integral. Esta matriz define la evidencia requerida; no certifica todavía el ciclo completo.
 
 ## Entornos y límites
 
@@ -17,7 +17,7 @@ Experimento de preparación ejecutado: Node con `generateText`, ID `anthropic/cl
 
 | Flujo | Resultado requerido | Evidencia actual |
 |---|---|---|
-| Bootstrap | Todas las migraciones y seed desde vacío; instrumentos retirados no reaparecen | Migraciones PostgreSQL Tasks 1–3 pasan; seed/stack Supabase pendientes |
+| Bootstrap | Todas las migraciones y seed desde vacío; instrumentos retirados no reaparecen | PostgreSQL Task4: migraciones, seed repetible y ningún ASQ/cuenta pasan; stack Supabase pendiente |
 | Permisos paciente | Sin autopromoción, cierre ajeno ni fabricación de informes/resultados/riesgos | SQL real Task 1 aprobado; Auth/Data API pendientes |
 | Informe privado | Data API paciente no entrega notas ni orientación diagnóstica; resumen revisado scoped | SQL/proyección Task 3 revisados; JWT/PostgREST pendientes |
 | Adultos y aceptación | Fechas reales, cumpleaños 18, consentimiento versionado y puerta servidor coherente | SQL/acciones/API/componentes Task 3 revisados; recorrido real pendiente |
@@ -28,7 +28,7 @@ Experimento de preparación ejecutado: Node con `generateText`, ID `anthropic/cl
 | Revisión clínica | Editar/confirmar/rechazar conserva una versión vigente y progreso de tareas | SQL Task 1 revisada; editor/view DOM Task 3 pasan; navegador pendiente |
 | Bandeja | Pendientes antiguos y todas las dimensiones de riesgo visibles | SQL paginada/prioridad/paridad y DOM Task 3 revisados; navegador pendiente |
 | Recarga | Resumen vigente, nombre y estado se mantienen al navegar y recargar | SDK/DOM Task 3 revisados; navegador pendiente |
-| Herramientas Supabase | SDK/CLI fijados, SSR refresh preservado, tipos/advisors estrictos | MCP docs ejecutado; proxy Task 2 revisado; actualización y comandos reales pendientes |
+| Herramientas Supabase | SDK/CLI fijados, SSR refresh preservado, tipos/advisors estrictos | MCP docs, SDK/CLI, transporte SSR y telemetría aislada verificados; guards Task4 revisados; stack/tipos/advisors reales pendientes |
 | Gates finales | Tests, lint, tipos, build, SQL, vulnerabilidades y navegador sobre versión final | Pendientes tras integración |
 
 ## Evidencia de entrega

@@ -72,11 +72,11 @@
 
 **Interfaces:** Conservar contratos de las Tasks 1–3. Usar los candidatos publicados en `docs/audits/2026-10-10-dependency-upgrade.md`, comprobando la instalación efectiva y sus guías. El wrapper Supabase conserva estado local aislado y opt-out en cada comando; nunca opera sobre un proyecto enlazado.
 
-- [ ] Fijar dependencias corregidas tras investigar advisories y uso real; retirar herramientas CLI del runtime si corresponde, sin `audit fix --force`. No instalar en el node_modules de otro checkout.
-- [ ] Resolver errores lint de fuente y pruebas con tipos útiles, raíz Turbopack explícita y scripts de typecheck/verify/DB. Añadir CI con gates fail-closed y reporte de vulnerabilidades. Actualizar SDK/CLI Supabase y el uso de skills oficiales fijadas por commit; documentación y comandos locales de tipos/advisors con límites de entorno explícitos. Revisar todos los adaptadores SSR del proyecto (browser, servidor, proxy y callback) con las guías de la versión instalada; verificar refresh, cookies/cache headers, PKCE y signout sin mutar configuración global.
-- [ ] Corregir el bootstrap/seed para funcionar desde vacío con las migraciones actuales, sin reincluir ASQ retirado ni depender de metacomandos psql incompatibles. Incluir `NEXT_PUBLIC_SITE_URL` y documentar claves modernas con fallback explícito y sin rotar claves.
-- [ ] Verificar los reducers y serializer reales de Workflow frente a los payloads previos conservados en `.superpowers/sdd/2026-10-10-robust-mvp/workflow-wire-before/`, además del roundtrip nuevo. Registrar la limitación original de DataView; no presentar un JSON roundtrip como evidencia de wire format. El replay durable del artefacto construido se comprueba en Task 6.
-- [ ] Implementar el build local aislado del commit mediante snapshot sin `.env.local`, entorno explícito y dependencias instaladas copiadas. Ejecutar tests, lint, tipos, build aislado, SQL y auditoría del lock final; conservar errores completos y advisories residuales. Informe y revisión independiente del bloque.
+- [x] Fijar dependencias corregidas tras investigar advisories y uso real; retirar herramientas CLI del runtime si corresponde, sin `audit fix --force`. No instalar en el node_modules de otro checkout.
+- [x] Resolver errores lint de fuente y pruebas con tipos útiles, raíz Turbopack explícita y scripts de typecheck/verify/DB. Añadir CI con gates fail-closed y reporte de vulnerabilidades. Actualizar SDK/CLI Supabase y el uso de skills oficiales fijadas por commit; documentación y comandos locales de tipos/advisors con límites de entorno explícitos. Revisar todos los adaptadores SSR del proyecto (browser, servidor, proxy y callback) con las guías de la versión instalada; verificar refresh, cookies/cache headers, PKCE y signout sin mutar configuración global.
+- [x] Corregir el bootstrap/seed para funcionar desde vacío con las migraciones actuales, sin reincluir ASQ retirado ni depender de metacomandos psql incompatibles. Incluir `NEXT_PUBLIC_SITE_URL` y documentar claves modernas con fallback explícito y sin rotar claves.
+- [x] Verificar los reducers y serializer reales de Workflow frente a los payloads previos conservados en `.superpowers/sdd/2026-10-10-robust-mvp/workflow-wire-before/`, además del roundtrip nuevo. Registrar la limitación original de DataView; no presentar un JSON roundtrip como evidencia de wire format. El replay durable del artefacto construido se comprueba en Task 6.
+- [x] Implementar el build local aislado del commit mediante snapshot sin `.env.local`, entorno explícito y dependencias instaladas copiadas. Ejecutar tests, lint, tipos, build aislado, SQL y auditoría del lock final; conservar errores completos y advisories residuales. Informe y revisión independiente del bloque.
 
 ## Task 5: Evaluación y configuración de IA
 
@@ -87,6 +87,7 @@
 - [ ] Documentar comparativa de modelos con fuentes primarias, precio de entrada/salida, capacidades y límites; evaluar Jev/Decisions como capa auxiliar. Separar ahorro proyectado y rendimiento medido.
 - [ ] Añadir escenarios y procedimiento de evaluación en español con errores críticos, abstención/calibración, latencia/coste y estabilidad de esquema; bandera de decisiones apagada por defecto.
 - [ ] Añadir presets tipados para candidatos, un adaptador auxiliar acotado y evaluación reproducible offline. Conservar los modelos actuales del flujo paciente hasta superar el benchmark clínico. No ejecutar llamadas online ni añadir autoridad probabilística sobre permisos, edad, puntuaciones, alertas o cierre. Informe, pruebas focalizadas y revisión independiente.
+- [ ] Resolver el tracing amplio del cargador de prompts observado en el build de Task4: rutas de archivos acotadas, mismo contenido/versiones clínicas y hashes del cuerpo cargado. Verificar el build y su trazado sin ignorar la advertencia ni incluir archivos de entorno.
 
 ## Task 6: Aceptación integral y entrega
 
