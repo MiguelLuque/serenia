@@ -31,6 +31,30 @@ describe('isolated local tooling contracts', () => {
     const { assertAuditGate } = await import('../../scripts/audit-dependencies.mjs')
     expect(() => assertAuditGate({})).toThrow()
     expect(() => assertAuditGate({ metadata: { vulnerabilities: { high: 1, critical: 0 } }, vulnerabilities: { next: { severity: 'high' } } })).toThrow()
-    expect(() => assertAuditGate({ metadata: { vulnerabilities: { high: 0, critical: 0 } }, vulnerabilities: { example: { severity: 'moderate' } } })).not.toThrow()
+    expect(() => assertAuditGate({ metadata: { vulnerabilities: { high: 0, critical: 0 } }, vulnerabilities: { example: { severity: 'moderate' } } })).toThrow()
+  })
+})
+
+describe('reviewed CLI argument boundaries', () => {
+  it.each([
+    ['status', '--create-ticket'], ['start', '--ignore-health-check'],
+    ['db', 'reset', '--local', '--profile', 'synthetic-profile'],
+    ['db', 'reset', '--local', '--local=false'], ['db', 'reset', '--local=true'], ['db', 'reset', '--local', '--local'],
+    ['status', '--output=json', '--output=env'], ['status', '--output', 'json', '--output=json'], ['status', '--help', '--create-ticket'],
+    ['start', '--exclude', 'gotrue'], ['db', 'reset', '--local', '--sql-paths', '../outside.sql'],
+    ['gen', 'types', '--local', '--lang', 'typescript', '--profile=synthetic'],
+    ['db', 'lint', '--local', '--fail-on', 'none'], ['status', 'unexpected-positional'],
+  ])('rejects scope expansion or ambiguity: %j', async (...args) => {
+    const { validateArguments } = await import('../../scripts/supabase-local.mjs')
+    expect(() => validateArguments(args)).toThrow()
+  })
+  it.each([
+    ['telemetry', 'disable'], ['telemetry', 'status'], ['start'], ['stop'],
+    ['status', '--output=json'], ['db', 'lint', '--local', '--schema', 'public', '--level', 'warning', '--fail-on', 'warning'],
+    ['db', 'advisors', '--local', '--type', 'all', '--level', 'warn', '--fail-on', 'warn'],
+    ['gen', 'types', '--local', '--lang=typescript', '--schema=public'], ['migration', 'new', 'synthetic_change'],
+  ])('retains reviewed local usage: %j', async (...args) => {
+    const { validateArguments } = await import('../../scripts/supabase-local.mjs')
+    expect(() => validateArguments(args)).not.toThrow()
   })
 })

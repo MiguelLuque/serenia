@@ -36,10 +36,41 @@ jobs:
           npm run supabase:local -- telemetry status
       - name: Start Supabase local stack and apply migrations and seed
         run: |
+          umask 077
+          set +e
           npm run supabase:local -- start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          result=$?
+          echo "$result" > "$RUNNER_TEMP/supabase-start.exit"
+          if [ "$result" -ne 0 ]; then exit "$result"; fi
           npm run supabase:local -- db reset --local > "$RUNNER_TEMP/supabase-reset.log" 2>&1
+          result=$?
+          echo "$result" > "$RUNNER_TEMP/supabase-reset.exit"
+          exit "$result"
       - name: Local SQL lint, advisors and generated type parity
-        run: npm run db:verify
+        run: |
+          umask 077
+          set +e
+          npm run db:verify > "$RUNNER_TEMP/supabase-verify.log" 2>&1
+          result=$?
+          echo "$result" > "$RUNNER_TEMP/supabase-verify.exit"
+          exit "$result"
       - name: Stop local stack
         if: always()
-        run: npm run supabase:local -- stop > "$RUNNER_TEMP/supabase-stop.log" 2>&1
+        run: |
+          umask 077
+          set +e
+          npm run supabase:local -- stop > "$RUNNER_TEMP/supabase-stop.log" 2>&1
+          result=$?
+          echo "$result" > "$RUNNER_TEMP/supabase-stop.exit"
+          exit "$result"
+      - name: Collect bounded build, wire and private local-stack diagnostics
+        if: always()
+        run: node scripts/collect-ci-evidence.mjs
+      - name: Preserve final bounded runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-runtime-evidence
+          path: ${{ runner.temp }}/serenia-final-evidence/*
+          if-no-files-found: error
+          retention-days: 7

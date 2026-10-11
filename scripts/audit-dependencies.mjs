@@ -19,7 +19,7 @@ function temporaryDevelopmentException(report, context) {
     const settings = entry?.settings?.next
     return settings && typeof settings === 'object' && 'rootDir' in settings
   })) return false
-  if (!productionReport || productionReport.metadata?.vulnerabilities?.total !== 0 || Object.keys(productionReport.vulnerabilities ?? { invalid: true }).length !== 0) return false
+  if (productionReport.metadata.vulnerabilities.total !== 0) return false
   const high = Object.entries(report.vulnerabilities).filter(([, v]) => ['high', 'critical'].includes(v.severity))
   if (Object.keys(report.vulnerabilities).length !== 5 || report.metadata.vulnerabilities.high !== 5 || report.metadata.vulnerabilities.critical !== 0 || high.length !== 5 || names.some(name => !high.some(([key]) => key === name))) return false
   for (let index = 0; index < names.length; index++) {
@@ -27,6 +27,7 @@ function temporaryDevelopmentException(report, context) {
     const entry = report.vulnerabilities[name]
     const node = `node_modules/${name}`
     const installed = lock?.packages?.[node]
+    if (entry.isDirect !== (index === names.length - 1) || entry.effects.length !== (index < names.length - 1 ? 1 : 0) || (index < names.length - 1 && entry.effects[0] !== names[index + 1])) return false
     if (entry.severity !== 'high' || entry.range !== ranges[index] || entry.nodes?.length !== 1 || entry.nodes[0] !== node || installed?.dev !== true || installed.version !== versions[index]) return false
     if (entry.via?.length !== 1) return false
     if (index === 0) {
@@ -34,21 +35,51 @@ function temporaryDevelopmentException(report, context) {
       if (advisory.url !== 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm' || advisory.range !== '<=3.0.3' || advisory.severity !== 'high') return false
     } else if (entry.via[0] !== names[index - 1] || installed.dependencies?.[names[index - 1]] !== dependencyRanges[index - 1]) return false
     // A new consumer/path of the same GHSA is outside this exception.
-    const consumers = Object.entries(lock.packages).filter(([, pkg]) => Object.hasOwn(pkg.dependencies ?? {}, name)).map(([key]) => key)
-    if (index < names.length - 1 && (consumers.length !== 1 || consumers[0] !== `node_modules/${names[index + 1]}`)) return false
-    if (index === names.length - 1 && (consumers.length !== 0 || lock.packages[''].devDependencies?.[name] !== versions[index] || Object.hasOwn(lock.packages[''].dependencies ?? {}, name))) return false
+    const kinds = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
+    const consumers = Object.entries(lock.packages).flatMap(([key, pkg]) =>
+      kinds.filter(kind => Object.hasOwn(pkg[kind] ?? {}, name)).map(kind => ({ key, kind, range: pkg[kind][name] })))
+    const expected = index < names.length - 1
+      ? { key: `node_modules/${names[index + 1]}`, kind: 'dependencies', range: dependencyRanges[index] }
+      : { key: '', kind: 'devDependencies', range: versions[index] }
+    if (consumers.length !== 1 || Object.keys(expected).some(key => consumers[0][key] !== expected[key])) return false
     if (Object.keys(lock.packages).some(key => key !== node && key.endsWith(`/node_modules/${name}`))) return false
   }
   return true
 }
-export function assertAuditGate(report, context) {
-  const counts = report?.metadata?.vulnerabilities
-  if (!counts || !report.vulnerabilities || !Number.isInteger(counts.high) || !Number.isInteger(counts.critical)) throw new Error('Invalid audit report; gate cannot assess dependencies')
-  if (counts.high || counts.critical || Object.values(report.vulnerabilities).some(v => ['high', 'critical'].includes(v.severity))) {
-    if (temporaryDevelopmentException(report, context)) return 'PASS_WITH_TEMPORARY_DEV_EXCEPTION'
-    throw new Error(`Audit blocked: ${counts.high} high / ${counts.critical} critical package graph entries`)
+const severities = ['info', 'low', 'moderate', 'high', 'critical']
+const record = value => value !== null && typeof value === 'object' && !Array.isArray(value)
+function validateReport(report) {
+  const invalid = () => { throw new Error('Invalid or inconsistent audit report; gate cannot assess dependencies') }
+  if (!record(report) || report.auditReportVersion !== 2 || !record(report.vulnerabilities) || !record(report.metadata)) invalid()
+  const counts = report.metadata.vulnerabilities
+  const dependencies = report.metadata.dependencies
+  if (!record(counts) || Object.keys(counts).length !== 6 || [...severities, 'total'].some(key => !Number.isSafeInteger(counts[key]) || counts[key] < 0)) invalid()
+  if (!record(dependencies) || ['prod', 'dev', 'optional', 'peer', 'peerOptional', 'total'].some(key => !Number.isSafeInteger(dependencies[key]) || dependencies[key] < 0 || dependencies[key] > dependencies.total)) invalid()
+  const actual = Object.fromEntries(severities.map(key => [key, 0]))
+  for (const [name, entry] of Object.entries(report.vulnerabilities)) {
+    if (!record(entry) || entry.name !== name || !severities.includes(entry.severity) || typeof entry.isDirect !== 'boolean' || typeof entry.range !== 'string' || !Array.isArray(entry.nodes) || !entry.nodes.length || entry.nodes.some(node => typeof node !== 'string' || !node.startsWith('node_modules/')) || new Set(entry.nodes).size !== entry.nodes.length) invalid()
+    if (!Array.isArray(entry.via) || !entry.via.length || !Array.isArray(entry.effects) || entry.effects.some(effect => typeof effect !== 'string' || !Object.hasOwn(report.vulnerabilities, effect))) invalid()
+    if (typeof entry.fixAvailable !== 'boolean' && !(record(entry.fixAvailable) && typeof entry.fixAvailable.name === 'string' && typeof entry.fixAvailable.version === 'string' && typeof entry.fixAvailable.isSemVerMajor === 'boolean')) invalid()
+    for (const via of entry.via) {
+      if (typeof via === 'string') {
+        if (!Object.hasOwn(report.vulnerabilities, via)) invalid()
+      } else if (!record(via) || typeof via.url !== 'string' || typeof via.range !== 'string' || !severities.includes(via.severity)) invalid()
+    }
+    actual[entry.severity]++
   }
-  return 'PASS'
+  if (severities.some(key => counts[key] !== actual[key]) || counts.total !== Object.keys(report.vulnerabilities).length || counts.total !== severities.reduce((sum, key) => sum + counts[key], 0)) invalid()
+  return counts
+}
+export function assertAuditGate(report, context, scope = 'production') {
+  if (!['production', 'full'].includes(scope)) throw new Error('Unknown audit scope')
+  const counts = validateReport(report)
+  if (scope === 'full') {
+    const productionCounts = validateReport(context?.productionReport)
+    if (productionCounts.total !== 0) throw new Error('Audit blocked: production must have zero advisories at every severity')
+  }
+  if (counts.total === 0) return 'PASS'
+  if (scope === 'full' && temporaryDevelopmentException(report, context)) return 'PASS_WITH_TEMPORARY_DEV_EXCEPTION'
+  throw new Error(`Audit blocked: ${counts.total} non-exempt advisory package graph entries (${scope})`)
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const directory = process.env.SERENIA_CHECK_LOG_DIR ? resolve(process.env.SERENIA_CHECK_LOG_DIR) : mkdtempSync(resolve(tmpdir(), 'serenia-audit-'))
@@ -71,7 +102,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         config: (await import('../eslint.config.mjs')).default,
         productionReport,
       } : undefined
-      const outcome = assertAuditGate(report, context)
+      const outcome = assertAuditGate(report, context, scope)
+      if (result.status !== (report.metadata.vulnerabilities.total === 0 ? 0 : 1)) throw new Error('Audit exit and report disagree')
       console.log(`${scope}: ${outcome} ${JSON.stringify(report.metadata.vulnerabilities)}; npm exit=${result.status}${outcome.includes('EXCEPTION') ? '; GHSA-vfj7-8cjw-p6xm expires 2026-10-18T00:00:00Z (not a clean audit)' : ''}`)
     } catch (error) { console.error(`${scope}: FAIL ${error.message}`); failed = true }
   }

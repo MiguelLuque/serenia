@@ -12,16 +12,45 @@ export function supabaseEnvironment(source, root) {
     NEXT_TELEMETRY_DISABLED: '1',
   }
 }
+// Deliberately narrower than the CLI: new options require a reviewed contract.
+const commandOptions = {
+  start: {}, stop: {}, status: { '--output': ['json'] },
+  'telemetry disable': {}, 'telemetry status': {},
+  'db reset': { '--local': true },
+  'db lint': { '--local': true, '--schema': ['public'], '--level': ['warning', 'error'], '--fail-on': ['warning'] },
+  'db advisors': { '--local': true, '--type': ['all'], '--level': ['info', 'warn', 'error'], '--fail-on': ['warn'] },
+  'gen types': { '--local': true, '--lang': ['typescript'], '--schema': ['public'] },
+  'migration new': {}, 'migration list': { '--local': true },
+}
 export function validateArguments(args) {
-  const forbidden = /^--(?:linked|db-url|project-ref|project-id|password|workdir|config|experimental)(?:=|$)/
-  if (args.some(value => forbidden.test(value))) throw new Error('Remote targets and alternate configuration are forbidden')
+  if (!Array.isArray(args) || args.some(value => typeof value !== 'string')) throw new Error('Invalid CLI arguments')
+  if (args.length === 1 && ['--help', '-h', '--version', '-v'].includes(args[0])) return
   const pair = args.slice(0, 2).join(' ')
-  const safe = ['--help', '--version', 'start', 'stop', 'status'].includes(args[0]) ||
-    ['telemetry disable', 'telemetry status', 'db reset', 'db lint', 'db advisors', 'gen types', 'migration new', 'migration list'].includes(pair)
-  if (!safe) throw new Error('Only reviewed local Supabase commands are allowed')
-  if (!args.includes('--help') && ['db reset', 'db lint', 'db advisors', 'gen types', 'migration list'].includes(pair) && !args.includes('--local')) {
-    throw new Error('This command requires --local')
+  const command = Object.hasOwn(commandOptions, pair) ? pair : args[0]
+  if (!Object.hasOwn(commandOptions, command)) throw new Error('Only reviewed local Supabase commands are allowed')
+  const allowed = { ...commandOptions[command], '--help': true }
+  const seen = new Set()
+  const positionals = []
+  for (let index = command.split(' ').length; index < args.length; index++) {
+    const argument = args[index]
+    if (!argument.startsWith('-')) { positionals.push(argument); continue }
+    const separator = argument.indexOf('=')
+    const rawFlag = separator < 0 ? argument : argument.slice(0, separator)
+    const flag = rawFlag === '-h' ? '--help' : rawFlag
+    if (!Object.hasOwn(allowed, flag) || seen.has(flag)) throw new Error('Unknown or duplicated CLI option')
+    seen.add(flag)
+    const choices = allowed[flag]
+    if (choices === true) {
+      if (separator >= 0) throw new Error('Boolean local/help flags must be bare and unique')
+    } else {
+      const value = separator >= 0 ? argument.slice(separator + 1) : args[++index]
+      if (!choices.includes(value)) throw new Error('Unreviewed CLI option value')
+    }
   }
+  if (command === 'migration new') {
+    if (positionals.length !== (seen.has('--help') ? 0 : 1) || positionals.some(value => !/^[a-z][a-z0-9_]{0,79}$/.test(value))) throw new Error('Expected one local migration name')
+  } else if (positionals.length) throw new Error('Unexpected CLI positional argument')
+  if (!seen.has('--help') && ['db reset', 'db lint', 'db advisors', 'gen types', 'migration list'].includes(command) && !seen.has('--local')) throw new Error('This command requires --local')
 }
 export function runSupabase(args, options = {}) {
   validateArguments(args)
