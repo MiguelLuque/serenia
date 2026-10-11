@@ -14,6 +14,8 @@ end $$;
 select pg_temp.flow_deny($q$insert into consents(user_id,consent_version,accepted_at) values(auth.uid(),'technical-draft-2026-10-11','2000-01-01')$q$);
 select pg_temp.flow_deny($q$update user_profiles set consent_version='technical-draft-2026-10-11',consent_given_at=now() where user_id=auth.uid()$q$);
 -- The authenticated acceptance API controls owner, version, date and stamp.
+select pg_temp.flow_deny($q$select complete_patient_onboarding('Synthetic','elle','-infinity'::date,'Synthetic test reason','technical-draft-2026-10-11',true)$q$);
+select pg_temp.flow_deny($q$select complete_patient_onboarding('Synthetic','elle','infinity'::date,'Synthetic test reason','technical-draft-2026-10-11',true)$q$);
 select pg_temp.flow_deny($q$select complete_patient_onboarding('Synthetic','elle',(((now() at time zone 'UTC')::date-interval '18 years')::date+1),'Synthetic test reason','technical-draft-2026-10-11',true)$q$);
 select pg_temp.flow_deny($q$select complete_patient_onboarding('Synthetic','elle','1990-01-01','Synthetic test reason','old',true)$q$);
 select pg_temp.flow_deny($q$select complete_patient_onboarding('Synthetic','elle','1990-01-01','Synthetic test reason','technical-draft-2026-10-11',false)$q$);
@@ -35,6 +37,17 @@ do $$ declare recovery jsonb; sid uuid; begin
  recovery=get_chat_turn_recovery(sid);
  if recovery->>'requestId'<>'flow-recovery' or recovery->>'text'<>'Recovery text' or not (recovery->>'canRetry')::boolean or not exists(select 1 from messages where id=(recovery->>'userMessageId')::uuid and role='user') then raise exception 'Persisted recovery ID/text missing'; end if;
 end $$;
+-- Even a matching legacy acknowledgement must not make an infinite stored DOB ready.
+reset role;
+insert into consents(user_id,consent_version,server_recorded,payload_json) values
+ ('00000000-0000-0000-0000-000000000001','technical-draft-2026-10-11',true,'{"birthDate":"-infinity"}'),
+ ('00000000-0000-0000-0000-000000000001','technical-draft-2026-10-11',true,'{"birthDate":"infinity"}');
+set local role authenticated;
+update user_profiles set birth_date='-infinity'::date where user_id=auth.uid();
+do $$ begin if get_onboarding_ready() then raise exception 'Non-finite stored negative DOB bypassed readiness'; end if; end $$;
+select pg_temp.flow_deny($q$select create_session_atomic('00000000-0000-0000-0000-000000000001')$q$);
+update user_profiles set birth_date='infinity'::date where user_id=auth.uid();
+do $$ begin if get_onboarding_ready() then raise exception 'Non-finite stored positive DOB bypassed readiness'; end if; end $$;
 update user_profiles set birth_date='2090-01-01'  where user_id=auth.uid();
 do $$ begin if get_onboarding_ready() then raise exception 'Current invalid date bypassed readiness'; end if; end $$;
 select pg_temp.flow_deny($q$select create_session_atomic('00000000-0000-0000-0000-000000000001')$q$);

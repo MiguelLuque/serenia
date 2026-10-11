@@ -1,23 +1,23 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { createUIMessageStreamResponse } from 'ai'
-const fixture = vi.hoisted(() => ({ closed: false, failed: true, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false }))
+const fixture = vi.hoisted(() => ({ closed: false, failed: true, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: fixture.refresh, replace: fixture.replace, push: vi.fn() }) }))
 vi.mock('@/app/app/actions', () => ({ endSessionAction: async () => {} }))
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => ({
  auth: { getUser: async () => ({ data: { user: { id: 'patient' } }, error: null }) },
  rpc: async () => ({ data: fixture.closed || !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null }),
  from: (table: string) => {
-  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open' } : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }, ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }).then(resolve) }; return chain
+  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open' } : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }, ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
  },
 }) }))
 import { ChatView } from '@/components/chat/chat-view'
 const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user', text: 'Mi texto original', status: 'failed' as const, canRetry: true, leaseUntil: '2026-01-01' }
 const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
 function reply() { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId: 'assistant' }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
-beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockClear(); fixture.replace.mockClear() })
+beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockClear(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 it('rehydrates a failed turn and retries the same request and text without duplicating it', async () => {
  const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
@@ -79,4 +79,66 @@ it('stopping an actual outstanding request keeps the urgent exit open and preser
  await waitFor(() => expect(screen.getByText(/Escribe una señal nueva de peligro/)).toBeTruthy())
  expect(input.value).toBe('Voy a matarme')
  expect((screen.getByRole('button', { name: 'Enviar' }) as HTMLButtonElement).disabled).toBe(false)
+})
+
+it('a delayed old snapshot cannot overwrite a newer urgent response', async () => {
+ fixture.holdNextMessages = true
+ vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => reply()))
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ fireEvent.click(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' }))
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Voy a matarme ahora' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull())
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Respuesta guardada')).toBeTruthy()
+ expect(screen.getByText('Voy a matarme ahora')).toBeTruthy()
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+})
+it('a delayed old snapshot cannot overwrite a successful retry', async () => {
+ fixture.holdNextMessages = true
+ vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => reply()))
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull())
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Respuesta guardada')).toBeTruthy()
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+})
+it('only the newest manual check can apply its snapshot', async () => {
+ fixture.holdNextMessages = true
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ fixture.failed = false; fixture.replied = true
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await screen.findByText('Respuesta guardada')
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Respuesta guardada')).toBeTruthy()
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+})
+it('a snapshot from a previous session cannot update a new session', async () => {
+ fixture.holdNextMessages = true
+ const view = render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ view.rerender(<ChatView {...props} sessionId="new-session" initialRecovery={null} initialMessages={[{ id: 'new-message', role: 'assistant', parts: [{ type: 'text', text: 'Nueva sesión' }] }]} />)
+ await screen.findByText('Nueva sesión')
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Nueva sesión')).toBeTruthy()
+ expect(screen.queryByText('Mi texto original')).toBeNull()
+})
+it('an unmounted recovery cannot refresh after a late closed snapshot', async () => {
+ fixture.closed = true; fixture.holdNextSession = true
+ const view = render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ view.unmount()
+ await act(async () => { fixture.releases.shift()!() })
+ expect(fixture.refresh).not.toHaveBeenCalled()
 })

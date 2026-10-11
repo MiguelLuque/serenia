@@ -87,6 +87,22 @@ export function ChatView({
   const activeRequestRef = useRef<string | null>(null)
   const cancelledRequestsRef = useRef(new Set<string>())
   const httpStatusRef = useRef<number | null>(null)
+  // A newer read, send, retry or urgent transition makes older snapshots obsolete.
+  const operationRef = useRef(0)
+  const lifecycleRef = useRef({ mounted: false, sessionId })
+
+  useEffect(() => {
+    lifecycleRef.current = { mounted: true, sessionId }
+    operationRef.current += 1
+    return () => {
+      lifecycleRef.current.mounted = false
+      operationRef.current += 1
+    }
+  }, [sessionId])
+
+  function isCurrentOperation(operation: number) {
+    return operationRef.current === operation && lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId
+  }
 
   const trackedFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
     const response = await fetch(url, init)
@@ -123,17 +139,25 @@ export function ChatView({
   const isExpired = isTimeExpired || isClosed
 
   async function rehydrate(allowLocalFallback = true) {
+    const operation = ++operationRef.current
+    const localFallback = allowLocalFallback && status === 'error' && lastAttemptRef.current
+      ? { ...lastAttemptRef.current, canRetry: httpStatusRef.current !== 422 } : null
     try {
       const state = await getOwnedChatState(sessionId)
+      if (!isCurrentOperation(operation)) return null
       setRecoveryError(false)
       if (state.closed) {
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
         router.refresh()
-        return
+        return operation
       }
-      setRecovery(state.recovery ?? (allowLocalFallback && status === 'error' && lastAttemptRef.current ? { ...lastAttemptRef.current, canRetry: httpStatusRef.current !== 422 } : null))
+      setRecovery(state.recovery ?? localFallback)
       setMessages(state.messages)
-    } catch { setRecoveryError(true) }
+      return operation
+    } catch {
+      if (isCurrentOperation(operation)) setRecoveryError(true)
+      return null
+    }
   }
 
   useEffect(() => {
@@ -157,6 +181,7 @@ export function ChatView({
 
   async function retry() {
     if (!recovery?.canRetry || retrying) return
+    const operation = ++operationRef.current
     const attempt = recovery
     activeRequestRef.current = attempt.requestId
     lastAttemptRef.current = attempt
@@ -164,19 +189,26 @@ export function ChatView({
     try {
       const existing = messages.find(message => message.id === attempt.userMessageId || message.id === attempt.requestId)
       await sendMessage(existing ? { text: attempt.text, messageId: existing.id } : undefined, { body: { requestId: attempt.requestId, retryText: attempt.text } })
-      if (!failedRef.current && !cancelledRequestsRef.current.has(attempt.requestId)) { await rehydrate(false); setRecovery(null); setUrgentMode(false) }
-    } finally { setRetrying(false) }
+      if (isCurrentOperation(operation) && !failedRef.current && !cancelledRequestsRef.current.has(attempt.requestId)) {
+        const snapshotOperation = await rehydrate(false)
+        if (snapshotOperation !== null && isCurrentOperation(snapshotOperation)) setUrgentMode(false)
+      }
+    } finally {
+      if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId && activeRequestRef.current === attempt.requestId) setRetrying(false)
+    }
   }
 
   async function send(text: string): Promise<boolean> {
     if (recovery && !urgentMode) return false
+    const operation = ++operationRef.current
     failedRef.current = false; clearError()
     const requestId = crypto.randomUUID()
     activeRequestRef.current = requestId
     lastAttemptRef.current = { requestId, userMessageId: requestId, text, status: 'failed', canRetry: true, leaseUntil: new Date().toISOString() }
     await sendMessage({ id: requestId, role: 'user', parts: [{ type: 'text', text }] })
-    if (!failedRef.current && !cancelledRequestsRef.current.has(requestId)) { setRecovery(null); setUrgentMode(false) }
-    return !failedRef.current && !cancelledRequestsRef.current.has(requestId)
+    const completed = isCurrentOperation(operation) && !failedRef.current && !cancelledRequestsRef.current.has(requestId)
+    if (completed) { setRecovery(null); setUrgentMode(false) }
+    return completed
   }
 
   useEffect(() => {
@@ -302,7 +334,7 @@ export function ChatView({
           {(recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
             <p role="status" aria-live="polite">{recovery ? recovery.canRetry ? 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'No se completó la respuesta. Tu texto se conserva; estamos comprobando el turno guardado.' : 'Esperando respuesta. Puedes seguir escribiendo.'}</p>
             {recovery?.canRetry && !urgentMode && <button type="button" disabled={retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
-            <button type="button" onClick={() => { if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
+            <button type="button" onClick={() => { operationRef.current += 1; if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
             <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
             {recoveryError && <p role="alert">No se pudo comprobar el estado. Conserva tu texto y vuelve a comprobarlo o recarga.</p>}
           </div>}

@@ -8,7 +8,7 @@ create index consents_server_acceptance on consents(user_id,consent_version) whe
 create function patient_onboarding_ready(p_user_id uuid) returns boolean
 language sql stable security definer set search_path=public,pg_temp as $$
  select exists(select 1 from user_profiles p where p.user_id=p_user_id and p.role='patient'
-  and p.birth_date is not null and p.birth_date <= ((now() at time zone 'UTC')::date - interval '18 years')::date
+  and p.birth_date is not null and isfinite(p.birth_date) and p.birth_date <= ((now() at time zone 'UTC')::date - interval '18 years')::date
   and length(btrim(p.informal_name)) between 1 and 80
   and p.pronouns in ('el','ella','elle','prefer_not_say')
   and length(btrim(p.reason_for_consulting)) between 10 and 2000
@@ -34,7 +34,7 @@ declare stamp timestamptz:=now(); p user_profiles%rowtype;
 begin
  if auth.uid() is null then raise exception 'Unauthorized' using errcode='42501'; end if;
  if p_accepted is distinct from true or p_version is distinct from 'technical-draft-2026-10-11' then raise exception 'Current draft acknowledgement required' using errcode='23514'; end if;
- if p_birth_date is null or p_birth_date>((stamp at time zone 'UTC')::date-interval '18 years')::date
+ if p_birth_date is null or not isfinite(p_birth_date) or p_birth_date>((stamp at time zone 'UTC')::date-interval '18 years')::date
   or p_informal_name is null or length(btrim(p_informal_name)) not between 1 and 80
   or p_pronouns is null or p_pronouns not in ('el','ella','elle','prefer_not_say')
   or p_reason is null or length(btrim(p_reason)) not between 10 and 2000 then raise exception 'Valid adult profile required' using errcode='23514'; end if;
