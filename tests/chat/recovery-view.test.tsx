@@ -16,7 +16,7 @@ vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: asyn
 import { ChatView } from '@/components/chat/chat-view'
 const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user', text: 'Mi texto original', status: 'failed' as const, canRetry: true, leaseUntil: '2026-01-01' }
 const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
-function reply() { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId: 'assistant' }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
+function reply(messageId = 'assistant') { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
 beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockClear(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 it('rehydrates a failed turn and retries the same request and text without duplicating it', async () => {
@@ -141,4 +141,59 @@ it('an unmounted recovery cannot refresh after a late closed snapshot', async ()
  view.unmount()
  await act(async () => { fixture.releases.shift()!() })
  expect(fixture.refresh).not.toHaveBeenCalled()
+})
+
+it('manual recovery during retry does not cancel successful completion or block the next message', async () => {
+ let finish!: () => void
+ const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = () => resolve(reply()) })).mockImplementation(async () => reply('next-assistant'))
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await waitFor(() => expect(finish).toBeTypeOf('function'))
+ fixture.holdNextMessages = true
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ await act(async () => { fixture.releases.shift()!() })
+ await act(async () => { finish() })
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull())
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Un mensaje nuevo normal' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+ expect(JSON.parse(fetch.mock.calls[1][1].body).requestId).not.toBe('retry-original')
+ await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''))
+})
+it('retry completion invalidates a manual snapshot started during its pending transport', async () => {
+ let finish!: () => void
+ vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = () => resolve(reply()) })))
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await waitFor(() => expect(finish).toBeTypeOf('function'))
+ fixture.holdNextMessages = true
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ await act(async () => { finish() })
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull())
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Respuesta guardada')).toBeTruthy()
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+})
+it('normal send completion survives an in-flight manual snapshot and clears its draft', async () => {
+ fixture.failed = false; fixture.text = 'Mensaje normal pendiente'
+ let finish!: () => void
+ vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = () => resolve(reply()) })))
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: fixture.text } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await waitFor(() => expect(finish).toBeTypeOf('function'))
+ fixture.holdNextMessages = true
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ await act(async () => { finish() })
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''))
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Respuesta guardada')).toBeTruthy()
+ expect(screen.getByText('Mensaje normal pendiente')).toBeTruthy()
 })
