@@ -1,0 +1,123 @@
+import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { readFileSync, writeFileSync, appendFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import assert from 'node:assert/strict'
+import { localOrigin, privateDirectory } from './acceptance-local.mjs'
+const directory = privateDirectory(process.env.SERENIA_ACCEPTANCE_DIR)
+const url = localOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL, 54321)
+const app = localOrigin(process.env.NEXT_PUBLIC_SITE_URL, 3000)
+const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+const admin = createClient(url, process.env.SUPABASE_SECRET_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
+const password = 'Synthetic-Only-2026!'
+const manifestPath = resolve(directory, 'fixtures.json')
+const proof = (name, detail = {}) => { const row = { at: new Date().toISOString(), name, status: 'PASS', ...detail }; appendFileSync(resolve(directory, 'checks.jsonl'), JSON.stringify(row) + '\n', { mode: 0o600 }); console.log(JSON.stringify(row)) }
+const ok = result => { if (result.error) throw new Error(JSON.stringify({ message: result.error.message, code: result.error.code })); return result.data }
+async function login(actor) {
+  const cookies = new Map()
+  const client = createServerClient(url, key, { cookies: { getAll: () => [...cookies].map(([name, value]) => ({ name, value })), setAll: rows => rows.forEach(({ name, value }) => cookies.set(name, value)) } })
+  const data = ok(await client.auth.signInWithPassword({ email: actor.email, password }))
+  assert.equal(data.user.id, actor.userId)
+  assert.equal(ok(await client.auth.getUser()).user.id, actor.userId)
+  return { client, cookie: () => [...cookies].map(([name, value]) => `${name}=${value}`).join('; ') }
+}
+async function makeActor(name) {
+  const email = `serenia-${name}-${Date.now()}@example.test`
+  const user = ok(await admin.auth.admin.createUser({ email, password, email_confirm: true })).user
+  return { email, userId: user.id, name }
+}
+const onboarding = { p_informal_name: 'Paciente ficticio', p_pronouns: 'elle', p_birth_date: '1990-01-01', p_reason: 'Verificación técnica con datos ficticios', p_version: 'technical-draft-2026-10-11', p_accepted: true }
+async function preparePatient(name) {
+  const actor = await makeActor(name)
+  const { client } = await login(actor)
+  ok(await client.rpc('complete_patient_onboarding', { ...onboarding, p_informal_name: `Ficticio ${name}` }))
+  const session = ok(await client.rpc('create_session_atomic', { p_user_id: actor.userId }))
+  return { ...actor, sessionId: session.id, conversationId: session.conversation_id, url: `${app}/app/sesion/${session.id}` }
+}
+async function send(actor, text, requestId = randomUUID()) {
+  const auth = await login(actor)
+  const response = await fetch(`${app}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: auth.cookie() }, body: JSON.stringify({ sessionId: actor.sessionId, requestId, messages: [{ id: requestId, role: 'user', parts: [{ type: 'text', text }] }] }) })
+  return { status: response.status, body: await response.text(), requestId }
+}
+const save = manifest => writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 })
+const mode = process.argv[2]
+if (mode === 'fixtures') {
+  const manifest = { password, app, createdAt: new Date().toISOString(), actors: {} }
+  const actor = await makeActor('gate')
+  const { client } = await login(actor)
+  assert.equal(ok(await client.rpc('get_onboarding_ready')), false)
+  assert.ok((await client.rpc('create_session_atomic', { p_user_id: actor.userId })).error)
+  for (const date of ['2015-01-01', '2026-02-30', 'infinity']) assert.ok((await client.rpc('complete_patient_onboarding', { ...onboarding, p_birth_date: date })).error)
+  assert.ok((await client.rpc('complete_patient_onboarding', { ...onboarding, p_accepted: false })).error)
+  ok(await client.rpc('complete_patient_onboarding', onboarding))
+  assert.equal(ok(await client.rpc('get_onboarding_ready')), true)
+  assert.ok((await client.from('user_profiles').update({ role: 'clinician' }).eq('user_id', actor.userId)).error)
+  assert.ok((await client.from('consents').insert({ user_id: actor.userId, consent_version: 'fake' })).error)
+  const consents = ok(await admin.from('consents').select('server_recorded,consent_version').eq('user_id', actor.userId))
+  assert.equal(consents.length, 1); assert.equal(consents[0].server_recorded, true)
+  proof('real_auth_jwt_onboarding_grants', { userId: actor.userId, invalidDates: 3 })
+  for (const name of ['runtime', 'chat', 'retry', 'pending', 'urgent', 'boundary', 'closure', 'older']) { manifest.actors[name] = await preparePatient(name); save(manifest) }
+  manifest.actors.clinician = await makeActor('clinician')
+  ok(await admin.from('user_profiles').update({ role: 'clinician' }).eq('user_id', manifest.actors.clinician.userId))
+  const a = manifest.actors.chat, b = manifest.actors.retry
+  const authA = await login(a)
+  assert.deepEqual(ok(await authA.client.from('clinical_sessions').select('id').eq('id', b.sessionId)), [])
+  assert.ok((await authA.client.rpc('close_session_atomic', { p_session_id: b.sessionId, p_user_id: b.userId, p_reason: 'user_request' })).error)
+  assert.ok((await authA.client.from('assessments').insert({ user_id: a.userId, session_id: a.sessionId, assessment_type: 'closure', status: 'draft_ai' })).error)
+  assert.ok((await authA.client.rpc('get_patient_session_reports', { p_session_ids: [b.sessionId] })).error)
+  save(manifest)
+  proof('real_auth_jwt_rls_cross_owner', { patient: a.userId, foreignSession: b.sessionId })
+  console.log(`Fictional fixtures: ${manifestPath}`)
+} else {
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  if (mode === 'http') {
+    for (const path of ['flow', 'step']) {
+      const response = await fetch(`${app}/.well-known/workflow/v1/${path}?__health`, { redirect: 'manual' }); assert.equal(response.status, 200)
+      const malformed = await fetch(`${app}/.well-known/workflow/v1/${path}`, { method: 'POST', body: '{}', redirect: 'manual' }); assert.equal(malformed.status, 400)
+    }
+    proof('generated_workflow_http_routes')
+    const actor = manifest.actors.runtime
+    for (const text of ['Primera conversación ficticia', 'Me encuentro tranquilo en esta prueba', 'Solicito el cuestionario PHQ9']) { const response = await send(actor, text); assert.equal(response.status, 200, response.body) }
+    const instance = ok(await admin.from('questionnaire_instances').select('id').eq('session_id', actor.sessionId).single())
+    const auth = await login(actor)
+    const response = await fetch(`${app}/api/questionnaires/${instance.id}/answers`, { method: 'POST', headers: { Cookie: auth.cookie(), 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: Array.from({ length: 9 }, (_, index) => ({ itemOrder: index + 1, valueNumeric: 0, valueRaw: 'Nunca' })) }) })
+    assert.equal(response.status, 200, await response.text())
+    assert.equal(ok(await admin.from('questionnaire_results').select('id').eq('instance_id', instance.id)).length, 1)
+    const retryId = randomUUID()
+    assert.equal((await send(actor, '[FALLO_UNICO] Ensayo de recuperación', retryId)).status, 503)
+    assert.equal((await send(actor, '[FALLO_UNICO] Ensayo de recuperación', retryId)).status, 200)
+    assert.equal((await send(actor, 'Mensaje ordinario tras recuperación')).status, 200)
+    const turn = ok(await admin.from('chat_turns').select('status,attempts,user_message_id').eq('session_id', actor.sessionId).eq('request_id', retryId).single())
+    assert.equal(turn.status, 'completed'); assert.equal(turn.attempts, 2)
+    proof('real_http_chat_phq_retry', { sessionId: actor.sessionId, instanceId: instance.id, requestId: retryId, turn })
+  }
+  if (mode === 'closure') {
+    const actor = manifest.actors.runtime
+    assert.equal((await send(actor, 'Propongo cerrar esta sesión')).status, 200)
+    assert.equal((await send(actor, 'Sí, cerramos')).status, 200)
+    proof('real_http_closure', { sessionId: actor.sessionId })
+  }
+  if (mode === 'inspect') {
+    const actor = manifest.actors.runtime
+    const jobs = ok(await admin.from('assessment_jobs').select('session_id,status,run_id,attempts').eq('session_id', actor.sessionId))
+    const assessments = ok(await admin.from('assessments').select('id,status,session_id').eq('session_id', actor.sessionId))
+    console.log(JSON.stringify({ jobs, assessments }))
+  }
+  if (mode === 'browser-fixtures') {
+    for (const name of ['chat', 'urgent', 'boundary']) assert.equal((await send(manifest.actors[name], 'Solicito el cuestionario PHQ9')).status, 200)
+    for (const name of ['closure', 'older']) {
+      const actor = manifest.actors[name]
+      for (const text of ['Primera entrada ficticia', 'Segunda entrada ficticia', 'Tercera entrada ficticia', 'Propongo cerrar esta sesión', 'Sí, cerramos']) assert.equal((await send(actor, text)).status, 200)
+    }
+    const retryId = randomUUID()
+    assert.equal((await send(manifest.actors.retry, '[FALLO_UNICO] Mensaje ficticio para reintentar', retryId)).status, 503)
+    manifest.actors.retry.requestId = retryId
+    // Preconditions only: no app bypass. The real route still applies expiry/risk.
+    ok(await admin.from('clinical_sessions').update({ opened_at: new Date(Date.now() - 61 * 60_000).toISOString() }).eq('id', manifest.actors.boundary.sessionId))
+    ok(await admin.from('clinical_sessions').update({ closed_at: '2026-01-01T12:00:00Z' }).eq('id', manifest.actors.older.sessionId))
+    ok(await admin.from('risk_events').insert({ user_id: manifest.actors.older.userId, session_id: manifest.actors.older.sessionId, risk_type: 'suicidal_ideation', severity: 'critical', source_type: 'message', payload_json: { synthetic: true }, status: 'open' }))
+    save(manifest)
+    proof('browser_fixture_preconditions', { fixtures: manifestPath })
+  }
+}

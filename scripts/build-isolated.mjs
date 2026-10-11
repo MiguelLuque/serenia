@@ -4,6 +4,7 @@ import { readFileSync, mkdtempSync, mkdirSync, openSync, closeSync, rmSync, writ
 import { tmpdir } from 'node:os'
 import { resolve, dirname, basename, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { localCredentials, acceptanceEnvironment } from './acceptance-local.mjs'
 
 export function buildEnvironment(source) {
   return {
@@ -28,7 +29,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const runDirectory = mkdtempSync(resolve(tmpdir(), 'serenia-build-'))
   let log
   try {
-    const env = buildEnvironment(process.env)
+    if (process.argv.slice(2).some(arg => arg !== '--local-acceptance') || process.argv.length > 3) throw new Error('Only --local-acceptance is supported')
+    const localAcceptance = process.argv[2] === '--local-acceptance'
+    const env = localAcceptance ? acceptanceEnvironment(process.env, localCredentials(), runDirectory) : buildEnvironment(process.env)
     const gitOptions = { cwd: root, env: { PATH: process.env.PATH } }
     const sourceCommit = checked('git', ['rev-parse', 'HEAD'], gitOptions).trim()
     const dirty = checked('git', ['diff', 'HEAD', '--name-only'], gitOptions).trim()
@@ -63,7 +66,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (installed !== lock.packages[`node_modules/${name}`].version) throw new Error(`Installed version differs from lock: ${name}`)
       return [name, installed]
     }))
-    const metadata = { sourceCommit, lockSha256: hash(readFileSync(resolve(snapshot, 'package-lock.json'))), node: process.version, versions, snapshot, copiedDependencies: true, environmentFiles: ['.env.example'], limits: 'Build only. No Auth/JWT/PostgREST/browser/generated workflow restart acceptance.' }
+    const metadata = { sourceCommit, lockSha256: hash(readFileSync(resolve(snapshot, 'package-lock.json'))), node: process.version, versions, snapshot, copiedDependencies: true, environmentFiles: ['.env.example'], localAcceptance, limits: 'Build only. No Auth/JWT/PostgREST/browser/generated workflow restart acceptance.' }
     writeFileSync(resolve(runDirectory, 'metadata.json'), JSON.stringify(metadata, null, 2) + '\n')
     const logfile = resolve(runDirectory, 'build.log')
     log = openSync(logfile, 'w', 0o600)
