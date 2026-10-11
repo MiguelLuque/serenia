@@ -1,6 +1,6 @@
 # Aceptación local del MVP robusto
 
-Estado: Tasks 1–3 implementadas y revisadas, incluyendo los dos fixes de Task3. Task4 completa y revisada tras corregir tres guards; Tasks5–6 conservan los gates de IA y aceptación integral. Esta matriz define la evidencia requerida; no certifica todavía el ciclo completo.
+Estado: Tasks 1–3 implementadas y revisadas, incluyendo los dos fixes de Task3. Tasks4–5 completas y revisadas, incluyendo guards y entorno del evaluador. Task6 conserva la aceptación integral; las mediciones de modelos externos no se han ejecutado. Esta matriz define la evidencia requerida; no certifica todavía el ciclo completo.
 
 ## Entornos y límites
 
@@ -30,6 +30,12 @@ Experimento de preparación ejecutado: Node con `generateText`, ID `anthropic/cl
 | Recarga | Resumen vigente, nombre y estado se mantienen al navegar y recargar | SDK/DOM Task 3 revisados; navegador pendiente |
 | Herramientas Supabase | SDK/CLI fijados, SSR refresh preservado, tipos/advisors estrictos | MCP docs, SDK/CLI, transporte SSR y telemetría aislada verificados; guards Task4 revisados; stack/tipos/advisors reales pendientes |
 | Gates finales | Tests, lint, tipos, build, SQL, vulnerabilidades y navegador sobre versión final | Pendientes tras integración |
+
+## IA y preparación Workflow
+
+Task5 revisada: 26 seeds sintéticos y checks deterministas offline; adaptadores nativos Jev/Decisions con transporte ficticio, desconectados del paciente y apagados. Sin comparación online de calidad, latencia, calibración ni coste facturado. Build9d63871:27NFT, sólo2prompts activos y package.json como assets de fuente,0env/0fuente ajena/0avisos. Fix4e14be8:38focales, lint/tipos y frontera de entorno del hijo antes de imports; build anterior no se relabela como nuevo. Evidencia en `2026-10-11-ai-implementation.md`.
+
+Preparación instalada Workflow4.8, no runtime PASS: `2026-10-11-workflow-runtime-preparation.md`. Local World es sólo desarrollo/sin autenticación de cola; aceptación enlazada a loopback. Falta probar recuperación automática real del mismo run y herencia del provider en ruta generada. Despliegue público requiere protección de ingress/colas o World de producción demostrado.
 
 ## Evidencia de entrega
 

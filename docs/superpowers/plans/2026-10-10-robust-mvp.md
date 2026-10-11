@@ -84,14 +84,14 @@
 
 **Interfaces:** Mantener roles conversational/structured/fast compatibles; no habilitar decisiones en pacientes sin evaluación. Harness de modelos usa entradas sintéticas, versión/modelo registrados, límites de gasto explícitos y no imprime entradas privadas. Si no hay credenciales aprobadas, evaluación offline pasa y comparación online queda no ejecutada.
 
-- [ ] Documentar comparativa de modelos con fuentes primarias, precio de entrada/salida, capacidades y límites; evaluar Jev/Decisions como capa auxiliar. Separar ahorro proyectado y rendimiento medido.
-- [ ] Añadir escenarios y procedimiento de evaluación en español con errores críticos, abstención/calibración, latencia/coste y estabilidad de esquema; bandera de decisiones apagada por defecto.
-- [ ] Añadir presets tipados para candidatos, un adaptador auxiliar acotado y evaluación reproducible offline. Conservar los modelos actuales del flujo paciente hasta superar el benchmark clínico. No ejecutar llamadas online ni añadir autoridad probabilística sobre permisos, edad, puntuaciones, alertas o cierre. Informe, pruebas focalizadas y revisión independiente.
-- [ ] Resolver el tracing amplio del cargador de prompts observado en el build de Task4: rutas de archivos acotadas, mismo contenido/versiones clínicas y hashes del cuerpo cargado. Verificar el build y su trazado sin ignorar la advertencia ni incluir archivos de entorno.
+- [x] Documentar comparativa de modelos con fuentes primarias, precio de entrada/salida, capacidades y límites; evaluar Jev/Decisions como capa auxiliar. Separar ahorro proyectado y rendimiento medido.
+- [x] Añadir escenarios y procedimiento de evaluación en español con errores críticos, abstención/calibración, latencia/coste y estabilidad de esquema; bandera de decisiones apagada por defecto.
+- [x] Añadir presets tipados para candidatos, un adaptador auxiliar acotado y evaluación reproducible offline. Conservar los modelos actuales del flujo paciente hasta superar el benchmark clínico. No ejecutar llamadas online ni añadir autoridad probabilística sobre permisos, edad, puntuaciones, alertas o cierre. Informe, pruebas focalizadas y revisión independiente.
+- [x] Resolver el tracing amplio del cargador de prompts observado en el build de Task4: rutas de archivos acotadas, mismo contenido/versiones clínicas y hashes del cuerpo cargado. Verificar el build y su trazado sin ignorar la advertencia ni incluir archivos de entorno.
 
 ## Task 6: Aceptación integral y entrega
 
-**Files:** scripts/fixtures de aceptación fuera de `app/`, tests de integración, README y auditorías consolidadas. Mantener los contratos productivos de Tasks 1–5.
+**Files:** scripts/fixtures de aceptación fuera de `app/`, tests de integración, README y auditorías consolidadas; integración de inicio de Workflow mediante `instrumentation.ts` si la prueba real demuestra que falta recuperación. Mantener los contratos productivos de Tasks 1–5.
 
 - [ ] Arrancar Supabase local con Auth/PostgREST y actores ficticios; verificar migraciones/seed, grants/RLS, consentimiento y proyección privada mediante JWT reales. Ejecutar tipos/advisors estrictos de la CLI final.
 - [ ] Ejecutar el ciclo de paciente, chat, cuestionarios, error/retry/recarga, cierre, informe y revisión clínica sobre `next start` del build final aislado. Usar el proveedor sintético global documentado del SDK, sin endpoints de bypass, credenciales reales ni fallback externo. Comprobar el proveedor también en los pasos generados de Workflow y el replay del mismo run tras reinicio.
@@ -99,6 +99,8 @@
 - [ ] Ejecutar `npm test`, `npm run lint`, typecheck, build, SQL/harness y navegador sobre artefacto final; revisar toda la rama con agente independiente y corregir regresiones.
 
 Aceptación integral prevista: Supabase local con Auth/PostgREST y cuentas ficticias más `next start` sobre el build final. Precargar un ProviderV3 sintético mediante la API global documentada de AI SDK para ejecutar chat/cuestionario/cierre/informe/revisión sin llamadas externas ni bypasses de autorización. El launcher debe exigir destinos locales, limpiar credenciales de proveedores y comprobar workers. Ver matriz `docs/audits/2026-10-10-acceptance.md`; las pruebas con auth.uid simulado conservan su límite explícito.
+
+Workflow Local World es sólo para desarrollo: enlazar el servidor a loopback y conservar su directorio privado entre reinicios. Si falta recuperación automática, reproducir el fallo y usar el lifecycle público del SDK en el inicio real de la aplicación, consultando las guías instaladas de Next/Workflow. El preload de pruebas no puede llamar a `world.start()`, registrar handlers directos ni reencolar para fabricar el replay. El despliegue público requiere un World apto para producción y protección del ingress/colas demostrada; queda como gate externo.
 
 ## Entrega
 
