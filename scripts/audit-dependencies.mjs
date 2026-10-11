@@ -15,7 +15,10 @@ function temporaryDevelopmentException(report, context) {
   if (!context || Date.now() >= expiry) return false
   const { lock, configSource, config, productionReport } = context
   if (createHash('sha256').update(configSource).digest('hex') !== configHash) return false
-  if (JSON.stringify(config).includes('"rootDir"')) return false
+  if (!Array.isArray(config) || config.some(entry => {
+    const settings = entry?.settings?.next
+    return settings && typeof settings === 'object' && 'rootDir' in settings
+  })) return false
   if (!productionReport || productionReport.metadata?.vulnerabilities?.total !== 0 || Object.keys(productionReport.vulnerabilities ?? { invalid: true }).length !== 0) return false
   const high = Object.entries(report.vulnerabilities).filter(([, v]) => ['high', 'critical'].includes(v.severity))
   if (Object.keys(report.vulnerabilities).length !== 5 || report.metadata.vulnerabilities.high !== 5 || report.metadata.vulnerabilities.critical !== 0 || high.length !== 5 || names.some(name => !high.some(([key]) => key === name))) return false
