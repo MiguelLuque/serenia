@@ -1,6 +1,6 @@
 # Aceptación local del MVP robusto
 
-Estado: pendiente de completar Tasks 2–4. Esta matriz define la evidencia requerida; no certifica que los flujos ya funcionen.
+Estado: Tasks 1–3 implementadas y revisadas, incluyendo los dos fixes de Task3. Tasks 4–6 conservan los gates de dependencias, IA y aceptación integral. Esta matriz define la evidencia requerida; no certifica todavía el ciclo completo.
 
 ## Entornos y límites
 
@@ -17,18 +17,18 @@ Experimento de preparación ejecutado: Node con `generateText`, ID `anthropic/cl
 
 | Flujo | Resultado requerido | Evidencia actual |
 |---|---|---|
-| Bootstrap | Todas las migraciones y seed desde vacío; instrumentos retirados no reaparecen | Migraciones PostgreSQL Task 1 pasan; seed/stack Supabase pendientes |
+| Bootstrap | Todas las migraciones y seed desde vacío; instrumentos retirados no reaparecen | Migraciones PostgreSQL Tasks 1–3 pasan; seed/stack Supabase pendientes |
 | Permisos paciente | Sin autopromoción, cierre ajeno ni fabricación de informes/resultados/riesgos | SQL real Task 1 aprobado; Auth/Data API pendientes |
-| Informe privado | Data API paciente no entrega notas ni orientación diagnóstica; resumen revisado scoped | Task 3 pendiente |
-| Adultos y aceptación | Fechas reales, cumpleaños 18, consentimiento versionado y puerta servidor coherente | Task 3 pendiente |
-| Chat | Un turno autorizado, historial servidor, retry con mismo ID y error recuperable | Task 2 en ejecución; UI Task 3 pendiente |
-| Seguridad | Señal nueva durante cribado y al límite temporal se procesa antes del cierre | Task 2 en ejecución |
-| Cuestionarios | Conjunto completo validado antes de writes; ramas CSSRS; retry sin duplicados | Task 2 en ejecución; UI Task 3 pendiente |
-| Cierre e informe | Manual/lazy/cron convergen; enqueue fallido se recupera con trabajo acotado | Task 2 en ejecución |
-| Revisión clínica | Editar/confirmar/rechazar conserva una versión vigente y progreso de tareas | SQL Task 1 y revisión independiente aprobados; UI pendiente |
-| Bandeja | Pendientes antiguos y todas las dimensiones de riesgo visibles | Task 3 pendiente |
-| Recarga | Resumen vigente, nombre y estado se mantienen al navegar y recargar | Task 3 pendiente |
-| Herramientas Supabase | SDK/CLI fijados, SSR refresh preservado, tipos/advisors estrictos | MCP docs ejecutado; implementación Tasks 2/4 pendiente |
+| Informe privado | Data API paciente no entrega notas ni orientación diagnóstica; resumen revisado scoped | SQL/proyección Task 3 revisados; JWT/PostgREST pendientes |
+| Adultos y aceptación | Fechas reales, cumpleaños 18, consentimiento versionado y puerta servidor coherente | SQL/acciones/API/componentes Task 3 revisados; recorrido real pendiente |
+| Chat | Un turno autorizado, historial servidor, retry con mismo ID y error recuperable | Tasks 2–3 revisadas; SDK/DOM pasan; navegador pendiente |
+| Seguridad | Señal nueva durante cribado y al límite temporal se procesa antes del cierre | Task 2 revisada; SQL/regresiones pasan; artefacto real pendiente |
+| Cuestionarios | Conjunto completo validado antes de writes; ramas CSSRS; retry sin duplicados | Task 2 revisada; ramas/reset/radios DOM Task 3 pasan; navegador pendiente |
+| Cierre e informe | Manual/lazy/cron convergen; enqueue fallido se recupera con trabajo acotado | Task 2 revisada; SQL/outbox pasan; Workflow generado y reinicio pendientes |
+| Revisión clínica | Editar/confirmar/rechazar conserva una versión vigente y progreso de tareas | SQL Task 1 revisada; editor/view DOM Task 3 pasan; navegador pendiente |
+| Bandeja | Pendientes antiguos y todas las dimensiones de riesgo visibles | SQL paginada/prioridad/paridad y DOM Task 3 revisados; navegador pendiente |
+| Recarga | Resumen vigente, nombre y estado se mantienen al navegar y recargar | SDK/DOM Task 3 revisados; navegador pendiente |
+| Herramientas Supabase | SDK/CLI fijados, SSR refresh preservado, tipos/advisors estrictos | MCP docs ejecutado; proxy Task 2 revisado; actualización y comandos reales pendientes |
 | Gates finales | Tests, lint, tipos, build, SQL, vulnerabilidades y navegador sobre versión final | Pendientes tras integración |
 
 ## Evidencia de entrega
