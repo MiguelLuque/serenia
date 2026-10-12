@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
-**Goal:** Corregir los bloqueos demostrados de Serenia y entregar un MVP local verificable con una selección de IA fundamentada.
+**Goal:** Corregir los bloqueos demostrados de Serenia, entregar un MVP local verificable y probar la integración en su Supabase hospedado existente, con una selección de IA fundamentada.
 
 **Architecture:** Mantener la arquitectura existente. Autorización y transiciones viven en servidor/SQL; LLM y modelos de decisiones no pueden autorizar efectos. Operaciones clínicas sensibles se consolidan en transacciones e idempotencia, con recuperabilidad tras fallo externo.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Toda shell se prefija con `rtk`; usar herramientas instaladas y lockfile. Leer documentación Next instalada relevante antes de editar código.
-- Trabajar en `codex/serenia-robust-mvp`. No tocar BD remota, desplegar, enviar mensajes externos ni imprimir secretos.
+- Trabajar en `codex/serenia-robust-mvp`. Tasks1–6 no tocan BD remota; Task7 autoriza sólo el proyecto Serenia `brpozobkoatabctjjadc` con paquete revisado y fixtures ficticios identificados. No desplegar públicamente, enviar mensajes externos, crear costes nuevos ni imprimir secretos. Preservar cuentas y datos existentes; sin reset remoto ni reparación inventada del historial.
 - No promover prompts clínicos draft ni cambiar bandas/cortes aprobados. Edad mínima: 18 años.
 - Escribir regresiones primero y observar el fallo por la razón esperada. Conservar logs completos de fallos fuera de la salida rutinaria.
 - Implementadores no crean otros agentes. Un bloque de implementación a la vez; revisión independiente después de cada bloque. Investigación de modelos puede avanzar en paralelo.
@@ -108,7 +108,7 @@ Añadida por la petición del usuario del12oct de usar Supabase para probar el p
 
 **Files:** plan concreto de migraciones pendientes, configuración/harness de staging separados de los guards locales, evidencia de aceptación y operación.
 
-- [ ] Identificar proyecto y plan, comprobar estado, historial/esquema y presencia de datos mediante metadata/conteos sin devolver filas clínicas. Proyecto encontrado: Serenia `brpozobkoatabctjjadc`, Free, eu-west-1. Reactivación solicitada por MCP aceptada; salud todavía pendiente.
+- [x] Identificar proyecto y plan, comprobar estado, historial/esquema y presencia de datos mediante metadata/conteos sin devolver filas clínicas. Serenia `brpozobkoatabctjjadc`, Free, eu-west-1, ACTIVE_HEALTHY. Conteos exactos:2 cuentas/Auth,2 perfiles,0 registros clínicos,5 definiciones/65 items;40 migraciones hospedadas/45 locales y6 diferencias históricas. Preflight/diseño conservados en docs/audits/2026-10-12-hosted-supabase-{preflight,execution-design}.md; actualización no aplicada.
 - [ ] Preparar y revisar las migraciones realmente pendientes frente al historial hospedado; comprobar drift, cambios de datos/permisos y recuperación. Conservar datos existentes y no hacer reset remoto. La ausencia de usuarios activos no prueba una BD vacía.
 - [ ] Aplicar sólo el paquete revisado que corresponda y verificar advisors/tipos, permisos y transacciones mediante Auth/JWT/Data API hospedados con fixtures identificados. No crear recursos de pago ni enviar datos reales a modelos; no relajar el harness local para admitir destinos arbitrarios.
 - [ ] Probar Next construido contra esa BD/Auth con configuración explícita del proyecto, proveedor sintético y evidencia de ciclo/informe/revisión. Supabase aloja BD/Auth; el servidor Next/Workflow permanece local en esta fase. Registrar límites de SMTP/callback/configuración hospedada y limpieza scoped de fixtures.
