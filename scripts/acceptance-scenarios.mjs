@@ -104,6 +104,42 @@ if (mode === 'fixtures') {
     const assessments = ok(await admin.from('assessments').select('id,status,session_id').eq('session_id', actor.sessionId))
     console.log(JSON.stringify({ jobs, assessments }))
   }
+  if (mode === 'review') {
+    const actor = manifest.actors.runtime
+    const patient = await login(actor)
+    assert.deepEqual(ok(await patient.client.from('assessments').select('*').eq('session_id', actor.sessionId)), [])
+    const before = ok(await patient.client.rpc('get_patient_session_reports', { p_session_ids: [actor.sessionId] }))
+    assert.equal(before[0].state, 'pending_review'); assert.equal(before[0].summary, null)
+    const report = ok(await admin.from('assessments').select('*').eq('session_id', actor.sessionId).neq('status', 'superseded').single())
+    assert.equal(report.status, 'draft_ai')
+    const clinician = await login(manifest.actors.clinician)
+    const summary = { ...report.summary_json, patient_facing_summary: 'Resumen ficticio revisado y vigente.', risk_assessment: { suicidality: 'passive', self_harm: 'historic', heteroaggression: 'verbal', substance_use_acute: 'suspected', notes: 'NOTA_PRIVADA_REVISADA' } }
+    const args = { p_session_id: actor.sessionId, p_assessment_id: report.id, p_action: 'modify', p_summary: summary, p_notes: 'NOTA_CLINICA_PRIVADA', p_inherited_updates: [] }
+    assert.ok((await patient.client.rpc('review_assessment_atomic', args)).error)
+    const reviewedId = ok(await clinician.client.rpc('review_assessment_atomic', args))
+    assert.equal(ok(await clinician.client.rpc('review_assessment_atomic', args)), reviewedId)
+    const projection = ok(await patient.client.rpc('get_patient_session_reports', { p_session_ids: [actor.sessionId] }))
+    assert.equal(projection[0].summary, summary.patient_facing_summary)
+    assert.ok(!JSON.stringify(projection).includes('PRIVADA'))
+    assert.deepEqual(ok(await patient.client.from('assessments').select('*').eq('session_id', actor.sessionId)), [])
+    const live = ok(await admin.from('assessments').select('id').eq('session_id', actor.sessionId).not('status', 'in', '(superseded,rejected)'))
+    assert.equal(live.length, 1)
+    proof('real_jwt_private_projection_clinical_review', { sessionId: actor.sessionId, originalId: report.id, reviewedId, projection })
+  }
+  if (mode === 'safety') {
+    for (const boundary of [false, true]) {
+      const actor = await preparePatient(boundary ? 'api-boundary' : 'api-urgent')
+      assert.equal((await send(actor, 'Solicito el cuestionario PHQ9')).status, 200)
+      if (boundary) ok(await admin.from('clinical_sessions').update({ opened_at: new Date(Date.now() - 61 * 60_000).toISOString() }).eq('id', actor.sessionId))
+      const response = await send(actor, 'Voy a suicidarme ahora, tengo un plan para hacerlo')
+      assert.equal(response.status, 200); assert.ok(response.body.includes('112'))
+      const risks = ok(await admin.from('risk_events').select('id,severity').eq('session_id', actor.sessionId))
+      assert.ok(risks.length > 0)
+      const session = ok(await admin.from('clinical_sessions').select('status,closure_reason').eq('id', actor.sessionId).single())
+      if (boundary) { assert.equal(session.status, 'closed'); assert.equal(session.closure_reason, 'crisis_detected') }
+      proof('real_http_new_urgent_signal', { boundary, actor, session, risks })
+    }
+  }
   if (mode === 'browser-fixtures') {
     for (const name of ['chat', 'urgent', 'boundary']) assert.equal((await send(manifest.actors[name], 'Solicito el cuestionario PHQ9')).status, 200)
     for (const name of ['closure', 'older']) {

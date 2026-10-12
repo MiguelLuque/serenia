@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Serenia
 
-## Getting Started
+MVP de conversación y cuestionarios con revisión clínica. Node **24.14.1**, Next16.4, React19, Supabase y Workflow4.8; versiones exactas en el lockfile. La aceptación local usa datos ficticios: no autoriza pacientes reales ni acredita rendimiento clínico de modelos externos. Ver [matriz](docs/audits/2026-10-10-acceptance.md), [Supabase](docs/operations/supabase.md) y [dependencias](docs/operations/dependency-gates.md).
 
-First, run the development server:
+## Instalación y checks
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```sh
+rtk npm ci
+rtk npm test
+rtk npm run lint
+rtk npm run typecheck
+rtk npm run workflow:wire
+rtk npm run db:test
+rtk npm run audit:dependencies
+rtk npm run build:isolated
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`rtk npm run verify` ejecuta esos gates y conserva todos los logs/exits privados. El build aislado exige cambios tracked registrados en Git, crea un snapshot de HEAD sin archivos de entorno y copia dependencias instaladas. Su modo por defecto usa placeholders: no sirve para aceptación Auth en navegador. `db:test` usa PostgreSQL real con `auth.uid()` simulado; JWT/advisors requieren el stack siguiente.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase y aceptación local
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Docker debe estar disponible. La CLI fijada se ejecuta mediante el wrapper aislado, sin link ni proyectos remotos. El primer arranque descarga las imágenes ausentes. Start/status pueden imprimir claves locales: conservar sus salidas privadas.
 
-## Learn More
+```sh
+rtk proxy mkdir -p .cache/acceptance
+rtk proxy chmod 700 .cache/acceptance
+rtk proxy sh -c 'umask 077; node scripts/supabase-local.mjs start > .cache/acceptance/supabase-start.log 2>&1'
+rtk proxy sh -c 'umask 077; node scripts/supabase-local.mjs db reset --local > .cache/acceptance/supabase-reset.log 2>&1'
+rtk npm run db:verify
+rtk proxy node scripts/build-isolated.mjs --local-acceptance
+```
 
-To learn more about Next.js, take a look at the following resources:
+Reset borra este stack local: ejecutar antes de los fixtures. No omitir servicios ni rebajar los gates estrictos lint/advisors/tipos. El build de aceptación obtiene el status local sólo en memoria y usa sus claves públicas reales para el bundle del navegador.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+El build devuelve un `snapshot`; usar su directorio padre como `SERENIA_BUILD_DIR`. Elegir una ruta absoluta privada nueva y canónica para `SERENIA_ACCEPTANCE_STATE` (macOS: `/private/tmp/...`, no el alias `/tmp/...`):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```sh
+SERENIA_BUILD_DIR=/private/tmp/directorio-devuelto-por-build
+SERENIA_ACCEPTANCE_STATE=/private/tmp/serenia-acceptance-local
+rtk proxy node scripts/acceptance-run.mjs fixtures "$SERENIA_ACCEPTANCE_STATE"
+rtk proxy node scripts/acceptance-start.mjs "$SERENIA_BUILD_DIR" "$SERENIA_ACCEPTANCE_STATE"
+```
 
-## Deploy on Vercel
+El servidor queda en primer plano en **http://127.0.0.1:3000**. En otra terminal con la misma variable de estado:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```sh
+rtk proxy node scripts/acceptance-run.mjs http "$SERENIA_ACCEPTANCE_STATE"
+rtk proxy node scripts/acceptance-run.mjs closure "$SERENIA_ACCEPTANCE_STATE"
+rtk proxy node scripts/acceptance-run.mjs inspect "$SERENIA_ACCEPTANCE_STATE"
+rtk proxy node scripts/acceptance-run.mjs review "$SERENIA_ACCEPTANCE_STATE"
+rtk proxy node scripts/acceptance-run.mjs safety "$SERENIA_ACCEPTANCE_STATE"
+rtk proxy node scripts/acceptance-run.mjs browser-fixtures "$SERENIA_ACCEPTANCE_STATE"
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`review` exige que el job haya terminado como draft_ai; comprobar con inspect. Estos escenarios consumen sus precondiciones: no repetir indiscriminadamente sobre los mismos actores. `fixtures.json` contiene sólo usuarios/contraseña/sesiones ficticias, sin tokens. `runtime.json` registra fuente, lock, BUILD_ID, PID y log. Los launchers exigen los origins loopback exactos app3000/Supabase54321; no cargan .env.local.
+
+El preload externo usa el hook documentado AI_SDK_DEFAULT_PROVIDER, tres modelos sintéticos y un ledger de PID/intentos. Bloquea destinos de red externos, sin modificar endpoints, auth ni bundles generados. Mensajes de ensayo: “Solicito el cuestionario PHQ9”, “[FALLO_UNICO] texto ficticio” (un fallo), “[ESPERA] texto ficticio” (15 segundos), “Propongo cerrar esta sesión” y en el turno siguiente “Sí, cerramos”. El control privado permite structured=fail/success para ensayar el retry durable.
+
+Detener la app con Ctrl-C. Reiniciarla con el mismo comando, build y directorio de estado; conservar workflow/ y sus eventos. Reencolar desde un harness no prueba recuperación automática. Para detener el stack:
+
+```sh
+rtk proxy sh -c 'umask 077; node scripts/supabase-local.mjs stop > .cache/acceptance/supabase-stop.log 2>&1'
+```
+
+Conservar logs/estado hasta cerrar revisión. Limpiar sólo los paths creados por esta ejecución. La promoción `scripts/promote-clinician.ts` exige URL loopback54321, clave privilegiada explícita y actor @example.test; no carga dotenv ni administra remoto. Los fixtures ya crean un clínico ficticio.
+
+## Configuración real y gates externos
+
+Los nombres requeridos son NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (fallback NEXT_PUBLIC_SUPABASE_ANON_KEY), SUPABASE_SECRET_KEY (fallback SUPABASE_SERVICE_ROLE_KEY), NEXT_PUBLIC_SITE_URL y los pares LLM_CONVERSATIONAL_PROVIDER/MODEL, LLM_FAST_PROVIDER/MODEL, LLM_STRUCTURED_PROVIDER/MODEL. Nunca hacer pública una clave privilegiada. CRON_SECRET autentica cierre programado. FEATURE_CROSS_SESSION_CONTEXT sigue off hasta aprobación clínica.
+
+Los roles resuelven strings mediante AI Gateway; autenticación, costes y tratamiento de datos se configuran explícitamente antes de conectar proveedores reales. El launcher sintético no hereda esas credenciales. `rtk npm run ai:evaluate:offline` prueba reglas deterministas sin llamadas pagadas; no mide calidad, latencia o coste de modelos. Adaptadores auxiliares siguen desconectados del paciente.
+
+Local World no autentica colas y sólo sirve para desarrollo. La aceptación se enlaza a loopback. Publicar exige World apto para producción, protección de ingress/colas demostrada, migraciones/smoke del destino, tratamiento de datos y textos legales aprobados, resolución de discrepancias clínicas y canal operativo de urgencias.
+
+El parche upstream de Next anunciado para el14octubre sigue pendiente; la excepción dev GHSA-vfj7-8cjw-p6xm caduca el **18octubre2026**. Audit de producción sin findings no convierte el audit completo en limpio.
