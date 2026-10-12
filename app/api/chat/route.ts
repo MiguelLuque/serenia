@@ -45,7 +45,8 @@ export async function POST(req: Request) {
   const { data: ready, error: readinessError } = await supabase.rpc('get_onboarding_ready')
   if (readinessError || ready !== true) return Response.json({ error: 'Completa los datos y la aceptación vigente', onboardingRequired: true }, { status: 403 })
   const crisis = detectCrisis(lastUserText)
-  const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: crisis.detected && hasHighSignalTerm(crisis.matchedTerms) })
+  const highSignalCrisis = crisis.detected && hasHighSignalTerm(crisis.matchedTerms)
+  const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
   const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string }
   if (turn.replay) return replay(turn.chunks ?? [])
@@ -95,7 +96,7 @@ export async function POST(req: Request) {
   try {
     // Accepted text/risk already committed. Urgent/time-limit responses do
     // not depend on history, prompt loading or optional context availability.
-    if (expired || turn.urgent) return await finishStaticReply(expired ? crisis.detected ? 'crisis_detected' : 'time_limit' : null)
+    if (expired || turn.urgent || highSignalCrisis) return await finishStaticReply(expired ? crisis.detected ? 'crisis_detected' : 'time_limit' : null)
     let context: Awaited<ReturnType<typeof prepareContext>>
     try { context = await prepareContext() }
     catch (error) {

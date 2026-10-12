@@ -57,7 +57,7 @@ if (mode === 'fixtures') {
   const consents = ok(await admin.from('consents').select('server_recorded,consent_version').eq('user_id', actor.userId))
   assert.equal(consents.length, 1); assert.equal(consents[0].server_recorded, true)
   proof('real_auth_jwt_onboarding_grants', { userId: actor.userId, invalidDates: 3 })
-  for (const name of ['runtime', 'chat', 'retry', 'pending', 'urgent', 'boundary', 'closure', 'older']) { manifest.actors[name] = await preparePatient(name); save(manifest) }
+  for (const name of ['runtime', 'chat', 'cssrs', 'retry', 'pending', 'urgent', 'boundary', 'closure', 'older']) { manifest.actors[name] = await preparePatient(name); save(manifest) }
   manifest.actors.clinician = await makeActor('clinician')
   ok(await admin.from('user_profiles').update({ role: 'clinician' }).eq('user_id', manifest.actors.clinician.userId))
   const a = manifest.actors.chat, b = manifest.actors.retry
@@ -153,16 +153,34 @@ if (mode === 'fixtures') {
       const actor = await preparePatient(boundary ? 'api-boundary' : 'api-urgent')
       assert.equal((await send(actor, 'Solicito el cuestionario PHQ9')).status, 200)
       if (boundary) ok(await admin.from('clinical_sessions').update({ opened_at: new Date(Date.now() - 61 * 60_000).toISOString() }).eq('id', actor.sessionId))
+      const countCalls = () => readFileSync(resolve(directory, 'provider.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)).filter(row => row.kind === 'model' && row.modelId === 'synthetic/conversational').length
+      const beforeCalls = countCalls()
       const response = await send(actor, 'Voy a suicidarme ahora, tengo un plan para hacerlo')
-      assert.equal(response.status, 200); assert.ok(response.body.includes('112'))
+      assert.equal(countCalls() - beforeCalls, 0, 'High-signal resources must not depend on a model call')
+      assert.equal(response.status, 200); assert.ok(response.body.includes('112'), response.body)
       const risks = ok(await admin.from('risk_events').select('id,severity').eq('session_id', actor.sessionId))
       assert.ok(risks.length > 0)
       const session = ok(await admin.from('clinical_sessions').select('status,closure_reason').eq('id', actor.sessionId).single())
       if (boundary) { assert.equal(session.status, 'closed'); assert.equal(session.closure_reason, 'crisis_detected') }
-      proof('real_http_new_urgent_signal', { boundary, actor, session, risks })
+      if (!boundary) assert.equal(session.status, 'open')
+      proof('real_http_new_urgent_signal', { boundary, actor, session, risks, conversationalCalls: 0 })
     }
   }
+  if (mode === 'safety') {
+    const actor = await preparePatient('api-interrupted')
+    const failed = await send(actor, '[FALLO_UNICO] Mensaje ficticio interrumpido')
+    assert.equal(failed.status, 503)
+    const requestId = randomUUID()
+    const text = 'Voy a suicidarme ahora, tengo un plan para hacerlo'
+    const first = await send(actor, text, requestId), replay = await send(actor, text, requestId)
+    assert.equal(first.status, 200); assert.ok(first.body.includes('112')); assert.equal(replay.body, first.body)
+    const turns = ok(await admin.from('chat_turns').select('request_id,status,attempts').eq('session_id', actor.sessionId))
+    assert.equal(turns.length, 2); assert.equal(turns.find(t => t.request_id === failed.requestId).status, 'interrupted'); assert.equal(turns.find(t => t.request_id === requestId).attempts, 1)
+    assert.equal(ok(await admin.from('risk_events').select('id').eq('session_id', actor.sessionId)).length, 1)
+    proof('real_http_urgent_interruption_replay', { actor, requestId, turns })
+  }
   if (mode === 'browser-fixtures') {
+    assert.equal((await send(manifest.actors.cssrs, '[CSSRS] Solicito el cuestionario')).status, 200)
     for (const name of ['chat', 'urgent', 'boundary']) assert.equal((await send(manifest.actors[name], 'Solicito el cuestionario PHQ9')).status, 200)
     for (const name of ['closure', 'older']) {
       const actor = manifest.actors[name]

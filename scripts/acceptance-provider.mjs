@@ -62,18 +62,11 @@ function model(modelId) {
       const text = (latest?.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('')
       if (text.includes('[FALLO_UNICO]') && count === 1) throw new Error('Synthetic recoverable chat failure')
       if (text.includes('[ESPERA]')) await new Promise(resolve => setTimeout(resolve, 15000))
-      const explicitSyntheticCrisis = /suicid/i.test(text) && /plan/i.test(text)
-      if (explicitSyntheticCrisis) {
-        const system = options.prompt.filter(message => message.role === 'system').map(message => typeof message.content === 'string' ? message.content : JSON.stringify(message.content)).join('\n')
-        if (!system.includes('[AVISO DE SEGURIDAD') && !system.includes('[RE-ESCALADA')) throw new Error('Synthetic crisis scenario did not receive the real safety notice')
-        record({ kind: 'safety_notice', modelId, observed: true })
-      }
       let name, input
-      if (/cuestionario|phq/i.test(text)) { name = 'propose_questionnaire'; input = { code: 'PHQ9', reason: 'Aceptación ficticia del cuestionario solicitado' } }
+      if (/cuestionario|phq/i.test(text)) { name = 'propose_questionnaire'; input = { code: text.includes('[CSSRS]') ? 'CSSRS' : 'PHQ9', reason: 'Aceptación ficticia del cuestionario solicitado' } }
       if (/propongo cerrar/i.test(text)) { name = 'propose_close_session'; input = { reason: 'user_request' } }
       if (/^s[ií],? cerramos[.!\s]*$/i.test(text.trim())) { name = 'confirm_close_session'; input = { reason: 'user_request' } }
-      if (explicitSyntheticCrisis) { name = 'close_session_crisis'; input = {} }
-      const response = explicitSyntheticCrisis ? 'Respuesta sintética ante la señal explícita: llama al 024 y al 112 si existe peligro inmediato. La señal queda registrada para revisión clínica.' : name === 'propose_questionnaire' ? 'Aquí tienes el PHQ-9 solicitado para esta prueba ficticia.' : name === 'propose_close_session' ? '¿Quieres cerrar la sesión?' : name === 'confirm_close_session' ? 'Cerramos la sesión. El informe queda pendiente de revisión.' : 'Respuesta sintética: gracias por compartirlo. ¿Cómo te has sentido hoy?'
+      const response = name === 'propose_questionnaire' ? 'Aquí tienes el cuestionario solicitado para esta prueba ficticia.' : name === 'propose_close_session' ? '¿Quieres cerrar la sesión?' : name === 'confirm_close_session' ? 'Cerramos la sesión. El informe queda pendiente de revisión.' : 'Respuesta sintética: gracias por compartirlo. ¿Cómo te has sentido hoy?'
       const parts = [{ type: 'stream-start', warnings: [] }, { type: 'text-start', id: 'text' }, { type: 'text-delta', id: 'text', delta: response }, { type: 'text-end', id: 'text' }]
       if (name) parts.push({ type: 'tool-call', toolCallId: randomUUID(), toolName: name, input: JSON.stringify(input) })
       parts.push({ type: 'finish', usage, finishReason: { unified: name ? 'tool-calls' : 'stop', raw: 'synthetic' } })
