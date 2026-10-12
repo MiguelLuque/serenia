@@ -22,3 +22,15 @@ it('the clinician can edit both risk fields and save them with the whole assessm
  fireEvent.click(screen.getByRole('button', { name: /Guardar/ }))
  await waitFor(() => expect(actions.saveAssessmentAction.mock.calls[0]?.[0]?.summary.risk_assessment).toEqual({ suicidality: 'none', self_harm: 'none', heteroaggression: 'verbal', substance_use_acute: 'suspected', notes: '' }))
 })
+it.each(['reviewed_modified', 'reviewed_confirmed'] as const)('removes draft review actions after refresh to %s while retaining editing', status => {
+ const detail: SessionDetail = { session: { id: 's', userId: 'u', openedAt: '2026-01-01', closedAt: '2026-01-02', closureReason: 'user_request', conversationId: 'c' }, patient: { userId: 'u', displayName: 'Synthetic' }, assessment: { id: 'a', status: 'draft_ai', summary, generatedBy: 'ai', createdAt: '2026-01-02', clinicalNotes: null, rejectionReason: null }, messages: [], inheritedTasks: [], regenerationInProgress: false }
+ const view = render(<AssessmentView detail={detail} />)
+ expect(screen.getByRole('button', { name: 'Marcar como revisado sin cambios' })).toBeTruthy()
+ fireEvent.click(screen.getByRole('button', { name: 'Rechazar informe' }))
+ expect(screen.getByLabelText('Motivo del rechazo')).toBeTruthy()
+ view.rerender(<AssessmentView detail={{ ...detail, assessment: { ...detail.assessment!, id: 'reviewed-a', status } }} />)
+ expect(screen.queryByRole('button', { name: 'Marcar como revisado sin cambios' })).toBeNull()
+ expect(screen.queryByRole('button', { name: 'Rechazar informe' })).toBeNull()
+ expect(screen.queryByLabelText('Motivo del rechazo')).toBeNull()
+ expect((screen.getByRole('button', { name: 'Editar informe' }) as HTMLButtonElement).disabled).toBe(false)
+})

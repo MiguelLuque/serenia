@@ -312,6 +312,8 @@ function AssessmentSections({
   }
 
   const isRejected = assessment.status === 'rejected'
+  const canReview = assessment.status === 'draft_ai' || assessment.status === 'pending_clinician_review'
+  const isRejecting = canReview && rejectOpen
 
   return (
     <>
@@ -625,9 +627,10 @@ function AssessmentSections({
               </Button>
             ) : (
               <>
-                <Button onClick={onEdit} disabled={isPending || rejectOpen}>
+                <Button onClick={onEdit} disabled={isPending || isRejecting}>
                   Editar informe
                 </Button>
+                {canReview && <>
                 <Button
                   variant="secondary"
                   onClick={handleMarkReviewed}
@@ -644,11 +647,12 @@ function AssessmentSections({
                 >
                   Rechazar informe
                 </Button>
+                </>}
               </>
             )}
           </div>
 
-          {rejectOpen && (
+          {isRejecting && (
             <div className="flex flex-col gap-2 rounded-md border border-red-200 bg-red-50 p-3">
               <Label htmlFor="reject-reason" className="text-red-900">
                 Motivo del rechazo
