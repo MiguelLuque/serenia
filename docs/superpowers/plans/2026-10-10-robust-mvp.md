@@ -102,6 +102,19 @@ Aceptación integral prevista: Supabase local con Auth/PostgREST y cuentas ficti
 
 Workflow Local World es sólo para desarrollo: enlazar el servidor a loopback y conservar su directorio privado entre reinicios. Si falta recuperación automática, reproducir el fallo y usar el lifecycle público del SDK en el inicio real de la aplicación, consultando las guías instaladas de Next/Workflow. El preload de pruebas no puede llamar a `world.start()`, registrar handlers directos ni reencolar para fabricar el replay. El despliegue público requiere un World apto para producción y protección del ingress/colas demostrada; queda como gate externo.
 
+## Task 7: Validación en Supabase hospedado
+
+Añadida por la petición del usuario del12oct de usar Supabase para probar el proyecto que nadie más utiliza. Conserva los requisitos y evidencia de Tasks1–6; no sustituye un gate fallido por otro entorno.
+
+**Files:** plan concreto de migraciones pendientes, configuración/harness de staging separados de los guards locales, evidencia de aceptación y operación.
+
+- [ ] Identificar proyecto y plan, comprobar estado, historial/esquema y presencia de datos mediante metadata/conteos sin devolver filas clínicas. Proyecto encontrado: Serenia `brpozobkoatabctjjadc`, Free, eu-west-1. Reactivación solicitada por MCP aceptada; salud todavía pendiente.
+- [ ] Preparar y revisar las migraciones realmente pendientes frente al historial hospedado; comprobar drift, cambios de datos/permisos y recuperación. Conservar datos existentes y no hacer reset remoto. La ausencia de usuarios activos no prueba una BD vacía.
+- [ ] Aplicar sólo el paquete revisado que corresponda y verificar advisors/tipos, permisos y transacciones mediante Auth/JWT/Data API hospedados con fixtures identificados. No crear recursos de pago ni enviar datos reales a modelos; no relajar el harness local para admitir destinos arbitrarios.
+- [ ] Probar Next construido contra esa BD/Auth con configuración explícita del proyecto, proveedor sintético y evidencia de ciclo/informe/revisión. Supabase aloja BD/Auth; el servidor Next/Workflow permanece local en esta fase. Registrar límites de SMTP/callback/configuración hospedada y limpieza scoped de fixtures.
+
+El cambio de entorno autoriza la preparación y validación técnica en el proyecto identificado. Las operaciones destructivas sobre registros existentes o un coste nuevo necesitan aprobación específica; la publicación de la aplicación y el uso con pacientes reales conservan los gates de entrega.
+
 ## Entrega
 
 No declarar listo para pacientes reales sin migraciones aplicadas y aceptación de producción, revisión clínica pendiente resuelta y tratamiento de datos aprobado. Entregar rama/diff revisables, reporte de verificación local y próximos pasos concretos. La publicación requiere decisión explícita sobre el resultado construido.
