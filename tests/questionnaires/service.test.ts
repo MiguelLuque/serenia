@@ -46,7 +46,7 @@ describe('authorized questionnaire service',()=>{
     expect(service.rpc).toHaveBeenCalledTimes(1)
     expect(service.rpc.mock.calls[0][0]).toBe('submit_questionnaire_atomic')
     expect(service.rpc.mock.calls[0][1].p_result).toEqual(result)
-    expect(service.rpc.mock.calls[0][1].p_risk_severity).toBe(risk)
+    expect(service.rpc.mock.calls[0][1].p_risk_severity).toBe(risk ?? undefined)
     expect(service.from).not.toHaveBeenCalled()
   })
   it('validates the complete option set before any write and permits a correct retry',async()=>{

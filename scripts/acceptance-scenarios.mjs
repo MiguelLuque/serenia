@@ -78,7 +78,7 @@ if (mode === 'fixtures') {
     const prior = new Set(readdirSync(eventsPath))
     let stopped = false
     const timer = setInterval(() => {
-      for (const name of readdirSync(eventsPath).filter(name => !prior.has(name))) {
+      for (const name of readdirSync(eventsPath).filter(name => name.endsWith('.json') && !prior.has(name))) {
         const event = JSON.parse(readFileSync(resolve(eventsPath, name), 'utf8'))
         if (event.eventType !== 'step_retrying') continue
         const runtime = JSON.parse(readFileSync(resolve(directory, 'runtime.json'), 'utf8'))
@@ -127,7 +127,7 @@ if (mode === 'fixtures') {
     console.log(JSON.stringify({ jobs, assessments }))
   }
   if (mode === 'review') {
-    const actor = manifest.actors.runtime
+    const actor = manifest.actors.restart ?? manifest.actors.runtime
     const patient = await login(actor)
     assert.deepEqual(ok(await patient.client.from('assessments').select('*').eq('session_id', actor.sessionId)), [])
     const before = ok(await patient.client.rpc('get_patient_session_reports', { p_session_ids: [actor.sessionId] }))

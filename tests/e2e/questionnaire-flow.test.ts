@@ -13,7 +13,7 @@ describe('questionnaire proposal to scoring contract (synthetic DB)',()=>{
     const result=await submitAnswers(h.client,{instanceId:instance.id,answers:h.answers([...values])})
     expect(result.severityBand).toBe(band)
     const scoringCall=service.rpc.mock.calls.find(([name])=>name==='submit_questionnaire_atomic')!
-    expect(scoringCall[1].p_risk_severity).toBe(risk)
+    expect(scoringCall[1].p_risk_severity).toBe(risk ?? undefined)
     if(code==='PHQ9'){expect(result.totalScore).toBe(12);expect(result.flags).toEqual([])}
     else expect(result.flags).toContainEqual({itemOrder:7,reason:'acute_risk'})
   })

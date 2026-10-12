@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { readFileSync, writeFileSync, existsSync, openSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { createServer } from 'node:net'
 import { localCredentials, acceptanceEnvironment, privateDirectory } from './acceptance-local.mjs'
 
 // Run from the original checkout; the exact Next child runs inside the immutable
@@ -15,6 +16,12 @@ const snapshot = metadata.snapshot
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex')
 if (hash(resolve(snapshot, 'package-lock.json')) !== metadata.lockSha256) throw new Error('Artifact lock mismatch')
 for (const name of ['.env', '.env.local', '.env.production', '.env.production.local']) if (existsSync(resolve(snapshot, name))) throw new Error('Environment files forbidden in acceptance artifact')
+// Fail before replacing runtime identity when an acceptance app is still live.
+await new Promise((done, reject) => {
+  const probe = createServer()
+  probe.once('error', () => reject(new Error('Acceptance port 3000 is already in use; stop the recorded child before restarting')))
+  probe.listen({ host: '127.0.0.1', port: 3000, exclusive: true }, () => probe.close(done))
+})
 const directory = privateDirectory(stateDirectory)
 if (!existsSync(resolve(directory, 'control.json'))) writeFileSync(resolve(directory, 'control.json'), '{"structured":"success"}\n', { mode: 0o600 })
 const buildId = readFileSync(resolve(snapshot, '.next/BUILD_ID'), 'utf8').trim()

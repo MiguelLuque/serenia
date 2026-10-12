@@ -73,6 +73,6 @@ describe('saveAssessmentAction atomic contract', () => {
   it('passes inherited updates and normalizes whitespace-only notes', async () => {
     const updates = [{ id: '00000000-0000-4000-8000-000000000001', estado: 'cumplida' as const, nota: 'Terminado' }]
     await saveAssessmentAction({ ...input, clinical_notes: ' ', inherited_task_updates: updates })
-    expect(rpc).toHaveBeenCalledWith('review_assessment_atomic', expect.objectContaining({ p_notes: null, p_inherited_updates: updates }))
+    expect(rpc).toHaveBeenCalledWith('review_assessment_atomic', expect.objectContaining({ p_notes: undefined, p_inherited_updates: updates }))
   })
 })
