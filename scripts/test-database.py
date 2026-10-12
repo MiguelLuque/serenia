@@ -53,11 +53,23 @@ try:
         if args.baseline_security and (path.name.startswith('202610') or path.name.startswith('20260502000004') or path.name.startswith('20260502000005')):
             continue
         try:
+            # Consolidating read policies must leave grants and every non-SELECT
+            # policy role/command and predicate contract intact (normalizing only the
+            # intended auth.uid() initplan rewrite).
+            if 'acceptance_strict_rls_advisors' in path.name:
+                invariant = """select jsonb_build_object(
+                  'table_grants',(select jsonb_agg(to_jsonb(g) order by table_name,grantee,privilege_type) from information_schema.table_privileges g where table_schema='public'),
+                  'column_grants',(select jsonb_agg(to_jsonb(g) order by table_name,column_name,grantee,privilege_type) from information_schema.column_privileges g where table_schema='public'),
+                  'routine_grants',(select jsonb_agg(to_jsonb(g) order by specific_name,grantee,privilege_type) from information_schema.routine_privileges g where routine_schema='public'),
+                  'write_policies',(select jsonb_agg(to_jsonb(p) || jsonb_build_object('qual',regexp_replace(qual, '\(\s*SELECT auth.uid\(\) AS uid\s*\)', 'auth.uid()', 'g'),'with_check',regexp_replace(with_check, '\(\s*SELECT auth.uid\(\) AS uid\s*\)', 'auth.uid()', 'g')) order by tablename,policyname) from pg_policies p where schemaname='public' and cmd<>'SELECT'))::text;"""
+                before_contract = query(invariant)
             if 'robust_chat_questionnaires_recovery' in path.name:
                 # New table grants must survive a hosted installation without
                 # bootstrap's historical permissive default privileges.
                 query('alter default privileges in schema public revoke all on tables from anon,authenticated,service_role;')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'acceptance_strict_rls_advisors' in path.name and query(invariant) != before_contract:
+                raise RuntimeError('Advisor fix changed grants or non-SELECT policy contracts')
         except RuntimeError as error:
             raise RuntimeError(f'Migration {path.name}: {error}') from error
     print('PASS migrations from empty auth.users')
@@ -212,5 +224,7 @@ try:
         touching.result()
     query(f"do $$ begin if (select status from clinical_sessions where id='{race_sid}')<>'open' or exists(select 1 from assessment_jobs where session_id='{race_sid}') then raise exception 'Stale inactivity job created'; end if; end $$;")
     print('PASS concurrent touch/inactivity lock revalidation preserves active session without outbox')
+    query((ROOT / 'supabase/tests/read-policy-equivalence.sql').read_text())
+    print('PASS baseline/new read rowsets across owner, foreign, clinician, anon and inherited authenticated role')
 finally:
     docker('rm', '--force', name, check=False)

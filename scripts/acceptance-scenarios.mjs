@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
-import { readFileSync, writeFileSync, appendFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
@@ -71,9 +71,31 @@ if (mode === 'fixtures') {
   console.log(`Fictional fixtures: ${manifestPath}`)
 } else {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  if (mode === 'restart-checkpoint') {
+    const actor = await preparePatient('restart')
+    manifest.actors.restart = actor; save(manifest)
+    const eventsPath = resolve(directory, 'workflow/events')
+    const prior = new Set(readdirSync(eventsPath))
+    let stopped = false
+    const timer = setInterval(() => {
+      for (const name of readdirSync(eventsPath).filter(name => !prior.has(name))) {
+        const event = JSON.parse(readFileSync(resolve(eventsPath, name), 'utf8'))
+        if (event.eventType !== 'step_retrying') continue
+        const runtime = JSON.parse(readFileSync(resolve(directory, 'runtime.json'), 'utf8'))
+        writeFileSync(resolve(directory, 'checkpoint.json'), JSON.stringify({ runId: event.runId, eventFile: name, event, actor, runtime }, null, 2), { mode: 0o600 })
+        process.kill(runtime.pid, 'SIGKILL'); stopped = true; clearInterval(timer)
+        proof('durable_retry_checkpoint_stopped', { runId: event.runId, eventFile: name, sessionId: actor.sessionId, pid: runtime.pid })
+      }
+    }, 20)
+    try {
+      for (const text of ['Primera entrada ficticia', 'Segunda entrada ficticia', 'Tercera entrada ficticia', 'Propongo cerrar esta sesión', 'Sí, cerramos']) assert.equal((await send(actor, text)).status, 200)
+      await new Promise(done => setTimeout(done, 1500))
+      assert.ok(stopped, 'No durable retry checkpoint observed')
+    } finally { clearInterval(timer) }
+  }
   if (mode === 'http') {
     for (const path of ['flow', 'step']) {
-      const response = await fetch(`${app}/.well-known/workflow/v1/${path}?__health`, { redirect: 'manual' }); assert.equal(response.status, 200)
+      const response = await fetch(`${app}/.well-known/workflow/v1/${path}?__health`, { method: 'POST', redirect: 'manual' }); assert.equal(response.status, 200)
       const malformed = await fetch(`${app}/.well-known/workflow/v1/${path}`, { method: 'POST', body: '{}', redirect: 'manual' }); assert.equal(malformed.status, 400)
     }
     proof('generated_workflow_http_routes')
@@ -81,7 +103,7 @@ if (mode === 'fixtures') {
     for (const text of ['Primera conversación ficticia', 'Me encuentro tranquilo en esta prueba', 'Solicito el cuestionario PHQ9']) { const response = await send(actor, text); assert.equal(response.status, 200, response.body) }
     const instance = ok(await admin.from('questionnaire_instances').select('id').eq('session_id', actor.sessionId).single())
     const auth = await login(actor)
-    const response = await fetch(`${app}/api/questionnaires/${instance.id}/answers`, { method: 'POST', headers: { Cookie: auth.cookie(), 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: Array.from({ length: 9 }, (_, index) => ({ itemOrder: index + 1, valueNumeric: 0, valueRaw: 'Nunca' })) }) })
+    const response = await fetch(`${app}/api/questionnaires/${instance.id}/answers`, { method: 'POST', headers: { Cookie: auth.cookie(), 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: Array.from({ length: 9 }, (_, index) => ({ itemOrder: index + 1, valueNumeric: 0, valueRaw: '0' })) }) })
     assert.equal(response.status, 200, await response.text())
     assert.equal(ok(await admin.from('questionnaire_results').select('id').eq('instance_id', instance.id)).length, 1)
     const retryId = randomUUID()
