@@ -93,6 +93,12 @@ if (mode === 'fixtures') {
       assert.ok(stopped, 'No durable retry checkpoint observed')
     } finally { clearInterval(timer) }
   }
+  if (mode === 'boundary-expire') {
+    const actor = manifest.actors.boundary
+    const rows = ok(await admin.from('clinical_sessions').update({ opened_at: new Date(Date.now() - 61 * 60_000).toISOString() }).eq('id', actor.sessionId).eq('user_id', actor.userId).eq('status', 'open').select('id'))
+    assert.equal(rows.length, 1, 'The synthetic browser boundary session must still be open')
+    proof('browser_boundary_expired_after_page_entry', { sessionId: actor.sessionId })
+  }
   if (mode === 'http') {
     for (const path of ['flow', 'step']) {
       const response = await fetch(`${app}/.well-known/workflow/v1/${path}?__health`, { method: 'POST', redirect: 'manual' }); assert.equal(response.status, 200)
@@ -166,18 +172,21 @@ if (mode === 'fixtures') {
       proof('real_http_new_urgent_signal', { boundary, actor, session, risks, conversationalCalls: 0 })
     }
   }
-  if (mode === 'safety') {
+  if (mode === 'safety' || mode === 'safety-interrupted') {
     const actor = await preparePatient('api-interrupted')
-    const failed = await send(actor, '[FALLO_UNICO] Mensaje ficticio interrumpido')
+    const failed = await send(actor, `[FALLO_UNICO] Mensaje ficticio interrumpido ${actor.userId}`)
     assert.equal(failed.status, 503)
     const requestId = randomUUID()
     const text = 'Voy a suicidarme ahora, tengo un plan para hacerlo'
+    const callsBefore = readFileSync(resolve(directory, 'provider.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)).filter(row => row.kind === 'model' && row.modelId === 'synthetic/conversational').length
     const first = await send(actor, text, requestId), replay = await send(actor, text, requestId)
-    assert.equal(first.status, 200); assert.ok(first.body.includes('112')); assert.equal(replay.body, first.body)
+    const callsAfter = readFileSync(resolve(directory, 'provider.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)).filter(row => row.kind === 'model' && row.modelId === 'synthetic/conversational').length
+    assert.equal(callsAfter, callsBefore)
+    assert.equal(first.status, 200); assert.ok(first.body.includes('112')); assert.deepEqual(replay.body.split('\n').filter(line => line.startsWith('data: {')).map(line => JSON.parse(line.slice(6))), first.body.split('\n').filter(line => line.startsWith('data: {')).map(line => JSON.parse(line.slice(6))))
     const turns = ok(await admin.from('chat_turns').select('request_id,status,attempts').eq('session_id', actor.sessionId))
     assert.equal(turns.length, 2); assert.equal(turns.find(t => t.request_id === failed.requestId).status, 'interrupted'); assert.equal(turns.find(t => t.request_id === requestId).attempts, 1)
     assert.equal(ok(await admin.from('risk_events').select('id').eq('session_id', actor.sessionId)).length, 1)
-    proof('real_http_urgent_interruption_replay', { actor, requestId, turns })
+    proof('real_http_urgent_interruption_replay', { actor, requestId, turns, conversationalCalls: 0 })
   }
   if (mode === 'browser-fixtures') {
     assert.equal((await send(manifest.actors.cssrs, '[CSSRS] Solicito el cuestionario')).status, 200)
@@ -190,7 +199,8 @@ if (mode === 'fixtures') {
     assert.equal((await send(manifest.actors.retry, '[FALLO_UNICO] Mensaje ficticio para reintentar', retryId)).status, 503)
     manifest.actors.retry.requestId = retryId
     // Preconditions only: no app bypass. The real route still applies expiry/risk.
-    ok(await admin.from('clinical_sessions').update({ opened_at: new Date(Date.now() - 61 * 60_000).toISOString() }).eq('id', manifest.actors.boundary.sessionId))
+    // Browser: enter the open boundary page first; set its local DB expiry
+    // only after the reviewer is ready, so the real lazy-close page gate is preserved.
     ok(await admin.from('clinical_sessions').update({ closed_at: '2026-01-01T12:00:00Z' }).eq('id', manifest.actors.older.sessionId))
     ok(await admin.from('risk_events').insert({ user_id: manifest.actors.older.userId, session_id: manifest.actors.older.sessionId, risk_type: 'suicidal_ideation', severity: 'critical', source_type: 'message', payload_json: { synthetic: true }, status: 'open' }))
     save(manifest)

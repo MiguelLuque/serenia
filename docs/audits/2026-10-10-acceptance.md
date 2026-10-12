@@ -22,20 +22,20 @@ Experimento de preparación ejecutado: Node con `generateText`, ID `anthropic/cl
 | Informe privado | Data API paciente no entrega notas ni orientación diagnóstica; resumen revisado scoped | SQL/proyección Task 3 revisados; JWT/PostgREST y revisión/proyección privada local PASS |
 | Adultos y aceptación | Fechas reales, cumpleaños 18, consentimiento versionado y puerta servidor coherente | SQL/acciones/API/componentes Task 3 revisados; recorrido real pendiente |
 | Chat | Un turno autorizado, historial servidor, retry con mismo ID y error recuperable | Tasks 2–3 revisadas; SDK/DOM pasan; navegador pendiente |
-| Seguridad | Señal nueva durante cribado y al límite temporal se procesa antes del cierre | Task 2 revisada; SQL/regresiones pasan; artefacto real pendiente |
+| Seguridad | Señal nueva durante cribado y al límite temporal se procesa antes del cierre | Task 2 revisada; SQL/regresiones y HTTP estático0modelcalls PASSc345887; navegador pendiente |
 | Cuestionarios | Conjunto completo validado antes de writes; ramas CSSRS; retry sin duplicados | Task 2 revisada; ramas/reset/radios DOM Task 3 pasan; navegador pendiente |
-| Cierre e informe | Manual/lazy/cron convergen; enqueue fallido se recupera con trabajo acotado | Task 2 revisada; SQL/outbox pasan; Workflow generado/provider HTTP y mismo run tras reinicio PASS7a5c843; repetir fixes finales del harness |
+| Cierre e informe | Manual/lazy/cron convergen; enqueue fallido se recupera con trabajo acotado | Task 2 revisada; SQL/outbox pasan; Workflow generado/provider HTTP y mismo run tras reinicio PASSc345887; navegador pendiente |
 | Revisión clínica | Editar/confirmar/rechazar conserva una versión vigente y progreso de tareas | SQL Task 1 revisada; editor/view DOM Task 3 pasan; navegador pendiente |
 | Bandeja | Pendientes antiguos y todas las dimensiones de riesgo visibles | SQL paginada/prioridad/paridad y DOM Task 3 revisados; navegador pendiente |
 | Recarga | Resumen vigente, nombre y estado se mantienen al navegar y recargar | SDK/DOM Task 3 revisados; navegador pendiente |
 | Herramientas Supabase | SDK/CLI fijados, SSR refresh preservado, tipos/advisors estrictos | MCP docs, SDK/CLI, transporte SSR y telemetría aislada verificados; guards Task4 revisados; lint/advisors estrictos sin findings y tipos generados exactos PASS local |
-| Gates finales | Tests, lint, tipos, build, SQL, vulnerabilidades y navegador sobre versión final | Pendientes tras integración |
+| Gates finales | Tests, lint, tipos, build, SQL, vulnerabilidades y navegador sobre versión final | c345887 todos los siete gates de verify PASS,697tests; navegador/revisión pendientes |
 
 ## IA y preparación Workflow
 
 Task5 revisada: 26 seeds sintéticos y checks deterministas offline; adaptadores nativos Jev/Decisions con transporte ficticio, desconectados del paciente y apagados. Sin comparación online de calidad, latencia, calibración ni coste facturado. Build9d63871:27NFT, sólo2prompts activos y package.json como assets de fuente,0env/0fuente ajena/0avisos. Fix4e14be8:38focales, lint/tipos y frontera de entorno del hijo antes de imports; build anterior no se relabela como nuevo. Evidencia en `2026-10-11-ai-implementation.md`.
 
-Preparación instalada Workflow4.8, no runtime PASS: `2026-10-11-workflow-runtime-preparation.md`. Local World es sólo desarrollo/sin autenticación de cola; aceptación enlazada a loopback. Task6 ejecutó herencia real del provider y recuperación del mismo run en7a5c843; artefacto posterior del harness y navegador mantienen su identidad/gate propios. Despliegue público requiere protección de ingress/colas o World de producción demostrado.
+Preparación instalada Workflow4.8, no runtime PASS: `2026-10-11-workflow-runtime-preparation.md`. Local World es sólo desarrollo/sin autenticación de cola; aceptación enlazada a loopback. Task6 ejecutó herencia real del provider y recuperación del mismo run en c345887; navegador y revisión independiente mantienen su gate propio. Despliegue público requiere protección de ingress/colas o World de producción demostrado.
 
 ## Evidencia de entrega
 

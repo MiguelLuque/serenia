@@ -45,3 +45,13 @@ Local World carece de autenticación de cola y sigue siendo sólo desarrollo, au
 ## Verificación de fuente
 
 Full verify inicial: test FAIL4/695 (tres mocks antiguos null vs default omitido y un import ESLint que superó5s con builds concurrentes); lint, typecheck, wire, SQL y audit PASS; build FAIL por source tracked dirty cuando llegó a ese gate. Ninguno de los dos fallos se oculta. Focales corregidos53/53 PASS y timeout exacto PASS sin ampliarlo; suite posterior60archivos/695tests PASS. Build local7a5c843 PASS; gates sobre el commit de harness/documentación final y navegador todavía pendientes.
+
+## Artefacto final c345887 ejecutado
+
+Todos los siete gates de verify pasan, incluidos697tests/60archivos, lint, tipos, wire, SQL, audit con excepción dev exacta y build aislado; evidencia `.cache/acceptance/verify-high-signal-final.log`, full `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-8p63hm`. Build de aceptación local separadoPASS, snapshotserenia-build-s3PcS4, BUILD_IDpsXcnnhs7nJegeW8c3tqn; servidor actualPID5051 enlazado127.0.0.1:3000. Prompttrace26NFT con sólo los dos prompts activos ypackage.json,0env/0fuente externa.
+
+Run originalwrun_01M4QQ3KQ4975P5PRBHDHYR9MD: checkpointdurable tras tres pasos completados; PID4800→5051, mismo build/datadir/namespace/stepgeneración,23eventos/unrun_created, completo09:29:25.547Z. Cada paso completado antes del corte tiene un único step_started; HTTPflow/step y un proveedor structured postreinicio. DB confirmaunjob/run_idoriginal/attempts1 y un draft previo a revisión. RevisiónJWT completa/idempotente/proyección privadaPASS; evidencia c345887-same-run-green.json y c345887-review-green.log.
+
+Señal nueva de alta intensidad durante screening y al límite temporal: recursos estáticos y riesgo persistido,0llamadas conversacionales; sesión normal permanece abierta, límite se cierra crisis_detected. Interrupción de fallo previo y replayPASS con0modelcalls,unriesgo/dosturnos. La comparación externa SSE se corrigió de bytes a chunks JSON semánticos porque jsonb reordena claves; se usa marcador de fallo único por actor. Evidencia c345887-safety-green.log (los dosPASS previos al fallo delprobe) y c345887-interruption-green.log. Son correcciones del runner fuera deapp; no se cambia app/provider después del commit construido.
+
+Fixtures de navegadorpreparadas, incluyendoCSSRSreal y bandeja cuyo primero es el crítico antiguo previsto. Boundary requiere entrar primero enpágina y caducar únicamente suopened_at local después de aviso del reviewer, para conservar el cierrelazy legítimo. B01–B12 y revisión independiente permanecenNOT_RUN hasta observaciones del controlador. No se repite ni se cierra el stack durante esehandoff.
