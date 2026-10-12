@@ -380,7 +380,7 @@ export async function persistAssessmentStep(
     assessment_type: 'closure',
     status: 'draft_ai',
     generated_by: 'ai',
-    summary_json: summary as unknown as Json,
+    summary_json: summary as unknown as NonNullable<Json>,
   })
 
   if (error) {
@@ -426,7 +426,7 @@ export async function recordManualReviewStep(
     assessment_type: 'closure',
     status: 'requires_manual_review',
     generated_by: 'ai',
-    summary_json: failurePayload as unknown as Json,
+    summary_json: failurePayload as unknown as NonNullable<Json>,
   })
 
   if (error) {

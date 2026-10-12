@@ -85,7 +85,7 @@ export async function saveAssessmentAction(
     p_assessment_id: input.assessmentId,
     p_action: 'modify',
     p_summary: parsed.data as unknown as Json,
-    p_notes: input.clinical_notes?.trim() || null,
+    p_notes: input.clinical_notes?.trim() || undefined,
     p_inherited_updates: parsedUpdates.data as unknown as Json,
   })
   if (error || !assessmentId) return { ok: false, error: error?.message ?? 'No se pudo guardar el informe' }

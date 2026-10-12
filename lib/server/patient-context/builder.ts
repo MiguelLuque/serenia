@@ -169,7 +169,7 @@ export async function buildPatientContext(
     // Q2: latest draft assessment from a closed session
     supabase
       .from('assessments')
-      .select('summary_json, clinical_sessions!inner(closed_at, status)')
+      .select('summary_json, clinical_sessions!assessments_session_id_fkey!inner(closed_at, status)')
       .in('status', ['draft_ai', 'rejected'])
       .eq('user_id', userId)
       .eq('clinical_sessions.status', 'closed')

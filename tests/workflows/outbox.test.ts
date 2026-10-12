@@ -17,6 +17,11 @@ describe('durable bounded workflow dispatch', () => {
     await expect(enqueueAssessmentGeneration({ sessionId: 'session' })).rejects.toThrow('unavailable')
     expect(start).not.toHaveBeenCalled()
   })
+  it('rejects a job without its SQL claim token before starting or releasing it', async () => {
+    await expect(dispatchAssessmentJob({ ...job, token: null })).rejects.toThrow('no claim token')
+    expect(start).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+  })
   it('uses durable clinical context and token, not caller replacement context', async () => {
     await enqueueAssessmentGeneration({ sessionId: 'session', rejectionContext: { rejectionReason: 'untrusted replacement', clinicalNotes: null } })
     expect(start).toHaveBeenCalledWith(expect.any(Function), [{ sessionId: 'session', jobToken: 'claim', rejectionContext: job.context_json }])

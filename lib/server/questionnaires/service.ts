@@ -165,7 +165,7 @@ export async function submitAnswers(
   const { error } = await service.rpc('submit_questionnaire_atomic', {
     p_instance_id: instance.id, p_user_id: user.id,
     p_answers: normalized as unknown as Json, p_result: scoringResult as unknown as Json,
-    p_risk_severity: acute ? 'critical' : suicidality ? 'high' : null,
+    p_risk_severity: acute ? 'critical' : suicidality ? 'high' : undefined,
   })
   if (error) throw error
   return scoringResult

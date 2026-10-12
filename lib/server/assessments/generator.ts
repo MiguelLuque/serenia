@@ -227,7 +227,7 @@ export async function generateAssessment(
       assessment_type: 'closure',
       status: 'draft_ai',
       generated_by: 'ai',
-      summary_json: summary as unknown as Json,
+      summary_json: summary as unknown as NonNullable<Json>,
     })
     .select()
     .single()
