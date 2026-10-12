@@ -63,7 +63,7 @@ function model(modelId) {
       if (text.includes('[FALLO_UNICO]') && count === 1) throw new Error('Synthetic recoverable chat failure')
       if (text.includes('[ESPERA]')) await new Promise(resolve => setTimeout(resolve, 15000))
       let name, input
-      if (/cuestionario|phq/i.test(text)) { name = 'propose_questionnaire'; input = { code: text.includes('[CSSRS]') ? 'CSSRS' : 'PHQ9', reason: 'Aceptación ficticia del cuestionario solicitado' } }
+      if (/^(?:\[CSSRS\]\s*)?Solicito el cuestionario(?: PHQ9)?[.!\s]*$/i.test(text.trim())) { name = 'propose_questionnaire'; input = { code: text.includes('[CSSRS]') ? 'CSSRS' : 'PHQ9', reason: 'Aceptación ficticia del cuestionario solicitado' } }
       if (/propongo cerrar/i.test(text)) { name = 'propose_close_session'; input = { reason: 'user_request' } }
       if (/^s[ií],? cerramos[.!\s]*$/i.test(text.trim())) { name = 'confirm_close_session'; input = { reason: 'user_request' } }
       const response = name === 'propose_questionnaire' ? 'Aquí tienes el cuestionario solicitado para esta prueba ficticia.' : name === 'propose_close_session' ? '¿Quieres cerrar la sesión?' : name === 'confirm_close_session' ? 'Cerramos la sesión. El informe queda pendiente de revisión.' : 'Respuesta sintética: gracias por compartirlo. ¿Cómo te has sentido hoy?'

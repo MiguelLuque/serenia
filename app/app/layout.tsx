@@ -6,6 +6,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app/app-sidebar'
+import { patientDisplayName } from '@/lib/shared/clinician/display-name'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createAuthenticatedClient()
@@ -14,14 +15,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('display_name, role')
+    .select('display_name, informal_name, role')
     .eq('user_id', user.id)
     .single()
 
   return (
     <SidebarProvider>
       <AppSidebar
-        displayName={profile?.display_name ?? ''}
+        displayName={patientDisplayName(profile) ?? ''}
         role={(profile?.role as 'patient' | 'clinician') ?? 'patient'}
       />
       <SidebarInset>

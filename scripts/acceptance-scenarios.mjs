@@ -71,6 +71,32 @@ if (mode === 'fixtures') {
   console.log(`Fictional fixtures: ${manifestPath}`)
 } else {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  if (mode === 'browser-renew-clocks') {
+    // Only refresh the recorded fictional open browser fixtures after a pause.
+    // Preserve the original closed histories, turns, questionnaires and jobs.
+    for (const name of ['chat', 'cssrs', 'retry', 'pending', 'urgent', 'boundary']) {
+      const actor = manifest.actors[name]
+      assert.equal(actor.name, name)
+      assert.match(actor.email, /^serenia-[a-z]+-\d+@example\.test$/)
+      const user = ok(await admin.auth.admin.getUserById(actor.userId)).user
+      assert.equal(user.email, actor.email)
+      const session = ok(await admin.from('clinical_sessions').select('*').eq('id', actor.sessionId).eq('user_id', actor.userId).single())
+      if (session.status !== 'open') {
+        proof('browser_fixture_clock_unchanged_closed', { actorName: name, sessionId: actor.sessionId })
+        continue
+      }
+      const preserved = async () => Object.fromEntries(await Promise.all(['chat_turns', 'questionnaire_instances', 'assessment_jobs'].map(async table => [table, ok(await admin.from(table).select('*').eq('session_id', actor.sessionId)).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))])))
+      const before = await preserved()
+      const now = new Date().toISOString()
+      const rows = ok(await admin.from('clinical_sessions').update({ opened_at: now, last_activity_at: now }).eq('id', actor.sessionId).eq('user_id', actor.userId).eq('status', 'open').select('*'))
+      assert.equal(rows.length, 1)
+      // The existing DB update trigger also advances updated_at.
+      const omitClock = row => Object.fromEntries(Object.entries(row).filter(([key]) => !['opened_at', 'last_activity_at', 'updated_at'].includes(key)))
+      assert.deepEqual(omitClock(rows[0]), omitClock(session))
+      assert.deepEqual(await preserved(), before)
+      proof('browser_fixture_only_clock_renewed', { actorName: name, userId: actor.userId, sessionId: actor.sessionId, openedAt: now })
+    }
+  }
   if (mode === 'restart-checkpoint') {
     const actor = await preparePatient('restart')
     manifest.actors.restart = actor; save(manifest)

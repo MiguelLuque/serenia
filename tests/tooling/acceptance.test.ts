@@ -38,4 +38,27 @@ describe('synthetic acceptance boundary', () => {
       expect(ledger.match(/network_denied/g)).toHaveLength(2)
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })
+  it('proposes synthetic questionnaires only for deliberate fixture requests', () => {
+    const directory = realpathSync(mkdtempSync(resolve(tmpdir(), 'serenia-provider-request-test-')))
+    writeFileSync(resolve(directory, 'control.json'), '{"structured":"success"}')
+    try {
+      const result = spawnSync(process.execPath, ['--import', resolve('scripts/acceptance-provider.mjs'), '--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        const model = globalThis.AI_SDK_DEFAULT_PROVIDER.languageModel('synthetic/conversational');
+        async function calls(text) {
+          const response = await model.doStream({prompt:[{role:'user',content:[{type:'text',text}]}]});
+          return (await Array.fromAsync(response.stream)).filter(part => part.type === 'tool-call');
+        }
+        for (const [text, code] of [['Solicito el cuestionario PHQ9','PHQ9'], ['[CSSRS] Solicito el cuestionario','CSSRS']]) {
+          const proposed = await calls(text);
+          assert.equal(proposed.length, 1);
+          assert.equal(proposed[0].toolName, 'propose_questionnaire');
+          assert.equal(JSON.parse(proposed[0].input).code, code);
+        }
+        for (const text of ['He completado el cuestionario.', 'He terminado el PHQ9', 'Ahora me siento tranquilo']) assert.equal((await calls(text)).length, 0);
+      `], { encoding: 'utf8', env: acceptanceEnvironment(process.env, { url: 'http://127.0.0.1:54321', publicKey: 'fictional', secretKey: 'fictional' }, directory) })
+      expect(result.stderr).toBe('')
+      expect(result.status).toBe(0)
+    } finally { rmSync(directory, { recursive: true, force: true }) }
+  })
 })

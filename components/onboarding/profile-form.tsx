@@ -13,7 +13,9 @@ export function ProfileForm({ initial }: { initial?: { informal_name: string; pr
   const [state, formAction, pending] = useActionState(submitProfile, undefined)
 
   return (
-    <form action={formAction} className="space-y-6">
+    // A returned validation error fulfills the action and triggers React's form
+    // reset. Successful onboarding redirects, so preserve the draft on reset.
+    <form action={formAction} onReset={(event) => event.preventDefault()} className="space-y-6">
       {state?.error && (
         <div
           role="alert"
