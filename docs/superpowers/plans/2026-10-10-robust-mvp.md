@@ -93,10 +93,10 @@
 
 **Files:** scripts/fixtures de aceptación fuera de `app/`, tests de integración, README y auditorías consolidadas; integración de inicio de Workflow mediante `instrumentation.ts` si la prueba real demuestra que falta recuperación. Mantener los contratos productivos de Tasks 1–5.
 
-- [ ] Arrancar Supabase local con Auth/PostgREST y actores ficticios; verificar migraciones/seed, grants/RLS, consentimiento y proyección privada mediante JWT reales. Ejecutar tipos/advisors estrictos de la CLI final.
-- [ ] Ejecutar el ciclo de paciente, chat, cuestionarios, error/retry/recarga, cierre, informe y revisión clínica sobre `next start` del build final aislado. Usar el proveedor sintético global documentado del SDK, sin endpoints de bypass, credenciales reales ni fallback externo. Comprobar el proveedor también en los pasos generados de Workflow y el replay del mismo run tras reinicio.
-- [ ] Consolidar auditoría con estado de cada hallazgo y roadmap de gates externos. Actualizar README con configuración, arranque y comandos exactos; los comandos de fixtures/promoción local deben exigir URL loopback y no cargar `.env.local` implícitamente. No alterar permisos ni cuentas remotas durante la verificación.
-- [ ] Ejecutar `npm test`, `npm run lint`, typecheck, build, SQL/harness y navegador sobre artefacto final; revisar toda la rama con agente independiente y corregir regresiones.
+- [x] Arrancar Supabase local con Auth/PostgREST y actores ficticios; verificar migraciones/seed, grants/RLS, consentimiento y proyección privada mediante JWT reales. Ejecutar tipos/advisors estrictos de la CLI final.
+- [x] Ejecutar el ciclo de paciente, chat, cuestionarios, error/retry/recarga, cierre, informe y revisión clínica sobre `next start` del build final aislado. Usar el proveedor sintético global documentado del SDK, sin endpoints de bypass, credenciales reales ni fallback externo. Comprobar el proveedor también en los pasos generados de Workflow y el replay del mismo run tras reinicio.
+- [x] Consolidar auditoría con estado de cada hallazgo y roadmap de gates externos. Actualizar README con configuración, arranque y comandos exactos; los comandos de fixtures/promoción local deben exigir URL loopback y no cargar `.env.local` implícitamente. No alterar permisos ni cuentas remotas durante la verificación.
+- [x] Ejecutar `npm test`, `npm run lint`, typecheck, build, SQL/harness y navegador sobre artefacto final; revisión independiente del bloque y corrección de regresiones. La revisión de toda la rama se conserva como gate final de Entrega después de la Task7 añadida por el usuario.
 
 Aceptación integral prevista: Supabase local con Auth/PostgREST y cuentas ficticias más `next start` sobre el build final. Precargar un ProviderV3 sintético mediante la API global documentada de AI SDK para ejecutar chat/cuestionario/cierre/informe/revisión sin llamadas externas ni bypasses de autorización. El launcher debe exigir destinos locales, limpiar credenciales de proveedores y comprobar workers. Ver matriz `docs/audits/2026-10-10-acceptance.md`; las pruebas con auth.uid simulado conservan su límite explícito.
 
@@ -116,5 +116,7 @@ Añadida por la petición del usuario del12oct de usar Supabase para probar el p
 El cambio de entorno autoriza la preparación y validación técnica en el proyecto identificado. Las operaciones destructivas sobre registros existentes o un coste nuevo necesitan aprobación específica; la publicación de la aplicación y el uso con pacientes reales conservan los gates de entrega.
 
 ## Entrega
+
+- [ ] Revisión independiente de toda la rama con el modelo más capaz disponible después de Task7; una ola de correcciones y revisión scoped, con evidencia final de los gates afectados. Este gate conserva el requisito original de Task6 y no lo sustituye la aprobación local del bloque.
 
 No declarar listo para pacientes reales sin migraciones aplicadas y aceptación de producción, revisión clínica pendiente resuelta y tratamiento de datos aprobado. Entregar rama/diff revisables, reporte de verificación local y próximos pasos concretos. La publicación requiere decisión explícita sobre el resultado construido.
