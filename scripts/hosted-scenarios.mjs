@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
-import { readFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs'
+import { readFileSync, existsSync, appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID, randomBytes } from 'node:crypto'
-import { hydrateWorkflowArguments } from '@workflow/core/serialization'
+import { findIntendedRetry, intendedEvents, readBoundRun } from './acceptance-checkpoint.mjs'
 import assert from 'node:assert/strict'
 import { hostedOrigin, secureDirectory, privateFile, assertFixture } from './hosted-acceptance.mjs'
 import { target } from './hosted-packet.mjs'
@@ -53,22 +53,8 @@ async function waitCompleted(name,timeout=90000){
   while(Date.now()<deadline){const j=await job(name);if(j?.status==='completed')return j;await new Promise(done=>setTimeout(done,250))}
   throw new Error('Synthetic job did not complete within bounded wait')
 }
-function eventsFor(runId){
-  const folder=resolve(directory,'workflow/events');if(!existsSync(folder))return []
-  return readdirSync(folder).filter(name=>name.startsWith(runId+'-')&&name.endsWith('.json')).map(name=>({name,event:JSON.parse(readFileSync(resolve(folder,name),'utf8'))})).filter(row=>row.event.runId===runId)
-}
-async function runFor(jobRow,name){
-  const a=actor(name);assert.ok(jobRow.run_id&&jobRow.token)
-  const folder=resolve(directory,'workflow/runs')
-  const candidates=readdirSync(folder).filter(file=>file===jobRow.run_id+'.json'||file.startsWith(jobRow.run_id+'.'))
-  assert.equal(candidates.length,1)
-  const run=JSON.parse(readFileSync(resolve(folder,candidates[0]),'utf8'))
-  assert.equal(run.runId,jobRow.run_id);assert.match(run.workflowName,/generateAssessmentWorkflow/)
-  assert.equal(run.input?.__type,'Uint8Array');const bytes=new Uint8Array(Buffer.from(run.input.data,'base64'))
-  const input=await hydrateWorkflowArguments(bytes,run.runId,undefined,globalThis)
-  assert.equal(input[0].sessionId,a.sessionId);assert.equal(input[0].jobToken,jobRow.token)
-  return run
-}
+const eventsFor=runId=>intendedEvents(directory,runId)
+async function runFor(jobRow,name){return (await readBoundRun(directory,actor(name),jobRow)).run}
 if(mode==='fixtures'){
   assert.equal(Object.keys(manifest.actors).length,0)
   for(const name of ['patient','foreign','browser'])await createActor(name)
@@ -122,10 +108,10 @@ if(mode==='fixtures'){
   const deadline=Date.now()+45000;let checkpoint
   while(Date.now()<deadline){
     const j=await job('restart')
-    if(j?.run_id){const retries=eventsFor(j.run_id).filter(row=>row.event.eventType==='step_retrying');if(retries.length){
+    if(j?.run_id){const bound=await readBoundRun(directory,actor('restart'),j);const selected=findIntendedRetry(eventsFor(j.run_id),actor('restart'),j,bound.input);if(selected){
       const run=await runFor(j,'restart');const runtime=JSON.parse(readFileSync(privateFile(resolve(directory,'runtime.json')),'utf8'))
       assert.equal(runtime.targetOrigin,url);assert.equal(runtime.stateDirectory,directory)
-      checkpoint={actor:actor('restart'),job:j,runId:j.run_id,run,events:eventsFor(j.run_id),runtime,retryEvent:retries.at(-1)}
+      checkpoint={actor:actor('restart'),job:j,runId:j.run_id,run,events:eventsFor(j.run_id),runtime,retryEvent:selected}
       privateFile(resolve(directory,'checkpoint.json'),JSON.stringify(checkpoint,null,2)+'\n')
       process.kill(runtime.pid,'SIGKILL');break
     }}
@@ -164,6 +150,12 @@ if(mode==='fixtures'){
   const replay=await fetch(`${target.appOrigin}/api/internal/close-stale-sessions`,{method:'GET',headers:{Authorization:`Bearer ${process.env.CRON_SECRET}`},redirect:'manual'});assert.equal(replay.status,200)
   assert.equal(ok(await admin.from('assessments').select('id').eq('session_id',a.sessionId).eq('user_id',a.userId)).length,1)
   proof('hosted_actual_cookieless_bearer_bounded_recovery',{result,sessionId:a.sessionId,runId:completed.run_id})
+}else if(mode==='browser-deadline'){
+  const a=await createActor('deadline')
+  const expiresAt=new Date(Date.now()+90_000)
+  ok(await admin.from('clinical_sessions').update({opened_at:new Date(expiresAt.getTime()-60*60_000).toISOString(),last_activity_at:new Date().toISOString()}).eq('id',a.sessionId).eq('user_id',a.userId).eq('status','open'))
+  a.expiresAt=expiresAt.toISOString();save()
+  proof('hosted_visible_deadline_fixture_ready',{sessionId:a.sessionId,expiresAt:a.expiresAt})
 }else if(mode==='browser-fixtures'){
   assert.equal((await send('browser','Solicito el cuestionario PHQ9')).status,200)
   proof('hosted_browser_fixture_ready',{fixtureManifest:path})

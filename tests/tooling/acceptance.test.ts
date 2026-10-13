@@ -1,11 +1,41 @@
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { acceptanceEnvironment, localOrigin } from '../../scripts/acceptance-local.mjs'
+import { findIntendedRetry, intendedEvents, readBoundRun } from '../../scripts/acceptance-checkpoint.mjs'
+import { dehydrateWorkflowArguments } from '@workflow/core/serialization'
 
 describe('synthetic acceptance boundary', () => {
+  it('reads only finalized intended events and validates actual SDK arguments against the recorded job token',async()=>{
+    const directory=realpathSync(mkdtempSync(resolve(tmpdir(),'serenia-checkpoint-test-')))
+    mkdirSync(resolve(directory,'workflow/events'),{recursive:true});mkdirSync(resolve(directory,'workflow/runs'))
+    const actor={sessionId:'fixture-session'},job={session_id:'fixture-session',token:'fixture-token',run_id:'wrun_intended'}
+    try{
+      const input=await dehydrateWorkflowArguments([{sessionId:actor.sessionId,jobToken:job.token}],job.run_id,undefined,[],globalThis)
+      writeFileSync(resolve(directory,'workflow/runs/wrun_intended.json'),JSON.stringify({runId:job.run_id,workflowName:'generateAssessmentWorkflow',input:{__type:'Uint8Array',data:Buffer.from(input).toString('base64')}}))
+      writeFileSync(resolve(directory,'workflow/events/wrun_unrelated-first.json'),JSON.stringify({runId:'wrun_unrelated',eventType:'step_retrying'}))
+      writeFileSync(resolve(directory,'workflow/events/wrun_intended-partial.json.tmp'),'unfinished')
+      const retry={runId:job.run_id,eventType:'step_retrying'}
+      writeFileSync(resolve(directory,'workflow/events/wrun_intended-final.json'),JSON.stringify(retry))
+      expect(intendedEvents(directory,job.run_id)).toEqual([{name:'wrun_intended-final.json',event:retry}])
+      expect((await readBoundRun(directory,actor,job)).input).toEqual([{sessionId:'fixture-session',jobToken:'fixture-token'}])
+      await expect(readBoundRun(directory,actor,{...job,token:'stale-token'})).rejects.toThrow('arguments mismatch')
+    }finally{rmSync(directory,{recursive:true,force:true})}
+  })
+  it('unrelated retry arriving first cannot satisfy the intended actor/job/run checkpoint',()=>{
+    const actor={userId:'fixture-user',sessionId:'fixture-session'}
+    const job={session_id:'fixture-session',token:'fixture-token',run_id:'wrun_intended'}
+    const unrelated={name:'wrun_unrelated-event.json',event:{runId:'wrun_unrelated',eventType:'step_retrying'}}
+    const intended={name:'wrun_intended-event.json',event:{runId:'wrun_intended',eventType:'step_retrying'}}
+    const input=[{sessionId:'fixture-session',jobToken:'fixture-token'}]
+    expect(findIntendedRetry([unrelated],actor,job,input)).toBeNull()
+    expect(findIntendedRetry([unrelated,intended],actor,job,input)).toEqual(intended)
+    expect(findIntendedRetry([intended],actor,job,[{sessionId:'other-session',jobToken:'fixture-token'}])).toBeNull()
+    expect(findIntendedRetry([intended],actor,job,[{sessionId:'fixture-session',jobToken:'stale-token'}])).toBeNull()
+    expect(findIntendedRetry([intended],actor,{...job,session_id:'other-session'},input)).toBeNull()
+  })
   it('promotion requires explicit loopback configuration before reading users', async () => {
     const { promotionConfig } = await import('../../scripts/promote-clinician')
     expect(() => promotionConfig({ NEXT_PUBLIC_SUPABASE_URL: 'https://remote.supabase.co', SUPABASE_SECRET_KEY: 'fictional' })).toThrow()

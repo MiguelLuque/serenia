@@ -18,7 +18,27 @@ const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user',
 const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
 function reply(messageId = 'assistant') { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
 beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockClear(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
+it.each([null, recovery])('preserves an explicit urgent draft through the displayed deadline and keeps a send path (recovery=%j)', async initialRecovery => {
+ vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-13T23:00:00Z'))
+ const fetch=vi.fn().mockImplementation(async()=>reply());vi.stubGlobal('fetch',fetch)
+ render(<ChatView {...props} initialMessages={[]} initialRecovery={initialRecovery} expiresAt={new Date(Date.now()+30_000)} />)
+ fireEvent.change(screen.getByRole('textbox'),{target:{value:'Voy a matarme ahora'}})
+ await act(async()=>{await vi.advanceTimersByTimeAsync(30_000)})
+ expect(screen.getAllByText(/La sesión ha terminado/).length).toBeGreaterThan(0)
+ const input=screen.queryByRole('textbox') as HTMLTextAreaElement|null
+ expect(input?.value).toBe('Voy a matarme ahora')
+ expect((screen.getByRole('button',{name:'Enviar'}) as HTMLButtonElement).disabled).toBe(true)
+ fireEvent.click(screen.getByRole('button',{name:'Interrumpir espera y enviar una señal urgente'}))
+ expect(input?.value).toBe('Voy a matarme ahora')
+ expect((screen.getByRole('button',{name:'Enviar'}) as HTMLButtonElement).disabled).toBe(false)
+ vi.useRealTimers()
+ fireEvent.click(screen.getByRole('button',{name:'Enviar'}))
+ await screen.findByText('Respuesta guardada')
+ const body=JSON.parse(fetch.mock.calls[0][1].body)
+ expect(body.messages[0].parts).toEqual([{type:'text',text:'Voy a matarme ahora'}])
+ expect(body.requestId).not.toBe('retry-original')
+})
 it('rehydrates a failed turn and retries the same request and text without duplicating it', async () => {
  const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
  render(<ChatView {...props} />)

@@ -34,7 +34,7 @@ export type InboxRow = {
 const InboxRowSchema = z.object({
   sessionId: z.string(), userId: z.string(), displayName: z.string().nullable(),
   closedAt: z.string().nullable(), closureReason: z.string().nullable(),
-  assessmentStatus: z.enum(['draft_ai','reviewed_confirmed','reviewed_modified','rejected','superseded','requires_manual_review']).nullable(),
+  assessmentStatus: z.enum(['draft_ai','pending_clinician_review','reviewed_confirmed','reviewed_modified','rejected','superseded','requires_manual_review']).nullable(),
   hasCrisis: z.boolean(), topRisk: z.enum(['low','moderate','high','critical']).nullable(),
   sessionNumber: z.number(), daysSincePrevious: z.number().nullable(),
   trendsByCode: z.object({ PHQ9: z.array(z.number()).optional(), GAD7: z.array(z.number()).optional(), BDI2: z.array(z.number()).optional(), BAI: z.array(z.number()).optional() }),
@@ -50,7 +50,7 @@ const InboxPageSchema = z.object({ rows: z.array(InboxRowSchema).max(100), hasMo
  */
 export function sortInboxRows(rows: InboxRow[]): InboxRow[] {
   const isUnreviewed = (row: InboxRow): boolean =>
-    row.assessmentStatus === null || row.assessmentStatus === 'draft_ai' || row.assessmentStatus === 'requires_manual_review'
+    row.assessmentStatus === null || row.assessmentStatus === 'draft_ai' || row.assessmentStatus === 'pending_clinician_review' || row.assessmentStatus === 'requires_manual_review'
 
   return [...rows].sort((a, b) => {
     const rank = { none: 0, watch: 1, active: 2, acute: 3 }

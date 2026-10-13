@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
-import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { localOrigin, privateDirectory } from './acceptance-local.mjs'
+import { findIntendedRetry, intendedEvents, readBoundRun } from './acceptance-checkpoint.mjs'
 const directory = privateDirectory(process.env.SERENIA_ACCEPTANCE_DIR)
 const url = localOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL, 54321)
 const app = localOrigin(process.env.NEXT_PUBLIC_SITE_URL, 3000)
@@ -100,24 +101,25 @@ if (mode === 'fixtures') {
   if (mode === 'restart-checkpoint') {
     const actor = await preparePatient('restart')
     manifest.actors.restart = actor; save(manifest)
-    const eventsPath = resolve(directory, 'workflow/events')
-    const prior = new Set(readdirSync(eventsPath))
-    let stopped = false
-    const timer = setInterval(() => {
-      for (const name of readdirSync(eventsPath).filter(name => name.endsWith('.json') && !prior.has(name))) {
-        const event = JSON.parse(readFileSync(resolve(eventsPath, name), 'utf8'))
-        if (event.eventType !== 'step_retrying') continue
-        const runtime = JSON.parse(readFileSync(resolve(directory, 'runtime.json'), 'utf8'))
-        writeFileSync(resolve(directory, 'checkpoint.json'), JSON.stringify({ runId: event.runId, eventFile: name, event, actor, runtime }, null, 2), { mode: 0o600 })
-        process.kill(runtime.pid, 'SIGKILL'); stopped = true; clearInterval(timer)
-        proof('durable_retry_checkpoint_stopped', { runId: event.runId, eventFile: name, sessionId: actor.sessionId, pid: runtime.pid })
+    for (const text of ['Primera entrada ficticia', 'Segunda entrada ficticia', 'Tercera entrada ficticia', 'Propongo cerrar esta sesión', 'Sí, cerramos']) assert.equal((await send(actor, text)).status, 200)
+    const deadline=Date.now()+45000;let stopped=false
+    while(Date.now()<deadline) {
+      const job=ok(await admin.from('assessment_jobs').select('session_id,token,run_id,status,attempts').eq('session_id',actor.sessionId).maybeSingle())
+      if(job?.run_id) {
+        const {run,input}=await readBoundRun(directory,actor,job)
+        const selected=findIntendedRetry(intendedEvents(directory,job.run_id),actor,job,input)
+        if(selected) {
+          const runtime=JSON.parse(readFileSync(resolve(directory,'runtime.json'),'utf8'))
+          assert.equal(runtime.stateDirectory,directory);assert.equal(runtime.url,app)
+          writeFileSync(resolve(directory,'checkpoint.json'),JSON.stringify({runId:job.run_id,eventFile:selected.name,event:selected.event,actor,job,run,runtime},null,2),{mode:0o600})
+          process.kill(runtime.pid,'SIGKILL');stopped=true
+          proof('durable_retry_checkpoint_stopped',{runId:job.run_id,eventFile:selected.name,sessionId:actor.sessionId,pid:runtime.pid})
+          break
+        }
       }
-    }, 20)
-    try {
-      for (const text of ['Primera entrada ficticia', 'Segunda entrada ficticia', 'Tercera entrada ficticia', 'Propongo cerrar esta sesión', 'Sí, cerramos']) assert.equal((await send(actor, text)).status, 200)
-      await new Promise(done => setTimeout(done, 1500))
-      assert.ok(stopped, 'No durable retry checkpoint observed')
-    } finally { clearInterval(timer) }
+      await new Promise(done=>setTimeout(done,100))
+    }
+    assert.ok(stopped,'No intended actor/job/run durable retry checkpoint observed')
   }
   if (mode === 'boundary-expire') {
     const actor = manifest.actors.boundary

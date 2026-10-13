@@ -14,7 +14,7 @@ function checked(command, args, options = {}) {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-  const runDirectory = mkdtempSync(resolve(tmpdir(), 'serenia-build-'))
+  const runDirectory = realpathSync(mkdtempSync(resolve(tmpdir(), 'serenia-hosted-build-')))
   let log
   try {
     if (process.argv.length !== 2) throw new Error('Hosted build accepts no destination overrides')

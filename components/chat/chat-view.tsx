@@ -204,7 +204,7 @@ export function ChatView({
   }
 
   async function send(text: string): Promise<boolean> {
-    if (recovery && !urgentMode) return false
+    if ((recovery || isTimeExpired) && !urgentMode) return false
     const operation = ++transitionRef.current
     failedRef.current = false; clearError()
     const requestId = crypto.randomUUID()
@@ -311,7 +311,7 @@ export function ChatView({
         )}
       </div>
 
-      {isExpired ? (
+      {isClosed ? (
         <div className="border-t border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
           <p>La sesión ha terminado.{' '}
             <Link href="/app" className="font-medium text-slate-900 underline">
@@ -321,7 +321,8 @@ export function ChatView({
         </div>
       ) : (
         <>
-          {activeQuestionnaire &&
+          {isTimeExpired && <p role="status" className="border-t bg-slate-50 p-3 text-sm">La sesión ha terminado para la conversación ordinaria. Tu borrador se conserva. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
+          {!isTimeExpired && activeQuestionnaire &&
             activeQuestionnaire.status !== 'scored' && (
               <QuestionnaireCard
                 key={activeQuestionnaire.instanceId}
@@ -336,17 +337,17 @@ export function ChatView({
                 }}
               />
             )}
-          {(recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
+          {(isTimeExpired || recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
             <p role="status" aria-live="polite">{recovery ? recovery.canRetry ? 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'No se completó la respuesta. Tu texto se conserva; estamos comprobando el turno guardado.' : 'Esperando respuesta. Puedes seguir escribiendo.'}</p>
-            {recovery?.canRetry && !urgentMode && <button type="button" disabled={retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
+            {recovery?.canRetry && !urgentMode && <button type="button" disabled={isTimeExpired || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
             <button type="button" onClick={() => { transitionRef.current += 1; if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
             <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
             {recoveryError && <p role="alert">No se pudo comprobar el estado. Conserva tu texto y vuelve a comprobarlo o recarga.</p>}
           </div>}
-          {urgentMode && <p role="status" className="px-3 text-sm">Escribe una señal nueva de peligro inmediato para ti o para otra persona. Solo una señal de seguridad puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
+          {urgentMode && <p role="status" className="px-3 text-sm">Escribe una señal nueva de peligro inmediato para ti, como pensamientos de hacerte daño o quitarte la vida. Solo una señal explícita admitida por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. Si hay peligro inmediato para ti o para otra persona, llama al 112. También puedes llamar al 024.</p>}
           <ChatInput
             status={recovery && !urgentMode ? 'submitted' : status}
-            disabled={isExpired}
+            disabled={isTimeExpired && !urgentMode}
             onSend={send}
           />
         </>

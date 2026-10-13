@@ -1,0 +1,1461 @@
+{
+  "keyFields": "table|column(if any)|grantee|grantor|is_grantable",
+  "tableGrants": {
+    "questionnaire_items||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_items||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_items||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_items||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinicians||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinicians||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinicians||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinicians||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinical_sessions||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinical_sessions||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinical_sessions||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinical_sessions||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_definitions||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_definitions||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_definitions||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_definitions||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "messages||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "messages||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "messages||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "messages||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "conversations||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "conversations||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "conversations||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "conversations||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_answers||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_answers||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_answers||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_answers||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "session_summaries||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "session_summaries||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "session_summaries||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "session_summaries||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_results||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_results||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_results||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_results||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_instances||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_instances||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_instances||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "questionnaire_instances||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "assessments||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "assessments||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "assessments||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "assessments||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "consents||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "consents||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "consents||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "consents||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_context_injections||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_context_injections||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_context_injections||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_context_injections||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinician_reviews||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinician_reviews||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinician_reviews||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "clinician_reviews||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "risk_events||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "risk_events||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "risk_events||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "risk_events||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_tasks||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_tasks||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_tasks||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "patient_tasks||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "care_plans||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "care_plans||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "care_plans||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "care_plans||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_clinician_assignments||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_clinician_assignments||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_clinician_assignments||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_clinician_assignments||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "audit_log||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "audit_log||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "audit_log||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "audit_log||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_profiles||postgres|postgres|YES": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_profiles||anon|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_profiles||authenticated|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "user_profiles||service_role|postgres|NO": [
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+      "DELETE",
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ]
+  },
+  "profileColumnGrants": {
+    "user_profiles|active_care_plan_id|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|baseline_summary|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|birth_date|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|city|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_given_at|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_version|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|country|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|created_at|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_focus|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_medication|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|display_name|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|employment|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|id|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|informal_name|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_known_risk_level|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_reviewed_assessment_id|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|living_with|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|locale|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|onboarding_status|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|prior_therapy|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|pronouns|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|reason_for_consulting|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|relationship_status|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|risk_profile_status|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|role|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|sex|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|timezone|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|updated_at|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|user_id|postgres|postgres|YES": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|active_care_plan_id|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|baseline_summary|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|birth_date|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|city|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_given_at|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_version|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|country|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|created_at|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_focus|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_medication|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|display_name|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|employment|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|id|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|informal_name|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_known_risk_level|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_reviewed_assessment_id|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|living_with|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|locale|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|onboarding_status|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|prior_therapy|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|pronouns|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|reason_for_consulting|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|relationship_status|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|risk_profile_status|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|role|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|sex|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|timezone|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|updated_at|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|user_id|anon|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|active_care_plan_id|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|baseline_summary|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|birth_date|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|city|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_given_at|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_version|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|country|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|created_at|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_focus|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_medication|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|display_name|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|employment|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|id|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|informal_name|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_known_risk_level|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_reviewed_assessment_id|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|living_with|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|locale|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|onboarding_status|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|prior_therapy|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|pronouns|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|reason_for_consulting|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|relationship_status|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|risk_profile_status|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|role|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|sex|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|timezone|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|updated_at|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|user_id|authenticated|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|active_care_plan_id|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|baseline_summary|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|birth_date|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|city|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_given_at|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|consent_version|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|country|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|created_at|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_focus|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|current_medication|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|display_name|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|employment|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|id|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|informal_name|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_known_risk_level|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|last_reviewed_assessment_id|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|living_with|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|locale|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|onboarding_status|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|prior_therapy|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|pronouns|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|reason_for_consulting|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|relationship_status|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|risk_profile_status|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|role|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|sex|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|timezone|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|updated_at|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ],
+    "user_profiles|user_id|service_role|postgres|NO": [
+      "INSERT",
+      "REFERENCES",
+      "SELECT",
+      "UPDATE"
+    ]
+  },
+  "defaultACL": [
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres",
+      "schema": "public",
+      "objectType": "r"
+    },
+    {
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "schema": "public",
+      "objectType": "f"
+    },
+    {
+      "acl": "{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}",
+      "owner": "postgres",
+      "schema": "public",
+      "objectType": "S"
+    },
+    {
+      "acl": "{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "objectType": "S"
+    },
+    {
+      "acl": "{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "objectType": "r"
+    },
+    {
+      "acl": "{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "objectType": "f"
+    }
+  ]
+}

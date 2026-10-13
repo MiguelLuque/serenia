@@ -1,0 +1,13 @@
+{
+  "projectId": "brpozobkoatabctjjadc",
+  "canonicalPredecessorSha256": "724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae",
+  "sourceFile": "supabase/migrations/20261013213559_final_inbox_pending_review.sql",
+  "localVersion": "20261013213559",
+  "name": "serenia_final_inbox_pending_review",
+  "packetSha256": "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+  "bytes": 5172,
+  "beforeBodyMd5": "d8cd7b9badc44fe4b4ec7191d878815d",
+  "afterBodyMd5": "9c91fd44e4c712465ebb44692b30c1da",
+  "status": "PREPARED_NOT_APPLIED",
+  "preserves": "CREATE OR REPLACE retains existing signature/owner/ACL; only two existing status lists add pending_clinician_review; no DML/catalog/threshold change"
+}

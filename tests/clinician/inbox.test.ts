@@ -76,6 +76,16 @@ describe('inbox operational priority', () => {
 
 
 describe('bounded inbox RPC boundary', () => {
+ it.each(['draft_ai','pending_clinician_review','reviewed_confirmed','reviewed_modified','rejected','superseded','requires_manual_review'] as const)('accepts valid database status %s through the actual page reader',async assessmentStatus=>{
+  const row=makeRow({assessmentStatus})
+  const rpc=vi.fn().mockResolvedValue({data:{rows:[row],hasMore:false},error:null})
+  expect(await getClinicianInbox({rpc} as unknown as SupabaseClient<Database>,{pendingOnly:false})).toEqual([row])
+ })
+ it('prioritizes an older pending clinician review above a newer reviewed row at the same risk',()=>{
+  const pending=makeRow({sessionId:'pending',assessmentStatus:'pending_clinician_review',closedAt:'2026-01-01'})
+  const reviewed=makeRow({sessionId:'reviewed',assessmentStatus:'reviewed_confirmed',closedAt:'2026-10-13'})
+  expect(sortInboxRows([reviewed,pending]).map(row=>row.sessionId)).toEqual(['pending','reviewed'])
+ })
  it('requests a filtered page before any rows reach the UI', async () => {
   const rpc=vi.fn().mockResolvedValue({ data: { rows: [], hasMore: false }, error: null })
   expect(await getClinicianInbox({ rpc } as unknown as SupabaseClient<Database>, { page: 3, pendingOnly: true })).toEqual([])

@@ -1,0 +1,24 @@
+# Consolidated final fix wave
+
+BASE `57a7cd56b32115ab0143283f011d41b80ce77315`. One source implementation owner, no helpers or new broad review. Root owns all hosted DDL after the original official application attempts: first expired requestState error, second aborted after944.9s/no resumable handle. Root's21:33UTC poststate had40originalhistory/canonical absent/newtables absent/2Auth2profiles/5defs65items/activepacketqueries0. Owner issued no third/concurrent remote write.
+
+I1: actual rendered clock RED proves the composer unmount discarded an explicit urgent draft, both with and without prior recovery. GREEN keeps the same composer mounted until server-confirmed closure, disables ordinary submission after the displayed limit, preserves typed text and exposes explicit urgent opt-in. Server admission/ownership/time/crisis criteria/request identity remain unchanged. Pending normal retry is disabled after deadline. Active questionnaire UI is hidden at deadline. Actual component uses installed useChat/transport and a streamed HTTP boundary, not a classifier/provider mock. Native browser visible-clock proof remains pending root.
+
+I2: actual reader RED rejects the valid database enum and helper sorts it after reviewed. Real PG17 RED reports `Pending clinician review missing from pending inbox`. Parser and same-risk pending priority now include the existing enum. Separate wrapper-created `20261013213559_final_inbox_pending_review.sql` has a guarded exact old function baseline, CREATE OR REPLACE and only two changed status lists. Signature/owner/ACL/pagination/risk rules preserved, no DML/clinical text/catalog change. Exact mirror `supabase/hosted/inbox-forward.sql`,5,172bytes SHA256 `d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9`; old/new bodyMD5 `d8cd7b9badc44fe4b4ec7191d878815d` / `9c91fd44e4c712465ebb44692b30c1da`. Root coordination review/application pending; no owner remote call. Native SQL proves pending/all-page inclusion, pending-before-newer-reviewed ordering and urgent first priority with bounded pagination.
+
+M1: recovery copy now describes explicit personal self-harm/suicide signal behavior, retaining direct112 guidance for danger to anyone. No signed prompts/classifier/labels/bands/windows changed. M2: both local/hosted restart observers use one shared helper to bind fixture session, actual job token/run and hydrated installed SDK arguments. Unrelated-first retry cannot satisfy the checkpoint; only finalized intended JSON events are inspected, no arbitrary namespace retry and no manual World/requeue/event mutation. Existing c345 actual restart remains historical evidence. M3: only persistence-failure tests spy on console.error, assert the exact expected request/failureRecorded call and restore in finally. Unexpected calls are forwarded to the original console; no production/suite error suppression.
+
+Hosted build temp path now canonicalizes macOS `/var`→`/private/var` before the existing private/no-symlink guard, so legitimate OS-created immutable snapshots satisfy it. No destination/config guard relaxed. New `browser-deadline` fixture mode creates only a manifest-recorded synthetic actor and sets its real future expiry90s ahead before page load; root can type an explicit signal and observe the displayed timer cross zero, then submit. Secret/password values stay private.
+
+| Command / stage | Exit / outcome | Private full log under `.cache/hosted-task7/final-fix/` |
+|---|---|---|
+| covering recovery+inbox RED |1 /4expected failures:2draft-loss, enum, priority |`components-inbox-red.log`|
+| native `npm run db:test` RED |1 /pending-status filter failure |`inbox-sql-red.log`|
+| recovery+inbox+safety GREEN |0 /45tests |`components-inbox-green.log`|
+| native `npm run db:test` GREEN |0 /all SQL/authorization/concurrency gates |`inbox-sql-green.log`|
+|6covering suites GREEN |0 /60tests, before final SDK helper addition |`covering-green.log`|
+|lint/types covering |0 /both PASS, before final SDK helper addition |`lint-green.log`, `typecheck-green.log`|
+|committed final native7/build |PENDING |will record exact commit/paths, not relabel BASE evidence|
+|hosted source build/runtime/JWT/restart/UI |PENDING root canonical/forward outcome and corrected source build |Task7 report|
+
+Original packet `serenia-atomic.sql` remains exact92,971bytes/SHA724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae and all six source hashes unchanged. Original history/manifest are untouched by this wave. Previous BASE native708tests/63files/all7 PASS in hmUg3q remains previous-source evidence. Current source is not declared production ready; Task7 actual acceptance, root native visible-deadline proof and same final reviewer disposition remain pending along with clinical/legal/data/upstream/dependency gates.

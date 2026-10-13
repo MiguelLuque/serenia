@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { chatHarness } from '../helpers/chat-harness'
 describe('safety notices and final input precedence',()=>{
   it.each([
@@ -36,6 +36,11 @@ describe('safety notices and final input precedence',()=>{
     expect(await response.text()).toContain('024'); expect(h.state.captured).toHaveLength(1)
   })
   it.each([false,true])('serves and replays a persisted high-signal turn without another LLM call or early closure (interrupted=%s)',async interrupted=>{
+    const originalError=console.error
+    const expectedError=vi.spyOn(console,'error').mockImplementation((...args)=>{
+      if(args[0]!=='[chat] turn failed')originalError(...args)
+    })
+    try {
     const h=await chatHarness(); h.state.urgentReply=interrupted; h.state.persistFailures=1
     expect((await h.post('Quiero matarme esta noche')).status).toBe(503)
     const response=await h.post('Quiero matarme esta noche')
@@ -45,6 +50,8 @@ describe('safety notices and final input precedence',()=>{
     expect(h.state.session.status).toBe('open')
     expect(h.state.rows.filter(row=>row.role==='assistant')).toHaveLength(1)
     expect(h.state.writes.find(w=>w.name==='begin_chat_turn').args.p_urgent).toBe(true)
+    expect(expectedError.mock.calls).toEqual([['[chat] turn failed',{requestId:'turn-1',failureRecorded:true}]])
+    } finally {expectedError.mockRestore()}
   })
   it('keeps safety resources when only the final prompt exceeds the context budget',async()=>{
     const h=await chatHarness(); h.state.prompt='Synthetic system context '.repeat(600)

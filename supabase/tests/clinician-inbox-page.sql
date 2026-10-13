@@ -45,6 +45,13 @@ begin
  insert into questionnaire_results(instance_id,total_score,severity_band,requires_review) values(qi,8,'synthetic',false);
 end $$;
 set local role authenticated;
+-- A supported pending status must survive filtering and precede newer reviewed
+-- rows at the same risk, while the urgent row still has global first priority.
+reset role;
+insert into conversations(id,user_id,status,ended_at) values('10000000-0000-0000-0000-000000000093','00000000-0000-0000-0000-000000000002','closed',now()-interval '300 days');
+insert into clinical_sessions(id,user_id,conversation_id,status,opened_at,closed_at) values('20000000-0000-0000-0000-000000000093','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000093','closed',now()-interval '301 days',now()-interval '300 days');
+insert into assessments(user_id,session_id,assessment_type,status,summary_json) values('00000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000093','closure','pending_clinician_review','{}');
+set local role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
 select pg_temp.must_deny('select get_clinician_inbox_page(0,100,false)');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',true);
@@ -54,6 +61,9 @@ do $$ declare page jsonb; second jsonb; pending jsonb; begin
  if page->'rows'->0->>'sessionId'<>'20000000-0000-0000-0000-000000000091' then raise exception 'Old urgent hidden after pagination'; end if;
  if page->'rows'->0->>'riskState'<>'acute' or page->'rows'->0->>'displayName'<>'Synthetic informal' then raise exception 'Urgent/name snapshot wrong'; end if;
  if not exists(select 1 from jsonb_array_elements(pending->'rows') r where r->>'sessionId'='20000000-0000-0000-0000-000000000091') then raise exception 'Old pending hidden before filtering'; end if;
+ if not exists(select 1 from jsonb_array_elements(pending->'rows') r where r->>'sessionId'='20000000-0000-0000-0000-000000000093' and r->>'assessmentStatus'='pending_clinician_review') then raise exception 'Pending clinician review missing from pending inbox'; end if;
+ if not exists(select 1 from jsonb_array_elements(page->'rows') with ordinality r(value,pos),jsonb_array_elements(page->'rows') with ordinality reviewed(value,pos)
+  where r.value->>'sessionId'='20000000-0000-0000-0000-000000000093' and reviewed.value->>'sessionId'=(md5('inbox-session-1')::uuid)::text and r.pos<reviewed.pos) then raise exception 'Pending clinician review not prioritized in all-status inbox'; end if;
  if not exists(select 1 from jsonb_array_elements((page->'rows')||(second->'rows')) r where r->>'sessionId'=(md5('long-session-4')::uuid)::text and r->>'sessionNumber'='4' and r->>'daysSincePrevious'='35' and r->>'openTasksCount'='2' and r->'trendsByCode'='{"PHQ9":[18,15,12],"GAD7":[10,8],"BDI2":[20],"BAI":[16]}'::jsonb) then raise exception 'Longitudinal counts/trends wrong'; end if;
  if not exists(select 1 from jsonb_array_elements((page->'rows')||(second->'rows')) r where r->>'sessionId'=(md5('long-other-session')::uuid)::text and r->'trendsByCode'='{"PHQ9":[8]}'::jsonb) then raise exception 'Cross-patient scores leaked'; end if;
  if jsonb_array_length(second->'rows')<5 or (second->>'hasMore')::boolean then raise exception 'Second page lost backlog'; end if;
