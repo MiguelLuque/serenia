@@ -14,6 +14,7 @@ describe('synthetic acceptance boundary', () => {
     const actor={sessionId:'fixture-session'},job={session_id:'fixture-session',token:'fixture-token',run_id:'wrun_intended'}
     try{
       const input=await dehydrateWorkflowArguments([{sessionId:actor.sessionId,jobToken:job.token}],job.run_id,undefined,[],globalThis)
+      if(!(input instanceof Uint8Array))throw new Error('Expected actual SDK Uint8Array arguments')
       writeFileSync(resolve(directory,'workflow/runs/wrun_intended.json'),JSON.stringify({runId:job.run_id,workflowName:'generateAssessmentWorkflow',input:{__type:'Uint8Array',data:Buffer.from(input).toString('base64')}}))
       writeFileSync(resolve(directory,'workflow/events/wrun_unrelated-first.json'),JSON.stringify({runId:'wrun_unrelated',eventType:'step_retrying'}))
       writeFileSync(resolve(directory,'workflow/events/wrun_intended-partial.json.tmp'),'unfinished')
