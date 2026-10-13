@@ -1,0 +1,988 @@
+{
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(questionnaire_id IN ( SELECT questionnaire_definitions.id\n   FROM questionnaire_definitions\n  WHERE (questionnaire_definitions.is_active = true)))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "questionnaire_items",
+      "permissive": "PERMISSIVE",
+      "policyname": "questionnaire_items_read_authenticated",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "false",
+      "roles": [
+        "public"
+      ],
+      "tablename": "clinicians",
+      "permissive": "PERMISSIVE",
+      "policyname": "clinicians_deny_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "clinical_sessions",
+      "permissive": "PERMISSIVE",
+      "policyname": "clinical_sessions_all_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "clinical_sessions",
+      "permissive": "PERMISSIVE",
+      "policyname": "clinical_sessions_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(is_active = true)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "questionnaire_definitions",
+      "permissive": "PERMISSIVE",
+      "policyname": "questionnaire_definitions_read_authenticated",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "messages",
+      "permissive": "PERMISSIVE",
+      "policyname": "messages_insert_own",
+      "schemaname": "public",
+      "with_check": "(conversation_id IN ( SELECT conversations.id\n   FROM conversations\n  WHERE (conversations.user_id = auth.uid())))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "messages",
+      "permissive": "PERMISSIVE",
+      "policyname": "messages_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((visible_to_user = true) AND (conversation_id IN ( SELECT conversations.id\n   FROM conversations\n  WHERE (conversations.user_id = auth.uid()))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "messages",
+      "permissive": "PERMISSIVE",
+      "policyname": "messages_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "conversations",
+      "permissive": "PERMISSIVE",
+      "policyname": "conversations_all_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "conversations",
+      "permissive": "PERMISSIVE",
+      "policyname": "conversations_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_answers",
+      "permissive": "PERMISSIVE",
+      "policyname": "qa_insert_own",
+      "schemaname": "public",
+      "with_check": "(instance_id IN ( SELECT questionnaire_instances.id\n   FROM questionnaire_instances\n  WHERE (questionnaire_instances.user_id = auth.uid())))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(instance_id IN ( SELECT questionnaire_instances.id\n   FROM questionnaire_instances\n  WHERE (questionnaire_instances.user_id = auth.uid())))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_answers",
+      "permissive": "PERMISSIVE",
+      "policyname": "qa_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "questionnaire_answers",
+      "permissive": "PERMISSIVE",
+      "policyname": "questionnaire_answers_insert_clinician",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM (questionnaire_instances qi\n     JOIN questionnaire_definitions qd ON ((qd.id = qi.questionnaire_id)))\n  WHERE ((qi.id = questionnaire_answers.instance_id) AND (qd.is_clinician_rated = true) AND is_clinician())))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_answers",
+      "permissive": "PERMISSIVE",
+      "policyname": "questionnaire_answers_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "session_summaries",
+      "permissive": "PERMISSIVE",
+      "policyname": "session_summaries_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_results",
+      "permissive": "PERMISSIVE",
+      "policyname": "qr_insert_own",
+      "schemaname": "public",
+      "with_check": "(instance_id IN ( SELECT questionnaire_instances.id\n   FROM questionnaire_instances\n  WHERE (questionnaire_instances.user_id = auth.uid())))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(instance_id IN ( SELECT questionnaire_instances.id\n   FROM questionnaire_instances\n  WHERE (questionnaire_instances.user_id = auth.uid())))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_results",
+      "permissive": "PERMISSIVE",
+      "policyname": "qr_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_results",
+      "permissive": "PERMISSIVE",
+      "policyname": "questionnaire_results_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_instances",
+      "permissive": "PERMISSIVE",
+      "policyname": "qi_all_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "questionnaire_instances",
+      "permissive": "PERMISSIVE",
+      "policyname": "questionnaire_instances_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "assessments",
+      "permissive": "PERMISSIVE",
+      "policyname": "assessments_insert_clinician",
+      "schemaname": "public",
+      "with_check": "is_clinician()"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "assessments",
+      "permissive": "PERMISSIVE",
+      "policyname": "assessments_insert_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "assessments",
+      "permissive": "PERMISSIVE",
+      "policyname": "assessments_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "assessments",
+      "permissive": "PERMISSIVE",
+      "policyname": "assessments_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "assessments",
+      "permissive": "PERMISSIVE",
+      "policyname": "assessments_update_clinician",
+      "schemaname": "public",
+      "with_check": "is_clinician()"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "consents",
+      "permissive": "PERMISSIVE",
+      "policyname": "consents_insert_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "consents",
+      "permissive": "PERMISSIVE",
+      "policyname": "consents_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "patient_context_injections",
+      "permissive": "PERMISSIVE",
+      "policyname": "pci_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "false",
+      "roles": [
+        "public"
+      ],
+      "tablename": "clinician_reviews",
+      "permissive": "PERMISSIVE",
+      "policyname": "reviews_deny_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "risk_events",
+      "permissive": "PERMISSIVE",
+      "policyname": "re_insert_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "risk_events",
+      "permissive": "PERMISSIVE",
+      "policyname": "risk_events_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "risk_events",
+      "permissive": "PERMISSIVE",
+      "policyname": "risk_events_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "patient_tasks",
+      "permissive": "PERMISSIVE",
+      "policyname": "patient_tasks_insert_clinician",
+      "schemaname": "public",
+      "with_check": "is_clinician()"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "patient_tasks",
+      "permissive": "PERMISSIVE",
+      "policyname": "patient_tasks_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "patient_tasks",
+      "permissive": "PERMISSIVE",
+      "policyname": "patient_tasks_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "patient_tasks",
+      "permissive": "PERMISSIVE",
+      "policyname": "patient_tasks_update_clinician",
+      "schemaname": "public",
+      "with_check": "is_clinician()"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "false",
+      "roles": [
+        "public"
+      ],
+      "tablename": "care_plans",
+      "permissive": "PERMISSIVE",
+      "policyname": "care_plans_deny_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "false",
+      "roles": [
+        "public"
+      ],
+      "tablename": "user_clinician_assignments",
+      "permissive": "PERMISSIVE",
+      "policyname": "assignments_deny_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "false",
+      "roles": [
+        "public"
+      ],
+      "tablename": "audit_log",
+      "permissive": "PERMISSIVE",
+      "policyname": "audit_log_deny_all",
+      "schemaname": "public",
+      "with_check": "false"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "is_clinician()",
+      "roles": [
+        "public"
+      ],
+      "tablename": "user_profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "user_profiles_select_clinician",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "user_profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "user_profiles_select_own",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "user_profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "user_profiles_update_own",
+      "schemaname": "public",
+      "with_check": "(user_id = auth.uid())"
+    }
+  ],
+  "routines": [
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "name": "close_session_atomic",
+      "owner": "postgres",
+      "config": [
+        "search_path=public"
+      ],
+      "signature": "p_session_id uuid, p_user_id uuid, p_reason text",
+      "definition": "CREATE OR REPLACE FUNCTION public.close_session_atomic(p_session_id uuid, p_user_id uuid, p_reason text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_conversation_id uuid;\n  v_now timestamptz := now();\nbegin\n  -- Verifica ownership y obtiene conversation_id. Si no hay match el RAISE\n  -- aborta la transacci\u00f3n y propaga el error al cliente, que es lo que\n  -- queremos: closeSession actual tambi\u00e9n throw-ea cuando el SELECT inicial\n  -- no encuentra la fila (ver fetchError).\n  select conversation_id into v_conversation_id\n  from clinical_sessions\n  where id = p_session_id and user_id = p_user_id;\n\n  if v_conversation_id is null then\n    raise exception 'Session % not found for user %', p_session_id, p_user_id;\n  end if;\n\n  -- Update clinical_sessions\n  update clinical_sessions\n  set status = 'closed',\n      closed_at = v_now,\n      closure_reason = p_reason\n  where id = p_session_id;\n\n  -- Update conversations en la misma transacci\u00f3n. Si falla, el UPDATE de\n  -- clinical_sessions tambi\u00e9n se revierte (atomicidad plpgsql).\n  update conversations\n  set status = 'closed', ended_at = v_now\n  where id = v_conversation_id and user_id = p_user_id;\nend;\n$function$\n",
+      "securityDefiner": true
+    },
+    {
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "name": "close_stale_sessions",
+      "owner": "postgres",
+      "config": [
+        "search_path=public"
+      ],
+      "signature": "threshold_minutes integer",
+      "definition": "CREATE OR REPLACE FUNCTION public.close_stale_sessions(threshold_minutes integer DEFAULT 30)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  n integer;\nbegin\n  update clinical_sessions\n  set status = 'closed',\n      closed_at = now(),\n      closure_reason = 'inactivity'\n  where status = 'open'\n    and last_activity_at < now() - make_interval(mins => threshold_minutes);\n  get diagnostics n = row_count;\n  return n;\nend;\n$function$\n",
+      "securityDefiner": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "name": "gdpr_erase_user",
+      "owner": "postgres",
+      "config": [
+        "search_path=public"
+      ],
+      "signature": "target_user_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.gdpr_erase_user(target_user_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  tombstone_id uuid := '00000000-0000-0000-0000-000000000000';\nbegin\n  -- Replace actor_id in audit_log to preserve tamper-evidence without PII\n  update audit_log\n    set actor_id = tombstone_id\n    where actor_id = target_user_id;\n\n  -- Hard-delete the auth user; all child tables cascade\n  delete from auth.users where id = target_user_id;\nend;\n$function$\n",
+      "securityDefiner": true
+    },
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "name": "handle_new_auth_user",
+      "owner": "postgres",
+      "config": [
+        "search_path=public"
+      ],
+      "signature": "",
+      "definition": "CREATE OR REPLACE FUNCTION public.handle_new_auth_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  insert into public.user_profiles (user_id, role, onboarding_status)\n  values (new.id, 'patient', 'pending');\n  return new;\nend;\n$function$\n",
+      "securityDefiner": true
+    },
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "name": "is_clinician",
+      "owner": "postgres",
+      "config": [
+        "search_path=public"
+      ],
+      "signature": "",
+      "definition": "CREATE OR REPLACE FUNCTION public.is_clinician()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from user_profiles\n    where user_id = auth.uid() and role = 'clinician'\n  );\n$function$\n",
+      "securityDefiner": true
+    },
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "name": "rls_auto_enable",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "signature": "",
+      "definition": "CREATE OR REPLACE FUNCTION public.rls_auto_enable()\n RETURNS event_trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n  cmd record;\nBEGIN\n  FOR cmd IN\n    SELECT *\n    FROM pg_event_trigger_ddl_commands()\n    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')\n      AND object_type IN ('table','partitioned table')\n  LOOP\n     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN\n      BEGIN\n        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);\n        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;\n      EXCEPTION\n        WHEN OTHERS THEN\n          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;\n      END;\n     ELSE\n        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;\n     END IF;\n  END LOOP;\nEND;\n$function$\n",
+      "securityDefiner": true
+    },
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "name": "set_updated_at",
+      "owner": "postgres",
+      "config": null,
+      "signature": "",
+      "definition": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n",
+      "securityDefiner": false
+    }
+  ],
+  "rowTrigger": [
+    {
+      "name": "on_auth_user_created",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_auth_user()"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "user_profiles_pkey",
+      "table": "user_profiles",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "user_profiles_user_id_key",
+      "table": "user_profiles",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "name": "user_profiles_user_id_fkey",
+      "table": "user_profiles",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "consents_pkey",
+      "table": "consents",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "consents_user_id_fkey",
+      "table": "consents",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "conversations_pkey",
+      "table": "conversations",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "conversations_user_id_fkey",
+      "table": "conversations",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "clinical_sessions_pkey",
+      "table": "clinical_sessions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "clinical_sessions_conversation_id_fkey",
+      "table": "clinical_sessions",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "clinical_sessions_user_id_fkey",
+      "table": "clinical_sessions",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "messages_pkey",
+      "table": "messages",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "messages_conversation_id_fkey",
+      "table": "messages",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "messages_session_id_fkey",
+      "table": "messages",
+      "definition": "FOREIGN KEY (session_id) REFERENCES clinical_sessions(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "session_summaries_pkey",
+      "table": "session_summaries",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "session_summaries_session_id_fkey",
+      "table": "session_summaries",
+      "definition": "FOREIGN KEY (session_id) REFERENCES clinical_sessions(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "session_summaries_user_id_fkey",
+      "table": "session_summaries",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "fk_conversations_latest_summary",
+      "table": "conversations",
+      "definition": "FOREIGN KEY (latest_session_summary_id) REFERENCES session_summaries(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "fk_sessions_summary",
+      "table": "clinical_sessions",
+      "definition": "FOREIGN KEY (summary_id) REFERENCES session_summaries(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "questionnaire_definitions_pkey",
+      "table": "questionnaire_definitions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "questionnaire_definitions_code_key",
+      "table": "questionnaire_definitions",
+      "definition": "UNIQUE (code)"
+    },
+    {
+      "name": "questionnaire_items_pkey",
+      "table": "questionnaire_items",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "questionnaire_items_questionnaire_id_order_index_key",
+      "table": "questionnaire_items",
+      "definition": "UNIQUE (questionnaire_id, order_index)"
+    },
+    {
+      "name": "questionnaire_items_questionnaire_id_fkey",
+      "table": "questionnaire_items",
+      "definition": "FOREIGN KEY (questionnaire_id) REFERENCES questionnaire_definitions(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "questionnaire_instances_pkey",
+      "table": "questionnaire_instances",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "questionnaire_instances_user_id_fkey",
+      "table": "questionnaire_instances",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "questionnaire_instances_conversation_id_fkey",
+      "table": "questionnaire_instances",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "questionnaire_instances_session_id_fkey",
+      "table": "questionnaire_instances",
+      "definition": "FOREIGN KEY (session_id) REFERENCES clinical_sessions(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "questionnaire_instances_questionnaire_id_fkey",
+      "table": "questionnaire_instances",
+      "definition": "FOREIGN KEY (questionnaire_id) REFERENCES questionnaire_definitions(id)"
+    },
+    {
+      "name": "questionnaire_answers_pkey",
+      "table": "questionnaire_answers",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "questionnaire_answers_instance_id_item_id_key",
+      "table": "questionnaire_answers",
+      "definition": "UNIQUE (instance_id, item_id)"
+    },
+    {
+      "name": "questionnaire_answers_instance_id_fkey",
+      "table": "questionnaire_answers",
+      "definition": "FOREIGN KEY (instance_id) REFERENCES questionnaire_instances(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "questionnaire_answers_item_id_fkey",
+      "table": "questionnaire_answers",
+      "definition": "FOREIGN KEY (item_id) REFERENCES questionnaire_items(id)"
+    },
+    {
+      "name": "questionnaire_results_pkey",
+      "table": "questionnaire_results",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "questionnaire_results_instance_id_key",
+      "table": "questionnaire_results",
+      "definition": "UNIQUE (instance_id)"
+    },
+    {
+      "name": "questionnaire_results_instance_id_fkey",
+      "table": "questionnaire_results",
+      "definition": "FOREIGN KEY (instance_id) REFERENCES questionnaire_instances(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "assessments_pkey",
+      "table": "assessments",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "assessments_user_id_fkey",
+      "table": "assessments",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "assessments_session_id_fkey",
+      "table": "assessments",
+      "definition": "FOREIGN KEY (session_id) REFERENCES clinical_sessions(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "assessments_supersedes_assessment_id_fkey",
+      "table": "assessments",
+      "definition": "FOREIGN KEY (supersedes_assessment_id) REFERENCES assessments(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "fk_user_profiles_last_assessment",
+      "table": "user_profiles",
+      "definition": "FOREIGN KEY (last_reviewed_assessment_id) REFERENCES assessments(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "risk_events_pkey",
+      "table": "risk_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "risk_events_user_id_fkey",
+      "table": "risk_events",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "risk_events_conversation_id_fkey",
+      "table": "risk_events",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "risk_events_session_id_fkey",
+      "table": "risk_events",
+      "definition": "FOREIGN KEY (session_id) REFERENCES clinical_sessions(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "audit_log_pkey",
+      "table": "audit_log",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "clinicians_pkey",
+      "table": "clinicians",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "clinicians_user_id_fkey",
+      "table": "clinicians",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "user_clinician_assignments_pkey",
+      "table": "user_clinician_assignments",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "user_clinician_assignments_user_id_fkey",
+      "table": "user_clinician_assignments",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "user_clinician_assignments_clinician_id_fkey",
+      "table": "user_clinician_assignments",
+      "definition": "FOREIGN KEY (clinician_id) REFERENCES clinicians(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "clinician_reviews_pkey",
+      "table": "clinician_reviews",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "clinician_reviews_assessment_id_fkey",
+      "table": "clinician_reviews",
+      "definition": "FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "clinician_reviews_clinician_id_fkey",
+      "table": "clinician_reviews",
+      "definition": "FOREIGN KEY (clinician_id) REFERENCES clinicians(id)"
+    },
+    {
+      "name": "care_plans_pkey",
+      "table": "care_plans",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "care_plans_user_id_fkey",
+      "table": "care_plans",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "fk_user_profiles_care_plan",
+      "table": "user_profiles",
+      "definition": "FOREIGN KEY (active_care_plan_id) REFERENCES care_plans(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "user_profiles_sex_check",
+      "table": "user_profiles",
+      "definition": "CHECK ((sex = ANY (ARRAY['female'::text, 'male'::text, 'non_binary'::text, 'prefer_not_say'::text])))"
+    },
+    {
+      "name": "user_profiles_employment_check",
+      "table": "user_profiles",
+      "definition": "CHECK ((employment = ANY (ARRAY['employed'::text, 'unemployed'::text, 'student'::text, 'retired'::text, 'homemaker'::text, 'other'::text])))"
+    },
+    {
+      "name": "user_profiles_relationship_status_check",
+      "table": "user_profiles",
+      "definition": "CHECK ((relationship_status = ANY (ARRAY['single'::text, 'in_relationship'::text, 'married'::text, 'divorced'::text, 'widowed'::text, 'other'::text])))"
+    },
+    {
+      "name": "user_profiles_living_with_check",
+      "table": "user_profiles",
+      "definition": "CHECK ((living_with = ANY (ARRAY['alone'::text, 'with_family'::text, 'with_partner'::text, 'with_roommates'::text, 'other'::text])))"
+    },
+    {
+      "name": "fk_assessments_reviewed_by",
+      "table": "assessments",
+      "definition": "FOREIGN KEY (reviewed_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "patient_tasks_descripcion_check",
+      "table": "patient_tasks",
+      "definition": "CHECK (((char_length(descripcion) >= 3) AND (char_length(descripcion) <= 500)))"
+    },
+    {
+      "name": "patient_tasks_nota_check",
+      "table": "patient_tasks",
+      "definition": "CHECK (((nota IS NULL) OR (char_length(nota) <= 300)))"
+    },
+    {
+      "name": "patient_tasks_pkey",
+      "table": "patient_tasks",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "patient_tasks_user_id_fkey",
+      "table": "patient_tasks",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "patient_tasks_acordada_en_session_id_fkey",
+      "table": "patient_tasks",
+      "definition": "FOREIGN KEY (acordada_en_session_id) REFERENCES clinical_sessions(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "patient_tasks_acordada_en_assessment_id_fkey",
+      "table": "patient_tasks",
+      "definition": "FOREIGN KEY (acordada_en_assessment_id) REFERENCES assessments(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "patient_tasks_closed_by_assessment_id_fkey",
+      "table": "patient_tasks",
+      "definition": "FOREIGN KEY (closed_by_assessment_id) REFERENCES assessments(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "patient_context_injections_tier_check",
+      "table": "patient_context_injections",
+      "definition": "CHECK ((tier = ANY (ARRAY['none'::text, 'historic'::text, 'tierB'::text, 'tierA'::text])))"
+    },
+    {
+      "name": "patient_context_injections_risk_state_check",
+      "table": "patient_context_injections",
+      "definition": "CHECK ((risk_state = ANY (ARRAY['none'::text, 'watch'::text, 'active'::text, 'acute'::text])))"
+    },
+    {
+      "name": "patient_context_injections_pkey",
+      "table": "patient_context_injections",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "patient_context_injections_user_id_fkey",
+      "table": "patient_context_injections",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "patient_context_injections_session_id_fkey",
+      "table": "patient_context_injections",
+      "definition": "FOREIGN KEY (session_id) REFERENCES clinical_sessions(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "patient_context_injections_last_validated_assessment_id_fkey",
+      "table": "patient_context_injections",
+      "definition": "FOREIGN KEY (last_validated_assessment_id) REFERENCES assessments(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "clinical_sessions_protocol_phase_check",
+      "table": "clinical_sessions",
+      "definition": "CHECK (((protocol_phase >= 1) AND (protocol_phase <= 8)))"
+    },
+    {
+      "name": "user_profiles_pronouns_check",
+      "table": "user_profiles",
+      "definition": "CHECK (((pronouns IS NULL) OR (pronouns = ANY (ARRAY['el'::text, 'ella'::text, 'elle'::text, 'prefer_not_say'::text]))))"
+    }
+  ],
+  "eventTrigger": [
+    {
+      "name": "ensure_rls",
+      "tags": [
+        "CREATE TABLE",
+        "CREATE TABLE AS",
+        "SELECT INTO"
+      ],
+      "event": "ddl_command_end",
+      "owner": "postgres",
+      "enabled": "O",
+      "function": "rls_auto_enable()"
+    }
+  ]
+}

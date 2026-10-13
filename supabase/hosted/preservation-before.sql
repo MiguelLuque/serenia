@@ -1,0 +1,45 @@
+-- Target-bound preconditions and preservation state; never returned to the caller.
+set local lock_timeout = '10s';
+set local statement_timeout = '120s';
+lock table auth.users, public.user_profiles, public.questionnaire_definitions, public.questionnaire_items in share row exclusive mode;
+create temporary table serenia_preservation (
+  relation_name text primary key, expected_count bigint not null, aggregate_sha256 text not null, nonce text not null
+) on commit drop;
+revoke all on table pg_temp.serenia_preservation from public, anon, authenticated, service_role;
+do $baseline$
+declare rel text; total bigint; digest text; secret_nonce text := gen_random_uuid()::text || gen_random_uuid()::text;
+begin
+  if (select count(*) from auth.users)<>2 or (select count(*) from public.user_profiles)<>2
+    or (select count(*) from public.questionnaire_definitions)<>5 or (select count(*) from public.questionnaire_items)<>65 then
+    raise exception 'Hosted preservation baseline counts changed';
+  end if;
+  if (select jsonb_agg(jsonb_build_object('version',version,'name',name,'statements_md5',md5(array_to_string(statements,E'\n'))) order by version)
+      from supabase_migrations.schema_migrations) is distinct from '[{"version":"20260419000001","name":"enums","statements_md5":"cb2bebd88815d1b2d463885187ac616a"},{"version":"20260419000002","name":"user_tables","statements_md5":"d7f8066fc618d14ae6e6769fb0471fc7"},{"version":"20260419000003","name":"conversation_tables","statements_md5":"a5a5e2c6fb76bb126fec6813cd4e4025"},{"version":"20260419000004","name":"questionnaire_tables","statements_md5":"6d55ea9c49907da3e47aedc9365bfa0b"},{"version":"20260419000005","name":"clinical_tables","statements_md5":"89c8d164afdf4a71b99af46cbebceb6a"},{"version":"20260419000006","name":"v15_stubs","statements_md5":"6503b34ed866a718118c15daef564d03"},{"version":"20260419000007","name":"updated_at_trigger","statements_md5":"f5d1db6e3e0de7581a6e0df81b13be4a"},{"version":"20260419000008","name":"rls_owner_only","statements_md5":"0e72c7f78981e5aa1a7214536a588597"},{"version":"20260419000009","name":"rls_public_and_restricted","statements_md5":"7f011544a8a2424f74f22c3bfa6b2172"},{"version":"20260419000010","name":"gdpr_erase","statements_md5":"eaedd14e1cf6d6460219704176c5d1ce"},{"version":"20260420000001","name":"user_profiles_extend","statements_md5":"d151e3e1efd9b79ac46d108c735cee8e"},{"version":"20260420000002","name":"user_profile_trigger","statements_md5":"7376e06e064b1321df55ea57134f6fd9"},{"version":"20260420000003","name":"rls_clinician_read","statements_md5":"1f83ca4931b8ba435d3ccef89e2d0695"},{"version":"20260421000001","name":"clinical_sessions_extend","statements_md5":"26f4d9226f56d43eadb69325960a20df"},{"version":"20260421000002","name":"close_stale_sessions","statements_md5":"630e87d8e8369173075458391de5b1ee"},{"version":"20260421000003","name":"messages_insert_own","statements_md5":"d152d59d113d753b61565fbeb3e83532"},{"version":"20260421000004","name":"clinical_sessions_single_open","statements_md5":"50bd572bd0083a8ac18ae6948dd79e7e"},{"version":"20260422000001","name":"seed_questionnaires","statements_md5":"7b04599461bbda09f47576c493be159a"},{"version":"20260422000002","name":"questionnaire_answers_insert","statements_md5":"2121c5a43fc69b15792702f3adb07afd"},{"version":"20260422000003","name":"questionnaire_results_risk_events_insert","statements_md5":"1c2fa8a0a0f515d7fd654d1559b7512c"},{"version":"20260422000004","name":"assessments_insert_own","statements_md5":"4cb081ddfbb35e67c3bbbf12f6c5dda1"},{"version":"20260423000001","name":"rls_clinician_write","statements_md5":"95ebe3b75d52aee128dd9721aab92c59"},{"version":"20260423000002","name":"assessments_rejection_reason","statements_md5":"5362406f7ad5fbafe0408cdc7e6dc698"},{"version":"20260423000003","name":"assessments_reviewed_by_auth_users","statements_md5":"ff0d520cdbb48cefa6353a6bee8f0338"},{"version":"20260424000001","name":"patient_tasks","statements_md5":"e08daddb87ee9cd70fb7ce405261d0d7"},{"version":"20260424000002","name":"indexes_patient_context","statements_md5":"86108a034bc5d17e828d7153aed17b5e"},{"version":"20260424000003","name":"patient_context_injections","statements_md5":"2d5400dcd953e73f3ba0702e9905d1ad"},{"version":"20260424000004","name":"assessment_requires_manual_review","statements_md5":"c24ec99b57d19021d4b13647fa8aac35"},{"version":"20260426000001","name":"assessments_clinical_notes","statements_md5":"5830622b76bfbf46c201e5aea42a469b"},{"version":"20260502000001","name":"questionnaires_clinician_rated","statements_md5":"a55d3dc87de61c12bbf418b29fcd1eca"},{"version":"20260502000002","name":"clinical_sessions_protocol_phase","statements_md5":"eb33b2fb5c756eb832b9e02d273be41f"},{"version":"20260502000003","name":"user_profiles_intake_clinico","statements_md5":"d63bf0d56fd656202e87c09df5cc2ee3"},{"version":"20260502000004","name":"wipe_legacy_test_data","statements_md5":"d3f66adf379a4279447a6627efe19d0a"},{"version":"20260502000005","name":"restore_preserved_profiles","statements_md5":"e75d54df0dd6466be8191ded3039d44e"},{"version":"20260502000006","name":"close_session_rpc","statements_md5":"3ff563f335d9387dfe72ef8d60cfd0d5"},{"version":"20260502000007","name":"hot_path_indices","statements_md5":"3ce4080bd2fd6e9bc12c8a9adcbf4bef"},{"version":"20260503204403","name":"seed_bdi2","statements_md5":"38f5f5e0382955de0fc941aa3dc722df"},{"version":"20260516175534","name":"seed_bai","statements_md5":"34143b4c825ba4775e7424179dc481d8"},{"version":"20260517151619","name":"seed_cssrs","statements_md5":"4f2fc5d05b4702b4fcc888704ca56256"},{"version":"20260517153400","name":"drop_asq","statements_md5":"f94f1328d4925f77e77be9893de1c514"}]'::jsonb then
+    raise exception 'Hosted migration history drifted';
+  end if;
+  if (select jsonb_agg(row_to_json(x)::jsonb order by code) from (
+    select d.code,encode(sha256(convert_to((to_jsonb(d)-'id'-'created_at'-'updated_at')::text,'UTF8')),'hex') as definition_sha256,
+      (select count(*) from public.questionnaire_items i where i.questionnaire_id=d.id) as items,
+      (select encode(sha256(convert_to(coalesce(string_agg((to_jsonb(i)-'id'-'questionnaire_id'-'created_at'-'updated_at')::text,E'\n' order by i.order_index),''),'UTF8')),'hex') from public.questionnaire_items i where i.questionnaire_id=d.id) as items_sha256
+    from public.questionnaire_definitions d) x) is distinct from '[{"code":"BAI","definition_sha256":"bd76a03f6132e819a8a0fc35f769fc694ae3c1b68a1ed427ee05a3e9bd13c8ca","items":21,"items_sha256":"910666dd581db8a7b92bf4694c54c47045b039328792f5390d06381bc497a1a6"},{"code":"BDI2","definition_sha256":"ba5c841ecda95dcd3cc34b944f6989a79a05e6689e461bc8748233f6f156de02","items":21,"items_sha256":"47b02e0550f8e2f4322c9326f22a69e8df54718b1b8d4fde598e4b27cf94ebde"},{"code":"CSSRS","definition_sha256":"017eb76248c16cbb8729dd417d033efb670987a42d2608c39ef0c0897a2ea9ef","items":7,"items_sha256":"238a8604a0fdeab09913ce3c230c7723948ff95b4b39292ef775d55b47b3f238"},{"code":"GAD7","definition_sha256":"a38c258a1aa0bf85d62cbc573caa8ff48ec168e0238e3b9194309d7e652786c7","items":7,"items_sha256":"8ea077be305a2a046ec9f131344bc6585161fdf9cfa5a04d31785ff57f3d9933"},{"code":"PHQ9","definition_sha256":"a2e8acf28de4a85dea7192af3720316dc2127efdb9abd550ddc6105a36a13d21","items":9,"items_sha256":"248aca918cdc8298fab08cbb1866b1380268af87c7b1130253cb43f38c2490f9"}]'::jsonb then
+    raise exception 'Hosted reviewed catalog semantic baseline changed';
+  end if;
+  if pg_get_userbyid((select relowner from pg_class where oid='auth.users'::regclass))<>'supabase_auth_admin'
+    or to_regprocedure('public.rls_auto_enable()') is null
+    or not exists(select 1 from pg_roles where rolname='supabase_admin')
+    or not exists(select 1 from pg_roles where rolname='supabase_auth_admin') then
+    raise exception 'Hosted platform baseline changed';
+  end if;
+  for rel in select unnest(array['public.assessments','public.audit_log','public.care_plans','public.clinical_sessions','public.clinician_reviews','public.clinicians','public.consents','public.conversations','public.messages','public.patient_context_injections','public.patient_tasks','public.questionnaire_answers','public.questionnaire_instances','public.questionnaire_results','public.risk_events','public.session_summaries','public.user_clinician_assignments']) loop
+    execute format('lock table %s in share row exclusive mode',rel);
+    execute format('select count(*) from %s',rel) into total;
+    if total<>0 then raise exception 'Hosted clinical baseline changed'; end if;
+  end loop;
+  foreach rel in array array['auth.users','public.user_profiles','public.questionnaire_definitions','public.questionnaire_items'] loop
+    execute format($q$select count(*),encode(sha256(convert_to(coalesce(string_agg(row_hash,'' order by row_hash),''),'UTF8')),'hex')
+      from (select encode(sha256(convert_to($1 || to_jsonb(r)::text,'UTF8')),'hex') row_hash from %s r) x$q$,rel)
+      into total,digest using secret_nonce;
+    insert into pg_temp.serenia_preservation values(rel,total,digest,secret_nonce);
+  end loop;
+end;
+$baseline$;
