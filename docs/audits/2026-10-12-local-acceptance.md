@@ -22,7 +22,7 @@ Los siete exits0 y el recuento703 se verifican en `serenia-verify-BrYljo/results
 
 El primer smoke final tenía sólo dos mensajes de usuario y activó correctamente requires_manual_review por el mínimo productivo de tres; se conserva `final-generated-smoke-short-transcript-red.log`. Una nueva conversación ficticia suficiente completó el smoke anterior sin cambiar la aplicación. Este smoke es ejecución nueva de pasos generados; **no es una nueva prueba de corte/restart/replay sobre a696**. El lifecycle, wire y código de Workflow no cambiaron desde la prueba durable c345, y el controlador autorizó esta distinción explícita.
 
-La matriz original de navegador se realizó sobre c345887. Los rechecks afectados usan el runtime a696: PHQ/finalización/conversación posterior y C-SSRS con branching y nuevo formulario sin selección heredada ya tienen observación del controlador y correlación real descrita al final. Onboarding corregido y ausencia de acciones inválidas en informe revisado siguen bajo control del navegador de root; no se marcan completos por los tests de fuente. La revisión independiente de toda la base también sigue abierta.
+Root completó **B01–B12** con procedencia explícita: matriz original c345887 y rechecks afectados B02/B04/B09/B12 sobre a696. Sus observaciones nativas y las correlaciones reales figuran abajo; ningún caso se marca PASS únicamente por tests de fuente. La revisión independiente de toda la base recibe esta evidencia final mediante el controlador.
 
 ## Base de datos y revisión de permisos
 
@@ -108,3 +108,28 @@ La sesión estaba cerrada por inactivity a07:07:15UTC del13octubre, tras opened_
 Root validó el reset de C-SSRS en una nueva sesión del mismo paciente ficticio, `2ec5bd66-f886-4fbd-a109-b96af6153295`. Primer C-SSRS `df8b9086-f39a-4069-9cab-f4599200e3b8`: No1/No2 avanzó directamente a conducta (ítem6,3de4); No6 dejó Enviar (3de3); scored0, siete respuestas únicas con los saltos normalizados y un resultado. Tras la confirmación ordinaria de finalización, otra solicitud explícita en **la misma sesión** creó `7d6fd877-aa7e-4096-9308-73121bee7045`: ID distinto, proposed, cero respuestas/resultados, sin submission_json ni submitted_at. El controlador observó pregunta1de7, Sí/No sin selección, siguiente deshabilitado y el mismo estado nuevo sin selección tras reload. Turno de finalización `cefc46b6-34fc-4021-93be-7719aff34d97` completed/attempts1 con un usuario y una respuesta. La lectura posterior encontró la sesión cerrada por user_request a07:11:32UTC después del signout del controlador; no afirma que siga abierta.
 
 Evidencia completa privada: `/private/tmp/serenia-acceptance-c345887/final-browser-questionnaires-0602ae7d-cc99-4e39-a45e-e91caba51c3d.json` y `final-browser-questionnaires-2ec5bd66-f886-4fbd-a109-b96af6153295.json` en el mismo directorio; resúmenes `.cache/acceptance/final-browser-questionnaires-{0602,2ec5}.log`. Un resultado y una respuesta por ítem acreditan efectos persistidos únicos, no un contador de peticiones HTTP. No se escribieron datos, cambiaron relojes, ejecutaron checks completos o reconstruyeron artefactos para esta correlación.
+
+## Cierre de rechecks afectados y matriz del controlador
+
+**B02 final PASS a696.** Actor nuevo exclusivamente ficticio `serenia-browser-final-1791875521605@example.test`, usuario `0fc7fb06-ee0c-4ddc-9b6d-cde01dfae945`. Root rellenó nombre «Perfil final ficticio», pronombres «Prefiero no decirlo», motivo ficticio, aceptación marcada y DOB2010-10-13: vio el error del servidor sobre18años y todos los campos/casilla conservados. Cambió sólo DOB1990-10-13 y completó el perfil; saludo y sidebar mostraron el nombre preferido.
+
+Correlación de lectura con JWT real: auth.getUser coincide, un perfil complete con informal_name/pronouns=`prefer_not_say`/birth_date1990-10-13/motivo exactos, get_onboarding_ready=true. Una sola aceptación `24335c63-461f-40af-a809-ed0300fbbcf4`, technical-draft-2026-10-11, server_recorded=true, accepted_at07:14:07.329962UTC del13octubre; versión y timestamp del perfil coinciden. No se reenvió la fecha inválida ni se reescribió el perfil desde el probe. Evidencia privada `final-browser-profile.json` en el estado y `.cache/acceptance/final-browser-profile.log`. Captura nativa del controlador `.cache/acceptance/browser-profile-final.jpg`, SHA256 verificado `1ec341ec6f1a1bf70dda2aeaa40ab75ece769948cebe828e6dc511b0545c8ff5`. La fecha de calendario imposible queda acreditada separadamente por el RPC real400/code22008 para2026-02-30 con perfil/consentimiento intactos (`browser-invalid-date-correlation.json/log` del12octubre).
+
+**B09 final PASS a696.** Root abrió como clínico la sesión revisada `ac1ca976-5eb6-41a0-acba-02622e355a43`: estado Revisado y todos los riesgos/notas privadas/resumen público/acuerdo guardados persistían. Conteos del DOM nativo: Editar1, Marcar como revisado sin cambios0, Rechazar informe0. No realizó mutación para esta comprobación. La evidencia JWT anterior mantiene dos versiones/una vigente, un acuerdo único y proyección paciente sin campos privados; la UI final demuestra la ausencia de las acciones inválidas.
+
+| Caso del controlador | Resultado y artefacto |
+|---|---|
+| B01 Adulto/aceptación | PASS c345; además el nuevo perfil adulto final completa en a696 |
+| B02 Edad/fecha/conservación | PASS a696 de rechazo visible, preservación y corrección; fecha imposible por GoTrue/PostgREST real, evidencia separada |
+| B03 Conversación/recarga | PASS c345, mensajes persistidos |
+| B04 PHQ y siguiente turno | PASS a696,9respuestas únicas/1resultado0 y conversación ordinaria tras finalización |
+| B05 Error/retry | PASS c345, mismo request_id/texto, attempts2, un usuario/asistente y siguiente envío ordinario |
+| B06 Recarga pendiente | PASS c345, estado autorizado, attempts1, un usuario/asistente/llamada |
+| B07 Señal urgente normal/límite | PASS c345, recursos estáticos, riesgo único,0llamadas; límite crisis_detected |
+| B08 Cierre/job/informe | PASS c345, cierre visible, job completo attempts1 y draft único |
+| B09 Revisión clínica/acciones | Revisión y efectos PASS c345; ausencia de acciones inválidas tras revisión PASS a696 |
+| B10 Proyección paciente/recarga | PASS c345, UI pública y JWT rawassessments[], proyección sin notas/riesgo/impression privados |
+| B11 Bandeja global | PASS c345, crítico antiguo enero primero ante casos nuevos |
+| B12 C-SSRS saltos/reset | PASS a696, primera instancia válida con normalización y segunda distinta sin selección/respuestas/resultados, también tras reload |
+
+Estado de la entrega local: **DONE_WITH_CONCERNS**. Los concerns son los gates externos ya descritos, la excepción dev temporal y los límites declarados de la evidencia; no se declara listo para pacientes reales. El replay durable sobre c345 y el smoke generado fresco sobre a696 se conservan separados; instrumentation/lifecycle, código de Workflow y wire no cambiaron entre ambos. Esta conclusión documental no requiere rebuild: el runtime permanece PID15377/a696 y disponible para el controlador. La aprobación de publicación/producción y la resolución de revisión independiente pertenecen a sus gates respectivos.
