@@ -115,6 +115,15 @@ Añadida por la petición del usuario del12oct de usar Supabase para probar el p
 
 El cambio de entorno autoriza la preparación y validación técnica en el proyecto identificado. Las operaciones destructivas sobre registros existentes o un coste nuevo necesitan aprobación específica; la publicación de la aplicación y el uso con pacientes reales conservan los gates de entrega.
 
+## Task 8: Parche de seguridad publicado el14oct
+
+El gate externo de Task4 se vuelve accionable: la release oficial de Next16.4.1 y los avisos GHSA-673q-mjm6-r5xr, GHSA-2464-fhr4-w9xw y GHSA-p3m5-59mp-jv5r se verificaron el14oct20:59UTC. Este mantenimiento nuevo no reabre la única ola de correcciones de la revisión final ni altera los contratos clínicos.
+
+- [ ] Confirmar metadata oficial publicada; fijar el parche compatible de Next/React y dependencias directamente relacionadas con lock revisado, sin actualizaciones generales ni forzar majors.
+- [ ] Conservar auditoría fail-closed y la caducidad original de cualquier excepción dev. Si cambia su grafo, revisar y justificar exactamente el nuevo grafo o eliminar la excepción al quedar limpio; no ampliar advisories, consumidores ni plazo.
+- [ ] Ejecutar los siete gates nativos por el cambio de dependencias, build aislado desde commit y smoke del artefacto construido con configuración/proveedor sintéticos; distinguir evidencia anterior y nueva, sin repetir el ciclo completo de Task6 sin motivo concreto.
+- [ ] Revisión independiente scoped del diff/evidencia por el mismo revisor final y actualización de README/operación/aceptación. HostedTask7 continúa pendiente; mantener ambos paquetes SQL exactos e inmutables.
+
 ## Entrega
 
 - [ ] Revisión independiente de toda la rama con el modelo más capaz disponible después de Task7; una ola de correcciones y revisión scoped, con evidencia final de los gates afectados. Este gate conserva el requisito original de Task6 y no lo sustituye la aprobación local del bloque.
