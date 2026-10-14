@@ -12,7 +12,11 @@ Only one new disposable local synthetic adult was created, with real GoTrue/JWT 
 
 Root reloaded after arming, saw2minutes, and typed the explicitly tagged fictitious signal while2minutes remained. Root observed1minute followed by the displayed “La sesión ha terminado” with the **same draft preserved**, ordinary Enviar disabled. There was no reload or further DB clock adjustment between those observations. Root captured the deadline state, clicked the actual urgent opt-in, observed the same draft become sendable, clicked Enviar and saw one user message plus the approved static resources response in native accessibility output. This is distinct from the earlier B07 database-only expiry edit while the browser timer remained live.
 
-Post-response reload/native closed-UI confirmation and screenshot reference remain root-owned evidence to append; the owner does not infer that UI observation from SQL.
+Root actually reloaded after the single static response. The native UI legitimately redirected to `/app`; Home confirmed the last session closed for safety, showed the summary pending review and made no immediate human-review promise. These are actual root CUA observations, separately supplied from the SQL result.
+
+The actual deadline screenshot is `.cache/acceptance/browser-visible-deadline-draft.jpg`,49,840bytes, SHA256 `6f54721d43afd508c9fd04898d8fdf75403899c2a13a9e5db2784fab9dcc521e`; CUA call `call_afdc77b7fe31434d97805def55f0d0c9` (“Capturar el borrador conservado al agotarse el contador”). The owner rechecked file size/hash without replaying the proof. Root independently inspected and asserted the private persisted-proof JSON: exact message/two roles/single turn and attempt/risk/closure/outbox/generated run/separate zero provider counters/source/build/PID. That file's latest SHA256 is `ac6f74c296e48115832c9a25a5822840163b76774f85953a7815ace390555b6e`, also rechecked by the owner.
+
+Nonblocking copy/state observation for the final reviewer's triage: the native UI showed “Esperando respuesta. Puedes seguir escribiendo.” at zero before a request, and after the static response until reload. This observation does not invalidate the preserved draft, explicit urgent submission or persisted closure; source was not changed in this documentation task.
 
 ## Actual scoped persistence and provider correlation
 
