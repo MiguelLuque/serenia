@@ -6,9 +6,9 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const names = ['braces', 'micromatch', 'fast-glob', '@next/eslint-plugin-next', 'eslint-config-next']
-const versions = ['3.0.3', '4.0.8', '3.3.1', '16.4.0', '16.4.0']
+const versions = ['3.0.3', '4.0.8', '3.3.1', '16.4.1', '16.4.1']
 const ranges = ['*', '>=0.2.0', '*', '>=14.3.0-canary.0', '>=14.3.0-canary.0']
-const dependencyRanges = ['^3.0.3', '^4.0.4', '3.3.1', '16.4.0']
+const dependencyRanges = ['^3.0.3', '^4.0.4', '3.3.1', '16.4.1']
 const expiry = Date.parse('2026-10-18T00:00:00Z')
 const configHash = '6b440fd458d9a2820a20e10b81127025eb257b04aacd06ea539fc40f4eca5ed2'
 function temporaryDevelopmentException(report, context) {

@@ -79,6 +79,16 @@ describe('audit policy remains fail closed outside the exception', () => {
     r.vulnerabilities.braces.isDirect = false; r.vulnerabilities.braces.effects.push('another-consumer')
     expect(() => assertAuditGate(r, context(), 'full')).toThrow()
   })
+  it.each(['eslint-config-next', '@next/eslint-plugin-next'])('rejects the previously reviewed parent version for %s', name => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-14T22:00:00Z'))
+    const c = context(); c.lock.packages['node_modules/' + name].version = '16.4.0'
+    expect(() => assertAuditGate(report(), c, 'full')).toThrow()
+  })
+  it('rejects a changed exact plugin edge even with approved installed versions', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-14T22:00:00Z'))
+    const c = context(); c.lock.packages['node_modules/eslint-config-next'].dependencies['@next/eslint-plugin-next'] = '^16.4.1'
+    expect(() => assertAuditGate(report(), c, 'full')).toThrow()
+  })
   it('requires clear production evidence even after the full graph becomes clean', () => {
     const c = context(); c.productionReport.metadata.vulnerabilities.total = 1
     expect(() => assertAuditGate(context().productionReport, c, 'full')).toThrow()
