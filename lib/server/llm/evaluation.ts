@@ -55,7 +55,7 @@ export async function runOfflineEvaluation(rawCorpus: unknown) {
   const syntheticResponse = JSON.stringify({ model: 'jev-1.13.0', answers: { theme: { type: 'choice', choice: 'insufficient', confidence: 1, probabilities: { work: 0, sleep: 0, other: 0, insufficient: 1 } } }, usage: { input_tokens: 100, output_tokens: 1 } })
   assert.equal((await evaluateAuxiliary('Texto sintético', { provider: 'jev', mode: 'shadow', transport: async () => ({ status: 200, body: syntheticResponse }) })).status, 'abstain')
   assert.equal((await evaluateAuxiliary('Texto sintético', { provider: 'openai', mode: 'shadow', transport: async () => ({ status: 200, body: '{}' }) })).status, 'error')
-  assert.deepEqual(estimateCost('decisionsLuna', { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }), { status: 'estimated', usd: .0001, pricingSnapshot: '2026-10-11', measured: false })
+  assert.deepEqual(estimateCost('decisionsLuna', { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }), { status: 'estimated', usd: .0001, pricingSnapshot: '2026-10-23', measured: false })
   const prompts = ['docs/agents/prompts/session-therapist.md', 'docs/agents/prompts/clinical-report.md'].map(path => {
     const artifact = getPromptArtifact(path)
     return { path: artifact.path, version: artifact.version, sourceSha256: artifact.sourceSha256, bodySha256: artifact.bodySha256 }
