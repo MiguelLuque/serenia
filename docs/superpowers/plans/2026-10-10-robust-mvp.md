@@ -119,10 +119,19 @@ El cambio de entorno autoriza la preparación y validación técnica en el proye
 
 El gate externo de Task4 se vuelve accionable: la release oficial de Next16.4.1 y los avisos GHSA-673q-mjm6-r5xr, GHSA-2464-fhr4-w9xw y GHSA-p3m5-59mp-jv5r se verificaron el14oct20:59UTC. Este mantenimiento nuevo no reabre la única ola de correcciones de la revisión final ni altera los contratos clínicos.
 
-- [ ] Confirmar metadata oficial publicada; fijar el parche compatible de Next/React y dependencias directamente relacionadas con lock revisado, sin actualizaciones generales ni forzar majors.
-- [ ] Conservar auditoría fail-closed y la caducidad original de cualquier excepción dev. Si cambia su grafo, revisar y justificar exactamente el nuevo grafo o eliminar la excepción al quedar limpio; no ampliar advisories, consumidores ni plazo.
-- [ ] Ejecutar los siete gates nativos por el cambio de dependencias, build aislado desde commit y smoke del artefacto construido con configuración/proveedor sintéticos; distinguir evidencia anterior y nueva, sin repetir el ciclo completo de Task6 sin motivo concreto.
-- [ ] Revisión independiente scoped del diff/evidencia por el mismo revisor final y actualización de README/operación/aceptación. HostedTask7 continúa pendiente; mantener ambos paquetes SQL exactos e inmutables.
+- [x] Confirmar metadata oficial publicada; fijar el parche compatible de Next/React y dependencias directamente relacionadas con lock revisado, sin actualizaciones generales ni forzar majors.
+- [x] Conservar auditoría fail-closed y la caducidad original de cualquier excepción dev. Si cambia su grafo, revisar y justificar exactamente el nuevo grafo o eliminar la excepción al quedar limpio; no ampliar advisories, consumidores ni plazo.
+- [x] Ejecutar los siete gates nativos por el cambio de dependencias, build aislado desde commit y smoke del artefacto construido con configuración/proveedor sintéticos; distinguir evidencia anterior y nueva, sin repetir el ciclo completo de Task6 sin motivo concreto.
+- [x] Revisión independiente scoped del diff/evidencia por el mismo revisor final y actualización de operación/aceptación. Task8 aprobada15oct por especificación y calidad sobre b67368e..cb02c2d. HostedTask7 continúa pendiente; mantener ambos paquetes SQL exactos e inmutables.
+
+## Task 9: Retirar la excepción vencida y recuperar aceptación vigente
+
+Al retomar el23oct, la excepción dev caducó18oct00UTC. La aprobación histórica de Task8 se conserva; no sirve para afirmar que el gate de dependencias pasa hoy.
+
+- [ ] Reproducir el bloqueo actual y obtener auditorías/metadata oficiales con entorno acotado, conservando logs completos. Identificar reparación compatible y revisar cualquier advisory nuevo relevante.
+- [ ] Aplicar la corrección mínima de dependencias/configuración necesaria, conservando las reglas efectivas de lint y los contratos. Retirar la excepción vencida; no ampliar plazo/allowlist ni ignorar advisories.
+- [ ] Ejecutar los siete gates sobre fuente comprometida, evidencia del lock/instalación/build y smoke sintético del artefacto afectado cuando cambien dependencias de runtime. No reejecutar Tasks1–8 como implementaciones nuevas.
+- [ ] Revisión independiente scoped y reporte actual con límites y gate hospedado explícitos. Mantener ambos paquetes SQL exactos e historia intactos.
 
 ## Entrega
 
