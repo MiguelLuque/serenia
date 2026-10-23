@@ -109,7 +109,7 @@ Añadida por la petición del usuario del12oct de usar Supabase para probar el p
 **Files:** plan concreto de migraciones pendientes, configuración/harness de staging separados de los guards locales, evidencia de aceptación y operación.
 
 - [x] Identificar proyecto y plan, comprobar estado, historial/esquema y presencia de datos mediante metadata/conteos sin devolver filas clínicas. Serenia `brpozobkoatabctjjadc`, Free, eu-west-1, ACTIVE_HEALTHY. Conteos exactos:2 cuentas/Auth,2 perfiles,0 registros clínicos,5 definiciones/65 items;40 migraciones hospedadas/45 locales y6 diferencias históricas. Preflight/diseño conservados en docs/audits/2026-10-12-hosted-supabase-{preflight,execution-design}.md; actualización no aplicada.
-- [ ] Preparar y revisar las migraciones realmente pendientes frente al historial hospedado; comprobar drift, cambios de datos/permisos y recuperación. Conservar datos existentes y no hacer reset remoto. La ausencia de usuarios activos no prueba una BD vacía.
+- [x] Preparar y revisar las migraciones realmente pendientes frente al historial hospedado; comprobar drift, cambios de datos/permisos y recuperación. Canónico724e y forwardd9604 revisados; siguen sin aplicar tras rechazo del conector23oct. Conservar datos existentes y no hacer reset remoto. La ausencia de usuarios activos no prueba una BD vacía.
 - [ ] Aplicar sólo el paquete revisado que corresponda y verificar advisors/tipos, permisos y transacciones mediante Auth/JWT/Data API hospedados con fixtures identificados. No crear recursos de pago ni enviar datos reales a modelos; no relajar el harness local para admitir destinos arbitrarios.
 - [ ] Probar Next construido contra esa BD/Auth con configuración explícita del proyecto, proveedor sintético y evidencia de ciclo/informe/revisión. Supabase aloja BD/Auth; el servidor Next/Workflow permanece local en esta fase. Registrar límites de SMTP/callback/configuración hospedada y limpieza scoped de fixtures.
 
@@ -128,10 +128,18 @@ El gate externo de Task4 se vuelve accionable: la release oficial de Next16.4.1 
 
 Al retomar el23oct, la excepción dev caducó18oct00UTC. La aprobación histórica de Task8 se conserva; no sirve para afirmar que el gate de dependencias pasa hoy.
 
-- [ ] Reproducir el bloqueo actual y obtener auditorías/metadata oficiales con entorno acotado, conservando logs completos. Identificar reparación compatible y revisar cualquier advisory nuevo relevante.
-- [ ] Aplicar la corrección mínima de dependencias/configuración necesaria, conservando las reglas efectivas de lint y los contratos. Retirar la excepción vencida; no ampliar plazo/allowlist ni ignorar advisories.
-- [ ] Ejecutar los siete gates sobre fuente comprometida, evidencia del lock/instalación/build y smoke sintético del artefacto afectado cuando cambien dependencias de runtime. No reejecutar Tasks1–8 como implementaciones nuevas.
-- [ ] Revisión independiente scoped y reporte actual con límites y gate hospedado explícitos. Mantener ambos paquetes SQL exactos e historia intactos.
+- [x] Reproducir el bloqueo actual y obtener auditorías/metadata oficiales con entorno acotado, conservando logs completos. Identificar reparación compatible y revisar cualquier advisory nuevo relevante.
+- [x] Aplicar la corrección mínima de dependencias/configuración necesaria, conservando las reglas efectivas de lint y los contratos. Retirar la excepción vencida; no ampliar plazo/allowlist ni ignorar advisories.
+- [x] Ejecutar los siete gates sobre fuente comprometida, evidencia del lock/instalación/build y smoke sintético del artefacto afectado cuando cambien dependencias de runtime. No reejecutar Tasks1–8 como implementaciones nuevas.
+- [x] Revisión independiente scoped y reporte actual con límites y gate hospedado explícitos. Task9 aprobada23oct, fuente04052b4/evidencia1ea0928;713tests/63archivos, siete exits0 y auditorías producción/completa0. Delta sólo dev, smoke nuevo NOT_RUN. Mantener ambos paquetes SQL exactos e historia intactos.
+
+## Task 10: Actualizar la estimación de caché Decisions
+
+La guía oficial actual23oct cobra lectura/escritura de caché a las tarifas estándar Luna; el preset de investigación11oct todavía las valora en cero.
+
+- [ ] Corregir únicamente tarifa/fecha del preset auxiliar, conservando otros snapshots, uso total inclusivo, salida gratuita y primas existentes. No cambiar modelos paciente ni habilitar el auxiliar.
+- [ ] Regresiones RED/GREEN de facturación con caché y primas; evaluador offline, lint y tipos sobre la corrección. La evidencia nativa de Task9 conserva su fuente exacta; no atribuirle cambios posteriores.
+- [ ] Revisión independiente scoped y actualización de la comparativa con fuentes primarias; calidad española/calibración online siguen no medidas.
 
 ## Entrega
 
