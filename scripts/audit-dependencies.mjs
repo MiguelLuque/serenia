@@ -28,6 +28,7 @@ function validateReport(report) {
   if (severities.some(key => counts[key] !== actual[key]) || counts.total !== Object.keys(report.vulnerabilities).length || counts.total !== severities.reduce((sum, key) => sum + counts[key], 0)) invalid()
   return counts
 }
+/** @param {number | null | undefined} commandExit */
 export function assertAuditGate(report, context, scope = 'production', commandExit = undefined) {
   if (!['production', 'full'].includes(scope)) throw new Error('Unknown audit scope')
   const counts = validateReport(report)
