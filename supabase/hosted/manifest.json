@@ -9,6 +9,14 @@
   "canonicalName": "serenia_robust_mvp_hosted_atomic",
   "mechanism": "official MCP apply_migration single atomic Management query; server version mapped after success",
   "status": "PREPARED_NOT_APPLIED",
+  "supersedes": {
+    "packetSha256": "724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae",
+    "packetBytes": 92971,
+    "status": "SQL_REJECTED_NOT_APPLIED",
+    "packetPath": "supabase/hosted/archive/724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae/serenia-atomic.sql",
+    "manifestPath": "supabase/hosted/archive/724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae/manifest.json",
+    "outcomePath": "supabase/hosted/archive/724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae/outcome.json"
+  },
   "history": [
     {
       "version": "20260419000001",
@@ -289,12 +297,12 @@
       "localVersion": "20261013073246",
       "position": 6,
       "offset": 88010,
-      "bytes": 3544,
-      "sha256": "e96c4dd71b39efa1922558a3376cdd3340cec6c605f3da4f700406ae8f24abe6"
+      "bytes": 3625,
+      "sha256": "565fa459d6ed2588ac601bdbcd079888aca9b2fb51e5a28ba29f2553f6f6a9b4"
     }
   ],
   "exactOctoberSha256": "b2379784c13c23ddc9ea22c2fcaa863ebc9a87efb29057b39cf50e57e9098086",
-  "packetBytes": 92971,
-  "packetSha256": "724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae",
+  "packetBytes": 93052,
+  "packetSha256": "6f0037fc74e115455e379795cdcb1c5318e4a9f65660d048f8ca5d7af30069b0",
   "noHistoricalReplay": true
 }

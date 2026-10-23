@@ -32,5 +32,7 @@ BEGIN
   END LOOP;
 END;
 $function$;
-create event trigger ensure_rls on ddl_command_end execute function public.rls_auto_enable();
+create event trigger ensure_rls on ddl_command_end
+  when tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+  execute function public.rls_auto_enable();
 grant execute on function public.rls_auto_enable(), public.handle_new_auth_user() to anon, authenticated, service_role;

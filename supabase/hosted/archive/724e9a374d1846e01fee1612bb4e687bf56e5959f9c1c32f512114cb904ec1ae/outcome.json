@@ -1,0 +1,16 @@
+{
+  "status": "SQL_REJECTED_NOT_APPLIED",
+  "packetSha256": "724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae",
+  "packetBytes": 92971,
+  "manifestSha256": "125c36195659add167cf569bed2feac7c9304e865572ad2ed0607dc4615254c0",
+  "projectId": "brpozobkoatabctjjadc",
+  "canonicalName": "serenia_robust_mvp_hosted_atomic",
+  "reportedBy": "root controller official MCP apply_migration",
+  "reportedDate": "2026-10-23",
+  "sqlstate": "P0001",
+  "error": "Unexpected hosted event trigger definition/binding",
+  "reason": "Original guard requires evttags IS NULL; recorded baseline and fresh controller catalog have exact CREATE TABLE, CREATE TABLE AS, SELECT INTO tags.",
+  "postState": "Root 19:17:17 UTC confirms original40 history fingerprints, catalog,2Auth/2profiles preserved; no new tables/clinical rows/active packet queries.",
+  "evidence": ".cache/acceptance/hosted-reconnect-20261023.json",
+  "archiveContract": "Packet and original manifest bytes immutable; original manifest retains preparation status as historical snapshot. This outcome records the later SQL rejection. No apply success or migration version exists."
+}

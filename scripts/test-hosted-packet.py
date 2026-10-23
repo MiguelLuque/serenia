@@ -45,6 +45,31 @@ try:
     expected=json.dumps(baseline['history'],separators=(',',':'))
     assert packet.count(expected)==1
     packet=packet.replace(expected,json.dumps(fixture_history,separators=(',',':')))
+    # Reproduce the observed hosted WHEN TAG binding with the entire packet.
+    # Successful rehearsal is rolled back so all later failure probes start pristine.
+    query('begin;'+packet+'\nrollback;')
+    assert query("select count(*) from pg_class where oid=to_regclass('public.chat_turns');").stdout.strip()=='0'
+    print('PASS full packet accepts exact observed event tags; rehearsal rolled back')
+    # Every binding probe runs in a transaction with the full packet. Rejection
+    # must undo the probe and all preceding packet DDL/ACL changes.
+    tags = ['CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO']
+    assert json.loads(query("select to_json(evttags) from pg_event_trigger where evtname='ensure_rls';").stdout)==tags
+    event_mutations = [
+        ('unfiltered', 'drop event trigger ensure_rls; create event trigger ensure_rls on ddl_command_end execute function public.rls_auto_enable();'),
+        ('missing-tag', "drop event trigger ensure_rls; create event trigger ensure_rls on ddl_command_end when tag in ('CREATE TABLE','CREATE TABLE AS') execute function public.rls_auto_enable();"),
+        ('extra-tag', "drop event trigger ensure_rls; create event trigger ensure_rls on ddl_command_end when tag in ('CREATE TABLE','CREATE TABLE AS','SELECT INTO','ALTER TABLE') execute function public.rls_auto_enable();"),
+        ('disabled', 'alter event trigger ensure_rls disable;'),
+        ('wrong-function', "create function public.unexpected_event_binding() returns event_trigger language plpgsql as $test$begin return; end;$test$; drop event trigger ensure_rls; create event trigger ensure_rls on ddl_command_end when tag in ('CREATE TABLE','CREATE TABLE AS','SELECT INTO') execute function public.unexpected_event_binding();"),
+    ]
+    for scenario, mutation in event_mutations:
+        result=query('begin;'+mutation+packet+'\ncommit;',check=False)
+        assert result.returncode and 'Unexpected hosted event trigger definition/binding' in result.stderr, scenario+': '+result.stdout+result.stderr
+        assert query("select count(*) from pg_class where oid=to_regclass('public.chat_turns');").stdout.strip()=='0', scenario+' committed a DDL prefix'
+        assert json.loads(query("select to_json(evttags) from pg_event_trigger where evtname='ensure_rls';").stdout)==tags
+        assert query("select evtenabled from pg_event_trigger where evtname='ensure_rls';").stdout.strip()=='O'
+        assert query("select has_function_privilege('anon','public.handle_new_auth_user()','EXECUTE');").stdout.strip()=='t', scenario+' did not roll back earlier ACL delta'
+        assert json.loads(query(catalog_sql).stdout)==accepted
+        print('PASS full packet rejects event '+scenario+' drift and rolls back binding/DDL/ACL')
     # Same counts with changed clinical text must fail inside the locked guard.
     result=query("begin; update questionnaire_items set prompt='Unexpected drift' where id=(select id from questionnaire_items limit 1);"+packet+'\ncommit;',check=False)
     assert result.returncode and 'Hosted reviewed catalog semantic baseline changed' in result.stderr, result.stdout+result.stderr

@@ -45,6 +45,18 @@ describe('target-bound hosted acceptance',()=>{
     expect(manifest.history).toHaveLength(40);expect(manifest.sections).toHaveLength(6)
     expect(packet.toString()).not.toMatch(/^\s*(?:commit|begin|vacuum)\s*;/im)
   })
+  it('preserves the rejected packet identity separately from its corrected successor',()=>{
+    const rejected='724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae'
+    const archive=resolve('supabase/hosted/archive',rejected)
+    const bytes=readFileSync(resolve(archive,'serenia-atomic.sql'))
+    const prior=JSON.parse(readFileSync(resolve(archive,'manifest.json'),'utf8'))
+    const outcome=JSON.parse(readFileSync(resolve(archive,'outcome.json'),'utf8'))
+    expect(bytes.length).toBe(92971);expect(sha256(bytes)).toBe(rejected)
+    expect(sha256(readFileSync(resolve(archive,'manifest.json')))).toBe('125c36195659add167cf569bed2feac7c9304e865572ad2ed0607dc4615254c0')
+    expect(prior.packetSha256).toBe(rejected);expect(prior.packetBytes).toBe(bytes.length)
+    expect(outcome.status).toBe('SQL_REJECTED_NOT_APPLIED');expect(outcome.sqlstate).toBe('P0001')
+    expect(makePacket().manifest).toMatchObject({supersedes:{packetSha256:rejected,packetBytes:92971,status:'SQL_REJECTED_NOT_APPLIED'}})
+  })
   it('runs the actual synthetic provider and denies external fetch/socket destinations',()=>{
     const directory=realpathSync(mkdtempSync(resolve(tmpdir(),'serenia-hosted-provider-')))
     writeFileSync(resolve(directory,'control.json'),'{"structured":"success"}',{mode:0o600})

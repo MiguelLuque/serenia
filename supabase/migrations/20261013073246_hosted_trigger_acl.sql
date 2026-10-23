@@ -45,7 +45,8 @@ begin
     or md5(routine.prosrc)<>'99be20677b456ea8d3be47bdd44fb369'
     or (select count(*) from pg_event_trigger e where e.evtname='ensure_rls'
       and e.evtevent='ddl_command_end' and e.evtenabled='O' and e.evtfoid=routine.oid
-      and pg_get_userbyid(e.evtowner)='postgres' and e.evttags is null)<>1 then
+      and pg_get_userbyid(e.evtowner)='postgres'
+      and e.evttags is not distinct from array['CREATE TABLE','CREATE TABLE AS','SELECT INTO']::text[])<>1 then
     raise exception 'Unexpected hosted event trigger definition/binding';
   end if;
   grant execute on function public.rls_auto_enable() to postgres, service_role;

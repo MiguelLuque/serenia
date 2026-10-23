@@ -15,6 +15,20 @@ export const sourceFiles = [
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 export function makePacket(root = resolve('.')) {
   const baseline = JSON.parse(readFileSync(resolve(root, 'docs/operations/hosted-baseline.json'), 'utf8'))
+  // Never relabel the earlier reviewed packet after its actual SQL rejection.
+  const rejectedSha = '724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae'
+  const rejectedManifestSha = '125c36195659add167cf569bed2feac7c9304e865572ad2ed0607dc4615254c0'
+  const archive = `supabase/hosted/archive/${rejectedSha}`
+  const rejected = readFileSync(resolve(root, archive, 'serenia-atomic.sql'))
+  const archivedManifestBytes = readFileSync(resolve(root, archive, 'manifest.json'))
+  const archivedManifest = JSON.parse(archivedManifestBytes)
+  const outcome = JSON.parse(readFileSync(resolve(root, archive, 'outcome.json'), 'utf8'))
+  if (sha256(rejected) !== rejectedSha || rejected.length !== 92971
+    || archivedManifest.packetSha256 !== rejectedSha || archivedManifest.packetBytes !== rejected.length
+    || sha256(archivedManifestBytes) !== rejectedManifestSha || outcome.manifestSha256 !== rejectedManifestSha
+    || outcome.packetSha256 !== rejectedSha || outcome.packetBytes !== rejected.length
+    || outcome.status !== 'SQL_REJECTED_NOT_APPLIED' || outcome.sqlstate !== 'P0001') throw new Error('Rejected hosted packet archive identity changed')
+  const supersedes = { packetSha256: rejectedSha, packetBytes: rejected.length, status: outcome.status, packetPath: `${archive}/serenia-atomic.sql`, manifestPath: `${archive}/manifest.json`, outcomePath: `${archive}/outcome.json` }
   const parts = [], sections = []; let offset = 0
   const add = bytes => { const b=Buffer.from(bytes); parts.push(b); offset+=b.length }
   add(readFileSync(resolve(root, 'supabase/hosted/preservation-before.sql')))
@@ -27,7 +41,7 @@ export function makePacket(root = resolve('.')) {
   }
   add(readFileSync(resolve(root, 'supabase/hosted/preservation-after.sql')))
   const packet = Buffer.concat(parts)
-  return { packet, manifest: { ...target, sourceBase: baseline.sourceBase, canonicalName: 'serenia_robust_mvp_hosted_atomic', mechanism: 'official MCP apply_migration single atomic Management query; server version mapped after success', status: 'PREPARED_NOT_APPLIED', history: baseline.history, catalog: baseline.catalog, sections, exactOctoberSha256: sha256(Buffer.concat(sourceFiles.slice(0,5).map(name=>readFileSync(resolve(root,'supabase/migrations',name))))), packetBytes: packet.length, packetSha256: sha256(packet), noHistoricalReplay: true } }
+  return { packet, manifest: { ...target, sourceBase: baseline.sourceBase, canonicalName: 'serenia_robust_mvp_hosted_atomic', mechanism: 'official MCP apply_migration single atomic Management query; server version mapped after success', status: 'PREPARED_NOT_APPLIED', supersedes, history: baseline.history, catalog: baseline.catalog, sections, exactOctoberSha256: sha256(Buffer.concat(sourceFiles.slice(0,5).map(name=>readFileSync(resolve(root,'supabase/migrations',name))))), packetBytes: packet.length, packetSha256: sha256(packet), noHistoricalReplay: true } }
 }
 if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   if(process.argv.length!==2) throw new Error('No target or argument overrides supported')

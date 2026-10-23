@@ -1020,7 +1020,7 @@ alter function set_updated_at() set search_path = public, pg_temp;
 
 -- END EXACT 20261012084307_acceptance_strict_rls_advisors.sql
 
--- BEGIN EXACT 20261013073246_hosted_trigger_acl.sql SHA256 e96c4dd71b39efa1922558a3376cdd3340cec6c605f3da4f700406ae8f24abe6
+-- BEGIN EXACT 20261013073246_hosted_trigger_acl.sql SHA256 565fa459d6ed2588ac601bdbcd079888aca9b2fb51e5a28ba29f2553f6f6a9b4
 -- Trigger-only routines are not Data API contracts. Preserve platform creators
 -- and service_role; do not create the hosted-only event trigger on local installs.
 do $acl$
@@ -1068,7 +1068,8 @@ begin
     or md5(routine.prosrc)<>'99be20677b456ea8d3be47bdd44fb369'
     or (select count(*) from pg_event_trigger e where e.evtname='ensure_rls'
       and e.evtevent='ddl_command_end' and e.evtenabled='O' and e.evtfoid=routine.oid
-      and pg_get_userbyid(e.evtowner)='postgres' and e.evttags is null)<>1 then
+      and pg_get_userbyid(e.evtowner)='postgres'
+      and e.evttags is not distinct from array['CREATE TABLE','CREATE TABLE AS','SELECT INTO']::text[])<>1 then
     raise exception 'Unexpected hosted event trigger definition/binding';
   end if;
   grant execute on function public.rls_auto_enable() to postgres, service_role;
