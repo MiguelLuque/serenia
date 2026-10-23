@@ -2,10 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { assertAuditGate } from '../../scripts/audit-dependencies.mjs'
 const names = ['braces', 'micromatch', 'fast-glob', '@next/eslint-plugin-next', 'eslint-config-next']
-const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'))
-const configSource = readFileSync('eslint.config.mjs', 'utf8')
 type Entry = { name: string; isDirect: boolean; effects: string[]; fixAvailable: boolean; severity: string; nodes: string[]; range: string; via: (string | { url: string; range: string; severity: string })[] }
-function context() { return { lock: structuredClone(lock), configSource, config: [{}] as { settings?: { next?: { rootDir?: string } } }[], productionReport: { auditReportVersion: 2, metadata: { dependencies: dependencies(), vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 } }, vulnerabilities: {} as Record<string, Entry> } } }
+function context() { return { productionReport: { auditReportVersion: 2, metadata: { dependencies: dependencies(), vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 } }, vulnerabilities: {} as Record<string, Entry> } } }
 function dependencies() { return { prod: 1, dev: 5, optional: 0, peer: 0, peerOptional: 0, total: 6 } }
 function report(): { auditReportVersion: number; metadata: { dependencies: ReturnType<typeof dependencies>; vulnerabilities: Record<string, number> }; vulnerabilities: Record<string, Entry> } {
   return { auditReportVersion: 2, metadata: { dependencies: dependencies(), vulnerabilities: { info: 0, low: 0, moderate: 0, high: 5, critical: 0, total: 5 } }, vulnerabilities: Object.fromEntries(names.map((name, index) => [name, {
@@ -14,32 +12,16 @@ function report(): { auditReportVersion: number; metadata: { dependencies: Retur
   }])) }
 }
 afterEach(() => vi.useRealTimers())
-describe('temporary exact development-only braces exception', () => {
-  it('accepts only the recorded dev graph and clear production report before expiry', () => {
+describe('removed development exception', () => {
+  it('rejects the formerly exempt graph even before its old expiry', () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T12:00:00Z'))
-    expect(assertAuditGate(report(), context(), 'full')).toBe('PASS_WITH_TEMPORARY_DEV_EXCEPTION')
-  })
-  it('evaluates the installed ESLint config without traversing circular plugin internals', async () => {
-    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T12:00:00Z'))
-    const c = context()
-    c.config = (await import('../../eslint.config.mjs')).default
-    expect(assertAuditGate(report(), c, 'full')).toBe('PASS_WITH_TEMPORARY_DEV_EXCEPTION')
-  })
-  it.each(['production-node', 'other-branch', 'other-advisory', 'rootDir', 'changed-config', 'production-advisory', 'expired'])('fails closed for %s', scenario => {
-    vi.useFakeTimers(); vi.setSystemTime(new Date(scenario === 'expired' ? '2026-10-18T00:00:00Z' : '2026-10-11T12:00:00Z'))
-    const r = report(); const c = context()
-    if (scenario === 'production-node') c.lock.packages['node_modules/braces'].dev = false
-    if (scenario === 'other-branch') c.lock.packages['node_modules/synthetic-parent'] = { dependencies: { braces: '^3.0.3' } }
-    if (scenario === 'other-advisory') r.vulnerabilities.braces.via.push({ url: 'https://github.com/advisories/GHSA-other-new', range: '*', severity: 'high' })
-    if (scenario === 'rootDir') c.config = [{ settings: { next: { rootDir: 'untrusted/**' } } }]
-    if (scenario === 'changed-config') c.configSource += '\n// altered\n'
-    if (scenario === 'production-advisory') c.productionReport.vulnerabilities.braces = r.vulnerabilities.braces
-    expect(() => assertAuditGate(r, c, 'full')).toThrow()
+    const priorContext = { ...context(), lock: JSON.parse(readFileSync('package-lock.json', 'utf8')), configSource: readFileSync('eslint.config.mjs', 'utf8'), config: [{}] }
+    expect(() => assertAuditGate(report(), priorContext, 'full')).toThrow()
   })
 })
 
-describe('audit policy remains fail closed outside the exception', () => {
-  it.each(['low', 'moderate', 'info'])('rejects a complete %s advisory in production and full reports', severity => {
+describe('strict zero-advisory audit policy', () => {
+  it.each(['info', 'low', 'moderate', 'high', 'critical'])('rejects a complete %s advisory in production and full reports', severity => {
     const r = report()
     r.vulnerabilities = { braces: { ...r.vulnerabilities.braces, severity, effects: [], via: [{ url: 'https://github.com/advisories/GHSA-synthetic-other', range: '*', severity }] } }
     r.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 1, [severity]: 1 }
@@ -65,35 +47,11 @@ describe('audit policy remains fail closed outside the exception', () => {
     }
     expect(() => assertAuditGate(malformed)).toThrow()
   })
-  it.each(['devDependencies', 'optionalDependencies', 'peerDependencies', 'dependencies'])('rejects a new root %s consumer', kind => {
-    const c = context(); c.lock.packages[''][kind] = { ...c.lock.packages[''][kind], braces: '3.0.3' }
-    expect(() => assertAuditGate(report(), c, 'full')).toThrow()
-  })
-  it.each(['optionalDependencies', 'peerDependencies', 'devDependencies'])('rejects a new package %s consumer', kind => {
-    const c = context(); c.lock.packages['node_modules/synthetic-parent'] = { [kind]: { braces: '3.0.3' } }
-    expect(() => assertAuditGate(report(), c, 'full')).toThrow()
-  })
-  it('rejects new audit directness and changed inherited effects', () => {
-    const r = report(); r.vulnerabilities.braces.isDirect = true
-    expect(() => assertAuditGate(r, context(), 'full')).toThrow()
-    r.vulnerabilities.braces.isDirect = false; r.vulnerabilities.braces.effects.push('another-consumer')
-    expect(() => assertAuditGate(r, context(), 'full')).toThrow()
-  })
-  it.each(['eslint-config-next', '@next/eslint-plugin-next'])('rejects the previously reviewed parent version for %s', name => {
-    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-14T22:00:00Z'))
-    const c = context(); c.lock.packages['node_modules/' + name].version = '16.4.0'
-    expect(() => assertAuditGate(report(), c, 'full')).toThrow()
-  })
-  it('rejects a changed exact plugin edge even with approved installed versions', () => {
-    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-14T22:00:00Z'))
-    const c = context(); c.lock.packages['node_modules/eslint-config-next'].dependencies['@next/eslint-plugin-next'] = '^16.4.1'
-    expect(() => assertAuditGate(report(), c, 'full')).toThrow()
-  })
   it('requires clear production evidence even after the full graph becomes clean', () => {
     const c = context(); c.productionReport.metadata.vulnerabilities.total = 1
     expect(() => assertAuditGate(context().productionReport, c, 'full')).toThrow()
   })
-  it('does not use the exception in production or accept a valid nonzero production context with clean full', () => {
+  it('rejects a nonzero production context even with clean full', () => {
     const c = context(); const r = report()
     expect(() => assertAuditGate(r, c, 'production')).toThrow()
     c.productionReport.vulnerabilities.braces = { ...r.vulnerabilities.braces, severity: 'moderate', effects: [] }
@@ -104,5 +62,27 @@ describe('audit policy remains fail closed outside the exception', () => {
     const c = context()
     expect(assertAuditGate(c.productionReport)).toBe('PASS')
     expect(assertAuditGate(c.productionReport, c, 'full')).toBe('PASS')
+  })
+})
+
+// A clean JSON document must never hide npm failure.
+describe('npm exit evidence', () => {
+  it.each([1, 2, null])('rejects clean report paired with npm exit %s', exit => {
+    expect(() => assertAuditGate(context().productionReport, undefined, 'production', exit)).toThrow()
+  })
+})
+
+describe('audit scope and command consistency', () => {
+  it('rejects an unknown scope', () => {
+    expect(() => assertAuditGate(context().productionReport, undefined, 'unexpected')).toThrow('Unknown audit scope')
+  })
+  it('requires a complete production report for full audit', () => {
+    expect(() => assertAuditGate(context().productionReport, undefined, 'full')).toThrow()
+  })
+  it('accepts clean evidence with npm exit zero', () => {
+    expect(assertAuditGate(context().productionReport, context(), 'full', 0)).toBe('PASS')
+  })
+  it('rejects advisory evidence paired with npm exit zero', () => {
+    expect(() => assertAuditGate(report(), context(), 'full', 0)).toThrow('Audit exit and report disagree')
   })
 })
