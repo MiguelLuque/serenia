@@ -19,7 +19,7 @@ La [guía actual de Decisions](https://developers.openai.com/api/docs/guides/dec
 
 El input total ya incluye lecturas/escrituras cacheadas: se restan del input ordinario antes de valorar cada categoría. Ejemplo estimado:1Minput con200klectura/100kescritura cuesta0.0845USD; con multiplicador de contexto largo y prima regional resulta0.1859USD. No son mediciones de uso. Regiones y retención requieren comprobar elegibilidad/configuración; no se infiere que nuestra cuenta tenga ZDR o acuerdos clínicos habilitados.
 
-La API admite caché implícita sobre input compartido a partir de1.024tokens. Las decisiones y preguntas siguen sin autoridad sobre permisos, edad, puntuaciones, alertas o cierre. La corrección del preset/fecha y sus regresiones se ejecuta como Task10; el auxiliar continúa apagado y desconectado del paciente.
+La API admite caché implícita sobre input compartido a partir de1.024tokens. Las decisiones y preguntas siguen sin autoridad sobre permisos, edad, puntuaciones, alertas o cierre. La corrección del preset/fecha y sus regresiones se completó y revisó independientemente en Task10, fuente51b7690, con ocho pruebas focales y lint/tipos/offline correctos; el auxiliar continúa apagado y desconectado del paciente.
 
 ## Jev y criterio de elección
 

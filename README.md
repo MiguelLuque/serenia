@@ -76,4 +76,6 @@ Los roles resuelven strings mediante AI Gateway; autenticación, costes y tratam
 
 Local World no autentica colas y sólo sirve para desarrollo. La aceptación se enlaza a loopback. Publicar exige World apto para producción, protección de ingress/colas demostrada, migraciones/smoke del destino, tratamiento de datos y textos legales aprobados, resolución de discrepancias clínicas y canal operativo de urgencias.
 
-El parche upstream de Next anunciado para el14octubre sigue pendiente; la excepción dev GHSA-vfj7-8cjw-p6xm caduca el **18octubre2026**. Audit de producción sin findings no convierte el audit completo en limpio.
+Next16.4.1 y React/DOM19.3.1 incluyen el mantenimiento de seguridad documentado; Vitest4.1.12 corrige los avisos dev actuales. La excepción de auditoría se ha retirado: producción y full exigen cero findings, con ejecución correcta23octubre2026. [Evidencia de dependencias](docs/audits/2026-10-23-dependency-acceptance.md).
+
+El [estado técnico actual](docs/audits/2026-10-23-mvp-status.md) distingue los bloques locales aprobados del bloqueo del conector de migraciones hospedadas, las fuentes/builds comprobados y los gates de producción pendientes. [Investigación actual de modelos y costes](docs/audits/2026-10-23-model-refresh.md).

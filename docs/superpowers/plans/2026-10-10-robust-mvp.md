@@ -137,9 +137,9 @@ Al retomar el23oct, la excepción dev caducó18oct00UTC. La aprobación históri
 
 La guía oficial actual23oct cobra lectura/escritura de caché a las tarifas estándar Luna; el preset de investigación11oct todavía las valora en cero.
 
-- [ ] Corregir únicamente tarifa/fecha del preset auxiliar, conservando otros snapshots, uso total inclusivo, salida gratuita y primas existentes. No cambiar modelos paciente ni habilitar el auxiliar.
-- [ ] Regresiones RED/GREEN de facturación con caché y primas; evaluador offline, lint y tipos sobre la corrección. La evidencia nativa de Task9 conserva su fuente exacta; no atribuirle cambios posteriores.
-- [ ] Revisión independiente scoped y actualización de la comparativa con fuentes primarias; calidad española/calibración online siguen no medidas.
+- [x] Corregir únicamente tarifa/fecha del preset auxiliar, conservando otros snapshots, uso total inclusivo, salida gratuita y primas existentes. No cambiar modelos paciente ni habilitar el auxiliar.
+- [x] Regresiones RED/GREEN de facturación con caché y primas; evaluador offline, lint y tipos sobre la corrección. La evidencia nativa de Task9 conserva su fuente exacta; no atribuirle cambios posteriores.
+- [x] Revisión independiente scoped y actualización de la comparativa con fuentes primarias; Task10 aprobada en51b7690, ocho pruebas focales y lint/tipos/offline0. Calidad española/calibración online siguen no medidas.
 
 ## Entrega
 
