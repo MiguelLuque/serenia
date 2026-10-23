@@ -1,0 +1,49 @@
+# Dependency acceptance — 2026-10-23
+
+Task9 actual BASE `86e1ac8cfa2e59aa4d757e65722778c47fa6c627`, branch `codex/serenia-robust-mvp`. Final executable source `04052b47a43b871a41e6a319ea76ed5d1d1c6ac1`; exact executable diff `86e1ac8cfa2e59aa4d757e65722778c47fa6c627..04052b47a43b871a41e6a319ea76ed5d1d1c6ac1`. Source commits: `780c743` (patch/strict gate), `11a6f87` and `04052b4` (optional JavaScript API typing corrected after native failures). Evidence-only follow-up changes this document; the accepted executable source and lock remain the ones identified above. Task1–8 were not reimplemented. Independent review remains root-owned and pending.
+
+## Published evidence and actual failure
+
+The historical braces exception expired18October; it is removed with no extension or replacement waiver. [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) was officially withdrawn23October as not practically exploitable; its page still lists no patched version. Public registry metadata confirms braces3.0.3 remains latest. We do not claim a new braces patch or suppress an active advisory.
+
+The actual initial authorized audit on the unchanged BASE returned production0/npm exit0 and full2 moderate package entries/npm exit1: `@vitest/mocker` and its parent `vitest`, due to [GHSA-qxg6-89mg-rqv8](https://github.com/vitest-dev/vitest/security/advisories/GHSA-qxg6-89mg-rqv8) and [GHSA-xp26-3454-mjgp](https://github.com/vitest-dev/vitest/security/advisories/GHSA-xp26-3454-mjgp). Both official advisories identify4.1.12 as patched. [Vitest4.1.12 release](https://github.com/vitest-dev/vitest/releases/tag/v4.1.12),15October, commit4766ce1, backports mock hardening in PR11580. These are two advisories inherited into two audit entries, not a braces finding.
+
+Public metadata retrieval/install used a positive child environment, private HOME/cache and empty user/global npm configuration. Exact `npm install --save-dev --save-exact vitest@4.1.12 --ignore-scripts --no-audit --no-fund` exited0. Installed Node v24.14.1 and Vite8.3.4 satisfy the published Vitest Node>=24/Vite^8 compatibility ranges. No forced major, audit-fix, global install/config, key access, or .env.local read/change.
+
+## Exact source and graph delta
+
+Only direct dev pin Vitest4.1.11→4.1.12. Lock remains1,059 entries including root, no nodes added/removed. Eight package nodes change4.1.11→4.1.12: vitest and @vitest/{expect,mocker,pretty-format,runner,snapshot,spy,utils}; all are dev-only before/after. Root dev pin follows. Every other parsed package node is unchanged. Lock SHA256 `e0f9eb1ffc90023ebb1b4bf2f1b7f85902f751229d2d679733f64f7b75fc1ed4`.
+
+Installed versions match those eight4.1.12 nodes. Next/eslint-config-next/@next/eslint-plugin-next16.4.1, React/DOM19.3.1, Workflow/core4.8.13 and integration4.1.17 stay exact. Root production dependency fields and every non-dev lock node are identical to approved runtime source `e7b79ea9111c760da2fa824f869b5d42b3a9bf8f`. App/components/hooks/lib, Next config and acceptance sources have no changes against that source. ESLint config bytes/rules remain exact, SHA256 `6b440fd458d9a2820a20e10b81127025eb257b04aacd06ea539fc40f4eca5ed2`.
+
+Installed mocker source/API inspected: `createManualModuleSource` JSON-serializes the module URL/export names; redirect registration uses `slash(redirectUrl.pathname)` before joining/allowlist checks. A focused actual exported-API call verifies escaping and plugin construction; exit0. This is source/API inspection, not a live browser/Windows exploit reproduction. Hashes and result: `.cache/task9/installed-inspection.json`, `installed-api-result.json`; script `installed-api-check.mjs`.
+
+Audit gate removes all exception/clock/config-hash logic. Both full and production require zero findings at every level, complete consistent npm v2 reports and matching npm exit. Audit children now also use private HOME/cache/empty configs and explicit public registry. No effective lint rule was removed. Replaced obsolete exemption graph/config guard tests with strict rejection tests for every severity, malformed/inconsistent reports, unknown scope, missing/nonzero production evidence and mismatched npm status. The former exact graph is rejected even under the old pre-expiry clock. RED:1failed/36passed on the old waiver; added exit mismatch RED:4failed/36passed. Final focused53/53 pass. Total suite713 versus historical723 reflects removing obsolete waiver-only cases; product tests are unchanged.
+
+## Native acceptance and failed attempts
+
+All seven required gates ran through native `npm run verify`, with full private logs. Numeric exits in order:
+
+| Attempt/source | test | lint | typecheck | workflow:wire | db:test | audit:dependencies | build:isolated |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| restricted780c743, overall1 | 0 | 0 | 2 | 0 | 1 | 1 | 1 |
+| authorized11a6f87, overall1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| final authorized04052b4, overall0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Restricted run `serenia-verify-OilFHI`: new exit argument inferred as undefined by TypeScript; Docker socket permission denied; audit DNS ENOTFOUND/incomplete JSON rejected. Build `serenia-build-8zAaGx` did not finish after about5minutes; after exact fresh launcher-descendant PID/PPID/command/cwd verification, only its next-build83134 was SIGTERM-cancelled (build exit143, gate1). No unsupported claim about the unfinished build's cause. `.cache/task9/initial-build-owned-tree.json` and `initial-build-cancel.json` preserve ownership/action. No historical runtime was inspected/stopped/restarted.
+
+First JSDoc adjustment still made context required: direct tsc2 (`typecheck-corrected.stdout`), and authorized native `serenia-verify-bF5Qkt` typecheck/build1; no acceptance claimed. Full optional signature fixed in04052b4; focused TypeScript/lint0 before final native rerun. Initial project-checks execution could not create its log outside the writable workspace and ran no gates; native wrapper then retained full local logs. Initial restricted standalone audits/metadata also failed DNS and remain recorded separately. No failed or missing check is counted as PASS.
+
+**Final acceptance:** `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-DYEnp5/results.json`, SHA256 `b1171cab9fe8f5f571f4748f21fef13585a44b66cd6518b0688a81f9631e3751`, seven numeric0/no error fields. **713 tests/63 files**, lint/typecheck0. Workflow:20 original payloads/24 current roundtrips/0failures, fixtures unchanged. Native PostgreSQL17.6 empty isolated database: migration/authorization/concurrency/read-rowset/12risk parity-vector gates passed. It does not test actual local JWT/Data API or reset existing acceptance data.
+
+Final production audit: info/low/moderate/high/critical/total all0, npm exit0. Full: all0, npm exit0, no exempt findings. Raw production/full JSON, stderr and real npm exit files are beside final results. Standalone after-patch audit `serenia-audit-bs41Qs` also0/0. Initial actual failure `serenia-audit-9RiIu8` retains the two moderate findings. These registry-dependent results are point-in-time evidence, not universal absence of vulnerabilities.
+
+Final build `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-build-IAV7hh`, exit0, BUILD_ID **KTqj18xsAQLNY9ZYIkNoN**, source04052b4/full hash above, lock above; Node24.14.1, Next16.4.1, Vitest4.1.12. Snapshot contains copied installed dependencies and only .env.example; positive build environment uses public placeholders, localAcceptance=false, telemetry off. Exact metadata/result/build.log remain in that directory. This is a new build acceptance, not a runtime smoke.
+
+## Runtime mapping, boundaries and retained evidence
+
+New runtime smoke **NOT_RUN**: only development dependencies/tooling changed, with exact unchanged runtime mapping above (`.cache/task9/runtime-mapping.json`). Historical Task8 report records sourcee7b79ea/local BUILD_IDeb82GmzSYtaaGZPdfJxGO and generated-run smoke wrun_01M4YAS61A3EH3X3AEJXK1A8Z0. Its raw `/private/tmp/serenia-task8-patch-20261015/smoke-proof.json` and temporary build metadata are absent now; that history is report-derived and has not been revalidated or relabelled as a new smoke. No current server/old PID/launcher liveness inferred. No new fake actor/manifest, local Auth/consent/SQL mutation, online model call, browser flow or same-run restart. Existing proof state was left alone. The current local acceptance stack and actual hosted acceptance remain unverified by Task9.
+
+Canonical `supabase/hosted/serenia-atomic.sql` remains92,971bytes/SHA256 `724e9a374d1846e01fee1612bb4e687bf56e5959f9c1c32f512114cb904ec1ae`. Both inbox forward copies remain5,172bytes/SHA256 `d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9`; prepared-not-applied. No hosted action, clinical/model/product/SQL/prompt change, deployment, public resource, paid call or positive cron claim. Root's untracked15October status document is unchanged. Hosted/clinical/legal/release approval remains root-owned and unresolved.
+
+Full raw evidence is private in `/Users/miguelluque/git/serenia/.cache/task9/`: before-lock/package, public metadata, install log, structural lock delta, installed inspection, runtime mapping, RED/GREEN/typecheck/lint logs, three native wrapper stdout/stderr/exits, process cancellation proof and `evidence-index.json` (file SHA256/bytes). Initial/final native and build directories above retain per-gate full logs; evidence index lists their exact hashes. Initial results SHA256 `cf62f0c2e4c285ac2ab830f7dee38c07e9d32bc4f5afe43d7a5420988c1eb583`; intermediate `2237d3d9729db11e6632725a657bcde9c9c3b8f41ad725341b88d76f7cbf36c8`. No raw source/env/private fixture bodies are published. Exact final BASE..HEAD review diff and its SHA256/bytes are recorded in Task9 SDD report and private review manifest after the evidence commit.
