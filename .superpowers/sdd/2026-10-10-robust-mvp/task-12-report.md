@@ -1,6 +1,6 @@
 # Task12 — bounded production dependency patch
 
-Status: source checkpoint in progress; no runtime/DDL/fixture action. Executable BASE `f1ff5b788f1f217c21c0883923cacbf056e991f1`; Task11 documentary checkpoint `5accbed` contains only its report/audit and precedes all dependency changes. Task12 review range begins at5accbed. Task11 source/forward review was approved separately by root/same reviewer; hosted acceptance remains pending. Six root-owned untracked records are excluded; root's Task12 plan edit is explicitly included in the forthcoming source commit.
+Status: committed source + hosted-build checkpoint ready for independent review; no runtime/DDL/fixture action. Executable BASE `f1ff5b788f1f217c21c0883923cacbf056e991f1`; Task11 documentary checkpoint `5accbed` contains only its report/audit and precedes all dependency changes. Task12 review range begins at5accbed. Task11 source/forward review was approved separately by root/same reviewer; hosted acceptance remains pending. Six root-owned untracked records are excluded; root's Task12 plan edit is explicitly included in the forthcoming source commit.
 
 ## Actual blocker and upstream rationale
 
@@ -28,7 +28,23 @@ After install, all6 probes passed. Combined schema/Task11 focused run:70 tests/4
 
 ## Final committed gates/build and limits
 
-Pending mandatory seven native gates on the committed final source, then a fresh exact-target hosted build without start. No Task11 vulnerable hosted build ran; its pre-execution approval-infrastructure usage-limit failure is recorded separately. Do not reuse its generic placeholder build for login.
+Executable source `f2d69ea088403a3f3e641d20112318b54a344577`, patched lock `cb963dbb3901c1f91e74c86c979e68062a823c464383250f72f95f7d26c9a425`, Node24.14.1. Final `rtk npm run verify` ran once on this committed source and completed overall exit0. Exact private evidence `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-5MXDSq/results.json`; wrapper/full output `.cache/task12/native-verify.log`, numeric exit `.cache/task12/native-verify-exit.json`, evidence/hash snapshot `.cache/task12/native-evidence.json`.
+
+| Gate | Exit | Actual result |
+| --- | --- | --- |
+| test |0|758 tests /65 files |
+| lint |0|zero-warning gate |
+| typecheck |0|tsc --noEmit |
+| workflow:wire |0|20 prior payloads /24 current roundtrips, zero failures |
+| db:test |0|PG17.6 frozen packet mapping, six forward drift cases, review integrity/authorization/task/concurrency controls |
+| audit:dependencies |0|production/full npm exits0; info/low/moderate/high/critical/total all0 in both raw reports |
+| build:isolated |0|source f2d69ea, generic BUILD_IDc8XKB05fOmf7LmdLCY-w5 |
+
+Generic snapshot: `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-build-5SpG3A/project`; placeholder configuration, never started. Raw audit JSON and numeric exits were independently parsed after verify; no missing check is inferred from another gate. The original Task11 audit1 stays preserved and attributable to its old lock.
+
+Fresh `rtk proxy node scripts/hosted-build.mjs` completed exit0 against the exact existing target via selected positive connection configuration. Snapshot `/private/tmp/serenia-hosted-build-w4zDky/project`, same committed source f2d69ea/lock above, BUILD_ID `7-SFAHJkzrF9ef47Bhjl7`,876 inventoried files, artifact SHA256 `bc0ef03700d0c28d3de31bb188208916ee110dd08315caab71908c03fee6ca9f`. Actual `metadata.json`, `result.json`, `artifact.json` and `build.log` remain private in its parent. Stored metadata SHA256 `6560efcdf8fa406a5c1facd2929fb667f8caa91ee80f14814c7531e1accde4b9`; artifact-record SHA256 `2503fd3b69d677866a5c7666e192724d01e117771ae3cc928c1760f15d5fe746`. All affected copied dependency versions and lock bytes were rechecked inside the hosted snapshot; read-only recomputation matches the complete stored artifact identity. Selected public/server keys were never printed. Local identity summary `.cache/task12/hosted-build-identity.json` and command/exit logs retain provenance.
+
+The hosted artifact is NOT STARTED. No hosted fixture call, provider request, same-run restart or UI acceptance occurred under Task12. No Task11 vulnerable hosted build ran; its earlier pre-execution approval-infrastructure usage-limit failure is preserved separately. The final documentation-only descendant records these results; the built executable source remains exactly f2d69ea, not that later docs HEAD.
 
 Frozen: canonical6f0037fc93052bytes, inboxd9604, prepared Task11 review forward8191bytes/SHA256 `86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504`/body7f83d3074a279a2740d1bf82a2977ebd. No migration/history/type/ACL/catalog change by Task12. Root alone owns later application after fresh metadata/review.
 
