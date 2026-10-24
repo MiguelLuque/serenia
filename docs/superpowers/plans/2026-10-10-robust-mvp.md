@@ -151,6 +151,17 @@ Defecto demostrado en la aceptación hospedada24oct: PHQ9 con9respuestas/resulta
 - [ ] Verificar las rutas productivas y cualquier generador alternativo que comparta el mismo contrato; regresiones de fallos, salida del modelo y ausencia válida. Ejecutar los siete gates nativos y build hospedado aislado comprometido, conservando identidades/logs y compatibilidad Workflow; revisión independiente scoped del cambio antes de aplicar el forward y cambiar runtime.
 - [ ] Probar el artefacto corregido contra el mismo destino hospedado con resultados ficticios ya puntuados: modelo sintético omite/contradice el array, informe persistido y vista clínica muestran los hechos canónicos; revisión/proyección paciente y cleanup scoped completan Task7. No reescribir informes históricos ni repetir DDL/fixtures para simular éxito. Evidencia anterior conserva su fuente27f82d8; fuente/build nuevos se identifican por separado.
 
+## Task 12: Cerrar los nuevos avisos de dependencias de producción
+
+La ejecución obligatoria de Task11 sobre `f1ff5b7` obtuvo test/lint/tipos/wire/PG/build0 pero audit1:22entradas del grafo causadas por cinco advisories de Zod, body-parser y Undici. Las páginas primarias actuales confirman las correcciones; la aprobación de23oct es histórica, no una excepción para estos hallazgos.
+
+- [ ] Verificar releases/constraints y elegir el cambio mínimo compatible: Zod4.6.6, body-parser2.4.0 y Undici6.29.1/7.30.1 son los mínimos corregidos publicados para las ramas afectadas. Preferir versiones padre compatibles; justificar cualquier override exacto si el upstream mantiene un pin/rango vulnerable. No degradar Workflow2 ni actualizar paquetes ajenos por inercia.
+- [ ] Conservar el gate estricto de cero advisories en producción/full y todos los fallos reales; dependencia/lock/install fijados sin waiver ni audit fix--force. Mantener identidad de los tres paquetes SQL y contratos clínicos.
+- [ ] Comprobar integración de esquemas/AI/Workflow/transporte afectada por el grafo final, ejecutar los siete gates nativos y construir un nuevo artefacto hospedado aislado desde fuente comprometida. Revisión independiente scoped de Task11/12 antes de aplicar el nuevo forward o cambiar runtime; el antiguo build27 y las pruebas anteriores no son evidencia del parche.
+- [ ] Completar aceptación hospedada del nuevo artefacto, hechos puntuados→informe, edición/proyección paciente, limpieza y postcheck; si cambia la implementación durable, verificar recuperación sobre el mismo run según impacto demostrado.
+
+La petición24oct deja UX y comportamiento/diagnóstico previo para una fase posterior al cierre técnico de este MVP. Esta tarea corrige bloqueos de seguridad, sin comenzar esa siguiente fase de producto.
+
 ## Entrega
 
 - [ ] Revisión independiente de toda la rama con el modelo más capaz disponible después de Task7; una ola de correcciones y revisión scoped, con evidencia final de los gates afectados. Este gate conserva el requisito original de Task6 y no lo sustituye la aprobación local del bloque.
