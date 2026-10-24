@@ -9,13 +9,16 @@ import { sha256, target } from './hosted-packet.mjs'
 export function artifactIdentity(snapshot) {
   if(realpathSync(snapshot)!==snapshot)throw new Error('Artifact symlink forbidden')
   const files={}
-  function scan(directory) {
+  function scan(directory, mutableCache = false) {
     for(const entry of readdirSync(resolve(snapshot,directory),{withFileTypes:true})) {
       const path=directory+'/'+entry.name
       if(entry.isSymbolicLink())throw new Error('Artifact code symlink forbidden')
-      if(path==='.next/cache')continue
-      if(entry.isDirectory())scan(path)
-      else if(entry.isFile())files[path]=sha256(readFileSync(resolve(snapshot,path)))
+      // Next16 keeps response data beside compiled routes, not in .next/cache.
+      // Traverse both exact cache subtrees for symlinks; omit only data hashes.
+      const cacheBoundary=path==='.next/cache'||path==='.next/server/route-cache'
+      if(cacheBoundary&&!entry.isDirectory())throw new Error('Artifact cache boundary must be a directory')
+      if(entry.isDirectory())scan(path,mutableCache||cacheBoundary)
+      else if(entry.isFile()&&!mutableCache)files[path]=sha256(readFileSync(resolve(snapshot,path)))
     }
   }
   for(const directory of ['.next','scripts','app','lib'])scan(directory)
