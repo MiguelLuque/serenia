@@ -23,6 +23,7 @@ import {
 
 interface MockTable {
   rows?: unknown
+  error?: unknown
   insertReturn?: unknown
 }
 
@@ -81,7 +82,7 @@ function makeSupabase(tables: Record<string, MockTable>) {
         )
         return chain
       }
-      return makeQueryChain({ data: table.rows ?? null })
+      return makeQueryChain({ data: table.rows ?? null, error: table.error })
     }),
   }
 }
@@ -183,5 +184,24 @@ describe('generateAssessment', () => {
         'session-1',
       ),
     ).rejects.toBeInstanceOf(AssessmentSkippedError)
+  })
+})
+
+
+describe('Task11 exported legacy writer uses persisted questionnaire facts', () => {
+  it.each([{ questionnaires: [] }, { questionnaires: [{ code: 'FAKE', score: 99, band: 'fake', flags: [] }] }])('overrides model facts %j before the legacy insert', async ({ questionnaires }) => {
+    generateObjectMock.mockResolvedValue({ object: { ...summaryResult, questionnaires }, usage: {} })
+    const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [{ id: 'instance-1', questionnaire_id: 'definition-1', status: 'scored' }] },
+      questionnaire_definitions: { rows: { code: 'PHQ9', name: 'PHQ-9' } },
+      questionnaire_results: { rows: { total_score: 12, severity_band: 'moderate', flags_json: [] } }, assessments: { insertReturn: { id: 'new' } } })
+    await generateAssessment(db as unknown as Parameters<typeof generateAssessment>[0], 'session-1')
+    const chain = db.from.mock.results.map(r => r.value as { insert?: { mock: { calls: { summary_json: { questionnaires: unknown } }[][] } } }).find(x => x.insert?.mock.calls.length)
+    expect(chain?.insert?.mock.calls[0][0].summary_json.questionnaires).toEqual([{ code: 'PHQ9', score: 12, band: 'moderate', flags: [] }])
+  })
+  it('propagates questionnaire read failure without calling the model or inserting a draft', async () => {
+    const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, messages: { rows: makeMessages(4) }, questionnaire_instances: { error: new Error('questionnaire unavailable') } })
+    await expect(generateAssessment(db as unknown as Parameters<typeof generateAssessment>[0], 'session-1')).rejects.toThrow()
+    expect(generateObjectMock).not.toHaveBeenCalled()
   })
 })

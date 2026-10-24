@@ -79,7 +79,7 @@ if(mode==='fixtures'){
   for(const name of ['flow','step'])assert.equal((await fetch(`${target.appOrigin}/.well-known/workflow/v1/${name}?__health`,{method:'POST',redirect:'manual'})).status,200)
   for(const text of ['Primera conversación ficticia','Me encuentro tranquilo en esta prueba','Solicito el cuestionario PHQ9']){const r=await send('patient',text);assert.equal(r.status,200,r.body)}
   const a=actor('patient'),auth=await login('patient')
-  const instance=ok(await admin.from('questionnaire_instances').select('id').eq('session_id',a.sessionId).eq('user_id',a.userId).single())
+  const instance=ok(await admin.from('questionnaire_instances').select('id,questionnaire_id').eq('session_id',a.sessionId).eq('user_id',a.userId).single())
   const body=JSON.stringify({answers:Array.from({length:9},(_,i)=>({itemOrder:i+1,valueNumeric:0,valueRaw:'0'}))})
   for(let i=0;i<2;i++){const response=await fetch(`${target.appOrigin}/api/questionnaires/${instance.id}/answers`,{method:'POST',headers:{Cookie:auth.cookie(),'Content-Type':'application/json'},body});assert.equal(response.status,200,await response.text())}
   assert.equal(ok(await admin.from('questionnaire_results').select('id').eq('instance_id',instance.id)).length,1)
@@ -87,8 +87,13 @@ if(mode==='fixtures'){
   const turn=ok(await admin.from('chat_turns').select('status,attempts').eq('session_id',a.sessionId).eq('request_id',retryId).single());assert.equal(turn.status,'completed');assert.equal(turn.attempts,2)
   for(const text of ['Propongo cerrar esta sesión','Sí, cerramos']){const r=await send('patient',text);assert.equal(r.status,200,r.body)}
   const completed=await waitCompleted('patient');assert.equal(completed.attempts,1)
-  assert.equal(ok(await admin.from('assessments').select('id').eq('session_id',a.sessionId).eq('user_id',a.userId)).length,1)
-  proof('hosted_actual_next_http_questionnaire_retry_idempotency_closure_generated_workflow',{sessionId:a.sessionId,runId:completed.run_id})
+  const report=ok(await admin.from('assessments').select('id,summary_json').eq('session_id',a.sessionId).eq('user_id',a.userId).single())
+  const result=ok(await admin.from('questionnaire_results').select('total_score,severity_band,flags_json').eq('instance_id',instance.id).single())
+  const definition=ok(await admin.from('questionnaire_definitions').select('code').eq('id',instance.questionnaire_id).single())
+  const facts=[{code:definition.code,score:result.total_score,band:result.severity_band,flags:result.flags_json}]
+  assert.deepEqual(facts,[{code:'PHQ9',score:0,band:'minimal',flags:[]}])
+  assert.deepEqual(report.summary_json.questionnaires,facts,'Generated report must retain persisted scored facts despite the adversarial empty provider list')
+  proof('hosted_actual_next_http_questionnaire_retry_idempotency_closure_generated_workflow',{sessionId:a.sessionId,runId:completed.run_id,questionnaires:facts})
 }else if(mode==='review'){
   const name=manifest.actors.restart?'restart':'patient',a=actor(name),patient=await login(name),clinician=await login('clinician')
   assert.deepEqual(ok(await patient.client.from('assessments').select('*').eq('session_id',a.sessionId)),[])

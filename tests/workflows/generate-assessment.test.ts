@@ -92,7 +92,7 @@ function makeSupabase(tables: Record<string, TableSpec>) {
   const fromMock = vi.fn((name: string) => {
     const spec = tables[name] ?? (name === 'conversations'
       ? { rows: { id: 'conv-1', user_id: 'user-1' } }
-      : {})
+      : name === 'questionnaire_instances' ? { rows: [] } : {})
 
     if (name === 'assessments') {
       let mode: 'read' | 'write' = 'read'
@@ -778,5 +778,81 @@ describe('durable assessment result fencing', () => {
     await persistAssessmentStep(makeSession() as never, summaryResult as never, 'valid-token')
     expect(rpc).toHaveBeenCalledWith('finish_assessment_job', { p_session_id: 'session-1', p_token: 'valid-token', p_status: 'draft_ai', p_summary: summaryResult })
     expect(from).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Task11 deterministic questionnaire facts in active reports', () => {
+  const scored = { code: 'PHQ9', score: 12, band: 'moderate', flags: [{ itemOrder: 9, reason: 'suicidality' }] }
+  function database(overrides: Record<string, TableSpec> = {}) {
+    return makeSupabase({
+      clinical_sessions: { rows: makeSession() }, assessments: { rows: null }, messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [{ id: 'instance-b', questionnaire_id: 'definition-1', status: 'scored' }] },
+      questionnaire_definitions: { rows: { code: 'PHQ9', name: 'PHQ-9' } },
+      questionnaire_results: { rows: { total_score: 12, severity_band: 'moderate', flags_json: [{ itemOrder: 9, reason: 'suicidality' }] } },
+      questionnaire_answers: { rows: [] }, risk_events: { rows: [] }, ...overrides,
+    })
+  }
+  it.each([{ questionnaires: [] }, { questionnaires: [{ code: 'FAKE', score: 9999, band: 'invented', flags: [{ itemOrder: 1, reason: 'invented' }] }] }])('persists scored facts even when the model returns %j', async ({ questionnaires }) => {
+    generateObjectMock.mockResolvedValue({ object: { ...summaryResult, questionnaires }, usage: {} })
+    const db = database(); createServiceRoleClientMock.mockReturnValue(db)
+    expect(await generateAssessmentWorkflow({ sessionId: 'session-1' })).toEqual({ status: 'completed' })
+    const row = db.from.mock.results.map(r => r.value as { _insertedRow?: { status: string; summary_json: { questionnaires: unknown } } }).find(x => x._insertedRow)?._insertedRow
+    expect(row?.status).toBe('draft_ai'); expect(row?.summary_json.questionnaires).toEqual([scored])
+  })
+  it('discards model-invented questionnaires when the persisted scored set is empty', async () => {
+    generateObjectMock.mockResolvedValue({ object: { ...summaryResult, questionnaires: [scored] }, usage: {} })
+    createServiceRoleClientMock.mockReturnValue(database({ questionnaire_instances: { rows: [] } }))
+    expect((await generateAssessmentStep(makeSession())).questionnaires).toEqual([])
+  })
+  it('retains flags and each separately persisted repeated instrument instance', async () => {
+    generateObjectMock.mockResolvedValue({ object: summaryResult, usage: {} })
+    createServiceRoleClientMock.mockReturnValue(database({ questionnaire_instances: { rows: [
+      { id: 'instance-b', questionnaire_id: 'definition-1', status: 'scored' },
+      { id: 'instance-a', questionnaire_id: 'definition-1', status: 'scored' },
+    ] } }))
+    expect((await generateAssessmentStep(makeSession())).questionnaires).toEqual([scored, scored])
+  })
+  it('orders distinct persisted results by instance ID and scopes reads to the session owner', async () => {
+    generateObjectMock.mockResolvedValue({ object: summaryResult, usage: {} })
+    const db = database({ questionnaire_instances: { rows: [
+      { id: 'instance-b', questionnaire_id: 'definition-1', status: 'scored' },
+      { id: 'instance-a', questionnaire_id: 'definition-1', status: 'scored' },
+    ] } })
+    const from = db.from.getMockImplementation()!
+    db.from.mockImplementation(name => {
+      if (name !== 'questionnaire_results') return from(name)
+      const result = { data: { total_score: 12, severity_band: 'moderate', flags_json: [{ itemOrder: 9, reason: 'suicidality' }] }, error: null }
+      const chain = makeChain(result)
+      chain.eq = vi.fn((_column, id) => {
+        if (id === 'instance-a') result.data = { total_score: 1, severity_band: 'minimal', flags_json: [] }
+        return chain
+      })
+      return chain
+    })
+    createServiceRoleClientMock.mockReturnValue(db)
+    expect((await generateAssessmentStep(makeSession())).questionnaires).toEqual([
+      { code: 'PHQ9', score: 1, band: 'minimal', flags: [] }, scored,
+    ])
+    const query = db.from.mock.results[db.from.mock.calls.findIndex(([table]) => table === 'questionnaire_instances')].value
+    expect(query.eq).toHaveBeenCalledWith('session_id', 'session-1')
+    expect(query.eq).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(query.eq).toHaveBeenCalledWith('status', 'scored')
+  })
+  it.each(['instances-query', 'definition-query', 'result-query', 'answers-query', 'missing-result', 'missing-definition', 'null-instances', 'invalid-flags', 'invalid-flag-reason', 'invalid-flag-order', 'invalid-score', 'invalid-band'])('enters manual review instead of a successful empty report for %s', async scenario => {
+    generateObjectMock.mockResolvedValue({ object: summaryResult, usage: {} })
+    const overrides: Record<string, TableSpec> = {}
+    if (scenario === 'instances-query') overrides.questionnaire_instances = { error: new Error('questionnaire query failed') }
+    if (scenario === 'definition-query') overrides.questionnaire_definitions = { error: new Error('definition read failed') }
+    if (scenario === 'answers-query') overrides.questionnaire_answers = { error: new Error('answers read failed') }
+    if (scenario === 'null-instances') overrides.questionnaire_instances = { rows: null }
+    if (scenario === 'result-query') overrides.questionnaire_results = { error: new Error('result read failed') }
+    if (scenario === 'missing-result') overrides.questionnaire_results = { rows: null }
+    if (scenario === 'missing-definition') overrides.questionnaire_definitions = { rows: null }
+    if (scenario.startsWith('invalid-')) overrides.questionnaire_results = { rows: { total_score: scenario === 'invalid-score' ? '12' : 12, severity_band: scenario === 'invalid-band' ? '' : 'moderate', flags_json: scenario === 'invalid-flags' ? {} : [{ itemOrder: scenario === 'invalid-flag-order' ? 0 : 9, reason: scenario === 'invalid-flag-reason' ? 'unrecognized' : 'suicidality' }] } }
+    const db = database(overrides); createServiceRoleClientMock.mockReturnValue(db)
+    expect(await generateAssessmentWorkflow({ sessionId: 'session-1' })).toMatchObject({ status: 'manual_review' })
+    const row = db.from.mock.results.map(r => r.value as { _insertedRow?: { status: string } }).find(x => x._insertedRow)?._insertedRow
+    expect(row?.status).toBe('requires_manual_review'); expect(generateObjectMock).not.toHaveBeenCalled()
   })
 })

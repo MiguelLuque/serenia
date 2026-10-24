@@ -5,6 +5,7 @@ import type { Database, Json } from '@/lib/shared/supabase/types'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import { llm } from '@/lib/shared/llm/models'
 import { loadPromptFromMarkdown } from '@/lib/server/llm/prompts/loader'
+import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
 import {
   AssessmentGenerationSchema,
   type AssessmentSummary,
@@ -247,44 +248,18 @@ export async function generateAssessmentStep(
     .filter((line) => line.length > 0)
     .join('\n')
 
-  const { data: qInstances } = await supabase
-    .from('questionnaire_instances')
-    .select('id, questionnaire_id, status')
-    .eq('session_id', session.id)
-    .eq('user_id', session.user_id)
-    .eq('status', 'scored')
-
+  const questionnaireFacts = await loadQuestionnaireFacts(supabase, session.id, session.user_id)
   const questionnaireBlocks: string[] = []
-  for (const qi of qInstances ?? []) {
-    const [{ data: def }, { data: result }, { data: answerRows }] =
-      await Promise.all([
-        supabase
-          .from('questionnaire_definitions')
-          .select('code, name')
-          .eq('id', qi.questionnaire_id)
-          .single(),
-        supabase
-          .from('questionnaire_results')
-          .select('total_score, severity_band, flags_json')
-          .eq('instance_id', qi.id)
-          .maybeSingle(),
-        // T5: pull individual item-level answers so the LLM can apply the
-        // anti-overclassification rules (e.g. C-SSRS ítem 6b = No → no recent
-        // behavior; PHQ-9 ítem 9 = 0 → no suicidality). The score+band alone
-        // don't disambiguate; the per-item answer is the binding signal.
-        // Defensive on shape: if the join fails or rows are missing we fall
-        // back to the aggregated line only.
-        supabase
-          .from('questionnaire_answers')
-          .select(
-            'answer_raw, answer_numeric, item:questionnaire_items!inner(order_index, prompt)',
-          )
-          .eq('instance_id', qi.id),
-      ])
-    if (!def || !result) continue
-    const flags = Array.isArray(result.flags_json) ? result.flags_json : []
-    const flagsLabel = flags.length > 0 ? JSON.stringify(flags) : 'ninguno'
-    const headerLine = `- ${def.code} (${def.name}): puntuación ${result.total_score}, banda ${result.severity_band}, flags ${flagsLabel}`
+  for (const { instanceId, name, report } of questionnaireFacts) {
+    // Preserve the existing item-level context for assistive judgment. Scored
+    // report fields come exclusively from the authoritative loader above.
+    const { data: answerRows, error: answerError } = await supabase
+      .from('questionnaire_answers')
+      .select('answer_raw, answer_numeric, item:questionnaire_items!inner(order_index, prompt)')
+      .eq('instance_id', instanceId)
+    if (answerError) throw answerError
+    const flagsLabel = report.flags.length > 0 ? JSON.stringify(report.flags) : 'ninguno'
+    const headerLine = `- ${report.code} (${name}): puntuación ${report.score}, banda ${report.band}, flags ${flagsLabel}`
 
     const itemLines = formatItemLines(answerRows)
     questionnaireBlocks.push(
@@ -353,7 +328,7 @@ export async function generateAssessmentStep(
     usage,
   })
 
-  return summary as AssessmentSummary
+  return { ...summary, questionnaires: questionnaireFacts.map(fact => fact.report) } as AssessmentSummary
 }
 generateAssessmentStep.maxRetries = 3
 

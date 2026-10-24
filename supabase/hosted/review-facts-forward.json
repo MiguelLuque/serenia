@@ -1,0 +1,24 @@
+{
+  "status": "PREPARED_NOT_APPLIED",
+  "targetProject": "brpozobkoatabctjjadc",
+  "migrationName": "serenia_review_questionnaire_facts_immutable",
+  "sourceMigration": "supabase/migrations/20261024145433_review_questionnaire_facts_immutable.sql",
+  "packet": "supabase/hosted/review-facts-forward.sql",
+  "bytes": 8191,
+  "sha256": "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504",
+  "before": {
+    "bodyMd5": "119e629fd31c44c55476ca45d1d88282",
+    "definitionMd5": "fa9bbdd61b38e492ca3c09151e3d92b6",
+    "owner": "postgres",
+    "securityDefiner": true,
+    "config": [
+      "search_path=public, pg_temp"
+    ],
+    "acl": [
+      "postgres=X/postgres",
+      "authenticated=X/postgres"
+    ]
+  },
+  "afterBodyMd5": "7f83d3074a279a2740d1bf82a2977ebd",
+  "limits": "Prepared exact forward only; root applies after independent review. No hosted application or new-source runtime acceptance claimed."
+}

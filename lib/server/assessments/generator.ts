@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
 import { llm } from '@/lib/shared/llm/models'
 import { loadPromptFromMarkdown } from '@/lib/server/llm/prompts/loader'
+import { loadQuestionnaireFacts } from './questionnaire-facts'
 
 type Supabase = SupabaseClient<Database>
 type AssessmentRow = Database['public']['Tables']['assessments']['Row']
@@ -146,32 +147,10 @@ export async function generateAssessment(
     .filter((line) => line.length > 0)
     .join('\n')
 
-  const { data: qInstances } = await supabase
-    .from('questionnaire_instances')
-    .select('id, questionnaire_id, status')
-    .eq('session_id', sessionId)
-    .eq('status', 'scored')
-
-  const questionnaireBlocks: string[] = []
-  for (const qi of qInstances ?? []) {
-    const [{ data: def }, { data: result }] = await Promise.all([
-      supabase
-        .from('questionnaire_definitions')
-        .select('code, name')
-        .eq('id', qi.questionnaire_id)
-        .single(),
-      supabase
-        .from('questionnaire_results')
-        .select('total_score, severity_band, flags_json')
-        .eq('instance_id', qi.id)
-        .maybeSingle(),
-    ])
-    if (!def || !result) continue
-    const flags = Array.isArray(result.flags_json) ? result.flags_json : []
-    questionnaireBlocks.push(
-      `- ${def.code} (${def.name}): puntuación ${result.total_score}, banda ${result.severity_band}, flags ${JSON.stringify(flags)}`,
-    )
-  }
+  const questionnaireFacts = await loadQuestionnaireFacts(supabase, sessionId, session.user_id)
+  const questionnaireBlocks = questionnaireFacts.map(({ name, report }) =>
+    `- ${report.code} (${name}): puntuación ${report.score}, banda ${report.band}, flags ${JSON.stringify(report.flags)}`,
+  )
 
   const { data: riskRows } = await supabase
     .from('risk_events')
@@ -227,7 +206,7 @@ export async function generateAssessment(
       assessment_type: 'closure',
       status: 'draft_ai',
       generated_by: 'ai',
-      summary_json: summary as unknown as NonNullable<Json>,
+      summary_json: { ...summary, questionnaires: questionnaireFacts.map(fact => fact.report) } as unknown as NonNullable<Json>,
     })
     .select()
     .single()

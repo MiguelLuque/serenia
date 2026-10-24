@@ -1,0 +1,37 @@
+# Task11 — authoritative questionnaire facts (source checkpoint in progress)
+
+BASE: `3f3f27a2e787d82e6947198dfc9eec8a06bb6c63`. Sole source owner; root controls hosted writes, fixtures, runtime handoff and independent review. This report does not claim new-source runtime acceptance.
+
+## Cause and generation correction
+
+Both `generateAssessmentStep` (the only production generation call path, through `generateAssessmentWorkflow`) and the still-exported legacy `generateAssessment` only placed scoring rows in a prompt, then persisted the model's `questionnaires` array. Neither treated failed/missing questionnaire reads as an unsuccessful report. Legacy generation has no current production caller, but remains exported and tested; both writers now share the same factual boundary.
+
+`loadQuestionnaireFacts` scopes scored instances to session and owner, obtains canonical definition code/name and the persisted result, validates them and replaces only the model questionnaire list before persistence. Score, band and flags are copied, never recomputed. Other model narrative/risk fields, approved prompts/catalog, provider defaults and durable claim/persistence fencing stay under their existing contracts. The synthetic provider continues returning `questionnaires:[]` as an adversarial probe.
+
+Order is instance ID ascending, retaining one entry per scored instance even when instrument codes repeat. This is deterministic, not a claim of chronological ordering. Successful empty instance reads yield `[]`; null/malformed reads, missing results/definitions, query errors and invalid flags fail closed. Active generation uses its existing retry/manual-review mechanism; legacy generation throws before model invocation or draft insertion. Item-level answer context remains in the active prompt and actual answer read errors also fail closed.
+
+Primitive decode limits: instance/definition identifiers 1–128 chars, at most100 instances, code/band 1–64 chars, definition name 1–256 chars, finite score0–500 (50 supported numeric answers bounded0–10), at most50 flags. Canonical DB definition codes are retained rather than restricting historical instruments to today's active registry. Flag item order reuses `AnswerSchema` (integer1–50); reasons exactly match persisted `QuestionnaireFlag` (`suicidality`/`acute_risk`); unexpected keys/shapes fail closed. Existing chat flag parsing tolerates malformed values and is unsuitable here. These bounds are decoding safeguards, not clinical cutoffs or a recalculation.
+
+Hosted HTTP acceptance source now asserts the generated report list equals the actual persisted PHQ9 result and canonical definition (and the controlled all-zero fixture has score0/minimal/no flags). The mode has not been replayed; old source27 evidence remains separately dated.
+
+## Review immutability expansion
+
+Root/same reviewer classified direct clinician RPC modification of `questionnaires` as Important and required within Task11. Wrapper-created `20261024145433_review_questionnaire_facts_immutable.sql` adds a JSONB `IS DISTINCT FROM` guard after locking the original assessment and before any idempotent-return or write path. Changed/omitted/added/reordered facts fail with SQLSTATE23514. Normal narrative/risk/task edits remain possible with identical facts. Genuinely identical legacy missing fields, JSON-null fields and empty arrays stay compatible, while missing versus JSON null remains distinct; SQL NULL payload cannot bypass validation. Historical reports are not rewritten.
+
+Exact prepared copy: `supabase/hosted/review-facts-forward.sql`, manifest `.json`,8191bytes, SHA256 `86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504`, status `PREPARED_NOT_APPLIED`. Original bodyMD5 `119e629fd31c44c55476ca45d1d88282` / definitionMD5 `fa9bbdd61b38e492ca3c09151e3d92b6`; new bodyMD5 `7f83d3074a279a2740d1bf82a2977ebd`. Guards require the exact signature/sole overload, postgres owner, SECDEF, language/volatility/return type, config and ACL `{postgres=X/postgres,authenticated=X/postgres}`. Postcondition rechecks metadata/new body. Native harness compares all pg_proc metadata except changed prosrc before/after and asserts packet bytes/source/manifest mapping. CREATE OR REPLACE preserves the original ACL; there are no grant changes.
+
+Native SQL RED exit1 reproduced an authorized clinician changing the score facts with existing historical migrations/seed passing. Native SQL GREEN exit0 verified9 fact mutations plus SQL-NULL payload denial, valid canonical narrative/risk edit, exact retry, task/history preservation, missing/JSON-null/empty compatibility, patient/parent denial and inherited-task failure rollback. Six forward drift cases (body/config/owner/ACL/security/signature) reject with the expected guard and restore the exact original metadata/definition on failed transaction. The final committed native gate will also cover the added exact packet/source/manifest assertion.
+
+Existing canonical `6f0037fc…`, inbox forward `d9604…`, rejected archive and migration history are unchanged. Root alone owns later hosted application and a prepared direct-RPC negative probe; no new harness mode or acceptance write was added for that probe.
+
+## Evidence so far
+
+Private directory `.cache/task11/` retains full logs and numeric exit JSON. Initial focused RED exit1 reproduced14 failures across both writers: empty/invented model facts or multiplicity lost, read/decoder failures accepted as completed. First focused GREEN:37 tests/2files exit0. Expanded focused GREEN:43 tests/2files exit0. First typecheck exit2 exposed test-only Vitest `it.each` array-row spreading/typing; fixture cases changed to objects so the intended arrays are passed exactly, then focused43 and typecheck both exit0. Lint exit0 and hosted scenario syntax check exit0. The final corrected43-case suite was also replayed against the exact BASE writer files:20 expected failures, exit1; source files restored byte-exact in a finally block, then focused GREEN rerun. This removes ambiguity from the initial test-row typing correction. These are focused results, not final mandatory gates.
+
+Read installed Next data-fetching guide and Workflow foundations (step IO/errors/retries), TDD/systematic-debugging/project-checks, project operations, pinned Supabase skills and official filter/single documentation. Supabase markdown changelog fetch was unsupported by the web reader; HTML changelog was read successfully. No SDK contract change is required. PostgreSQL17 CREATE OR REPLACE documentation confirms ownership/permissions remain unchanged; forthcoming forward tests must verify the actual metadata/ACL too.
+
+## Runtime and remaining checkpoint
+
+Original build `/private/tmp/serenia-hosted-build-Nd4nXo/project`, source `27f82d8e8d46257dff8517dbca5592e4a4681df9`, BUILD_ID `xhrWTx9JGknr6oTSmk6va`, artifact `c3d0ddb6e48185deda89f9d4ec66b730bae6316f7aa2a17d6401497d8a3a9136`, remains separate from this source work. No runtime start/stop, fixture write/clock edit, provider call or hosted DDL was performed for Task11 preparation. Root's known PID11147 observation owns current liveness; missing historic unified handle is not proof of termination.
+
+Pending: final native gates; committed source; fresh isolated hosted build without start; source/build independent review; root-controlled forward application and actual scored-result → report UI proof. Root-owned untracked audit/application records are excluded from this checkpoint.

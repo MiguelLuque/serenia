@@ -10,6 +10,7 @@ import subprocess
 import uuid
 import json
 import shutil
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -67,7 +68,41 @@ try:
                 # New table grants must survive a hosted installation without
                 # bootstrap's historical permissive default privileges.
                 query('alter default privileges in schema public revoke all on tables from anon,authenticated,service_role;')
+            if 'review_questionnaire_facts_immutable' in path.name:
+                manifest = json.loads((ROOT / 'supabase/hosted/review-facts-forward.json').read_text())
+                packet = (ROOT / manifest['packet']).read_bytes()
+                if packet != path.read_bytes() or len(packet) != manifest['bytes'] or hashlib.sha256(packet).hexdigest() != manifest['sha256']:
+                    raise RuntimeError('Review facts forward packet/source/manifest mismatch')
+                print('PASS exact review forward packet bytes/hash/source mapping')
+                signature = 'public.review_assessment_atomic(uuid,uuid,text,jsonb,text,jsonb,text)'
+                contract = f"select (to_jsonb(p)-'prosrc')::text from pg_proc p where oid='{signature}'::regprocedure;"
+                definition = f"select pg_get_functiondef('{signature}'::regprocedure);"
+                before_metadata = query(contract)
+                before_definition = query(definition)
+                drifts = {
+                    'body': f"do $drift$ declare d text; begin d=pg_get_functiondef('{signature}'::regprocedure); execute replace(d,E'begin\n if auth.uid()',E'begin\n -- deliberate drift\n if auth.uid()'); end $drift$;",
+                    'config': f'alter function {signature} set search_path=public;',
+                    'owner': f'alter function {signature} owner to service_role;',
+                    'acl': f'grant execute on function {signature} to service_role;',
+                    'security': f'alter function {signature} security invoker;',
+                    'signature': 'create function public.review_assessment_atomic(text) returns uuid language sql as $extra$ select null::uuid $extra$;',
+                }
+                for label, drift in drifts.items():
+                    try:
+                        query('BEGIN;\n' + drift + '\n' + path.read_text() + '\nCOMMIT;')
+                    except RuntimeError as error:
+                        if 'Unexpected review facts forward baseline' not in str(error):
+                            raise RuntimeError(f'Unexpected {label} guard failure: {error}') from error
+                    else:
+                        raise RuntimeError(f'Review forward accepted {label} drift')
+                    if query(contract) != before_metadata or query(definition) != before_definition:
+                        raise RuntimeError(f'Review {label} drift failure left partial changes')
+                    if query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='review_assessment_atomic';").splitlines()[2].strip() != '1':
+                        raise RuntimeError('Review signature drift left an overload')
+                print('PASS review forward rejects body/config/owner/ACL/security/signature drift atomically')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'review_questionnaire_facts_immutable' in path.name and query(contract) != before_metadata:
+                raise RuntimeError('Review facts forward changed metadata/ACL/signature')
             if 'acceptance_strict_rls_advisors' in path.name and query(invariant) != before_contract:
                 raise RuntimeError('Advisor fix changed grants or non-SELECT policy contracts')
         except RuntimeError as error:
@@ -80,10 +115,12 @@ try:
     # Keep the temporary must_deny helper and fixtures on one SQL connection.
     query((ROOT / 'supabase/tests/authorization-review.sql').read_text() + '\n' +
           (ROOT / 'supabase/tests/relationships.sql').read_text() + '\n' +
-          (ROOT / 'supabase/tests/review-task-progress.sql').read_text())
+          (ROOT / 'supabase/tests/review-task-progress.sql').read_text() + '\n' +
+          (ROOT / 'supabase/tests/review-questionnaire-facts.sql').read_text())
     print('PASS authorization, ownership, closure, review, rollback and regeneration')
     print('PASS elevated cross-parent writes and foreign inherited task rollback')
     print('PASS review preserves completed/partial tasks and rejects incompatible agreements')
+    print('PASS questionnaire facts immutable across direct review, narrative edits, retries and legacy missing/null/empty')
     # Replay the two repaired historical data migrations against existing rows:
     # preserve accounts/clinician roles and repair only a missing profile.
     query("delete from user_profiles where user_id='00000000-0000-0000-0000-000000000002';")

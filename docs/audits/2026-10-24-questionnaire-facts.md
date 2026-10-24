@@ -1,0 +1,11 @@
+# Integridad factual de los informes — Task11
+
+La aceptación hospedada sobre la fuente27f82d8 mostró PHQ9 puntuado con9respuestas y resultado0, pero el informe guardaba `questionnaires:[]` porque el proveedor sintético lo devolvía así. Esto demuestra un defecto de integración; no mide la calidad de un modelo real. La fuenteBASE de reparación es3f3f27a.
+
+La generación activa Workflow y el generador legacy exportado comparten ahora una lectura estricta de instancias puntuadas del usuario/sesión, definición canónica y resultado persistido. El informe conserva exactamente código/puntuación/banda/flags guardados, independientemente del array del modelo; el resto del texto/juicio mantiene su contrato previo. Orden estable por ID de instancia, sin deduplicar instrumentos repetidos. Fallos o datos incompletos llevan a revisión manual/error; una lectura vacía válida produce `[]`. El proveedor adversarial permanece sin cambios.
+
+El mismo revisor clasificó como Important que la RPC clínica permitiera reemplazar esos hechos. Un nuevo forward independiente rechaza cualquier cambio respecto al informe bloqueado, conserva edición narrativa/reintentos/tareas y distingue campo ausente de JSON null. No reescribe informes históricos ni modifica paquetes aplicados. Paquete preparado `supabase/hosted/review-facts-forward.sql`:8191bytes, SHA25686a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504; sólo root puede aplicarlo tras revisión.
+
+RED de generación y RPC reproducidos; GREEN enfocado43casos y PostgreSQL17 con guards de drift/atomicidad. Evidencia completa privada y fallo inicial de tipado conservados en `.cache/task11/`. Gates finales/build comprometido pendientes en este checkpoint de trabajo. El arnés HTTP exige igualdad entre informe y scoring persistido, pero no se ha repetido aceptación. Runtime/fixtures originales siguen bajo control exclusivo de root; no se atribuye su evidencia a la nueva fuente.
+
+Detalle, comandos/exits e identidades: `.superpowers/sdd/2026-10-10-robust-mvp/task-11-report.md`. La aceptación del nuevo artefacto requiere revisión de fuente/forward, aplicación explícita por root y prueba nativa posterior. Los gates clínico/legal/modelo real/publicación permanecen independientes.
