@@ -1,4 +1,4 @@
-# Task11 — authoritative questionnaire facts (source checkpoint in progress)
+# Task11 — authoritative questionnaire facts (source checkpoint; acceptance pending)
 
 BASE: `3f3f27a2e787d82e6947198dfc9eec8a06bb6c63`. Sole source owner; root controls hosted writes, fixtures, runtime handoff and independent review. This report does not claim new-source runtime acceptance.
 
@@ -30,8 +30,28 @@ Private directory `.cache/task11/` retains full logs and numeric exit JSON. Init
 
 Read installed Next data-fetching guide and Workflow foundations (step IO/errors/retries), TDD/systematic-debugging/project-checks, project operations, pinned Supabase skills and official filter/single documentation. Supabase markdown changelog fetch was unsupported by the web reader; HTML changelog was read successfully. No SDK contract change is required. PostgreSQL17 CREATE OR REPLACE documentation confirms ownership/permissions remain unchanged; forthcoming forward tests must verify the actual metadata/ACL too.
 
+## Committed native verification
+
+Executable source: `f1ff5b788f1f217c21c0883923cacbf056e991f1`, tree `e97b6130b051ad72fb3354a770ca7c7997a7877a`. `rtk npm run verify` completed overall exit1. Exact private evidence: `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-jgKyNw/results.json`; command wrapper/full output `.cache/task11/native-verify{,-exit.json}` (full output file is `native-verify.log`).
+
+| Gate | Exit | Actual evidence |
+| --- | --- | --- |
+| test |0|752 tests /64 files passed |
+| lint |0|zero warnings required |
+| typecheck |0|tsc --noEmit |
+| workflow:wire |0|20 previous payloads /24 current roundtrips, zero failures |
+| db:test |0|PG17.6 packet/source/manifest exact, six atomic drift guards, immutable facts/legacy compatibility, prior authorization/task/concurrency controls |
+| audit:dependencies |1|production and full npm exits1;22 High package-graph entries from five distinct advisories |
+| build:isolated |0|committed snapshot described below |
+
+Generic isolated build: `/private/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-build-MfoOLu/project`, BUILD_ID `tMoKmmzcxF9cgo5sF_B6F`, source f1ff5b7, Node24.14.1, lock SHA256 `e0f9eb1ffc90023ebb1b4bf2f1b7f85902f751229d2d679733f64f7b75fc1ed4`, actual result exit0. It uses placeholder public configuration and was never started; it cannot establish hosted login acceptance.
+
+The strict audit is an unresolved gate, not a waiver or Task11 regression hidden by the earlier green source. Actual full/production JSON, npm exits and stderr are preserved in the verification directory. [Zod GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), [body-parser GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828), and Undici [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472), [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c) match the observed vulnerable copies. These are five advisories propagated across22 graph entries, not22 vulnerabilities. Root authorized a separate bounded Task12 dependency wave; Task11 does not change package.json/lock or audit policy.
+
+The attempted hosted-build invocation was rejected before process creation because automatic approval review hit a usage limit (review infrastructure failure, not an unsafe-action determination). No child, build directory or resumable handle was created by that attempt. Root then explicitly deferred the vulnerable f1ff hosted build to the patched Task12 source. Hosted build is NOT RUN for Task11; no hidden retry or bypass occurred.
+
 ## Runtime and remaining checkpoint
 
-Original build `/private/tmp/serenia-hosted-build-Nd4nXo/project`, source `27f82d8e8d46257dff8517dbca5592e4a4681df9`, BUILD_ID `xhrWTx9JGknr6oTSmk6va`, artifact `c3d0ddb6e48185deda89f9d4ec66b730bae6316f7aa2a17d6401497d8a3a9136`, remains separate from this source work. No runtime start/stop, fixture write/clock edit, provider call or hosted DDL was performed for Task11 preparation. Root's known PID11147 observation owns current liveness; missing historic unified handle is not proof of termination.
+Original build `/private/tmp/serenia-hosted-build-Nd4nXo/project`, source `27f82d8e8d46257dff8517dbca5592e4a4681df9`, BUILD_ID `xhrWTx9JGknr6oTSmk6va`, artifact `c3d0ddb6e48185deda89f9d4ec66b730bae6316f7aa2a17d6401497d8a3a9136`, remains separate. No runtime start/stop, fixture write/clock edit, provider call or hosted DDL was performed for Task11. Root's earlier PID11147 observation is dated; current liveness is unverified and a missing historic unified handle does not establish termination. No Task11 write is in flight.
 
-Pending: final native gates; committed source; fresh isolated hosted build without start; source/build independent review; root-controlled forward application and actual scored-result → report UI proof. Root-owned untracked audit/application records are excluded from this checkpoint.
+The source11 checkpoint is ready for root/same-reviewer inspection, not accepted complete. Pending: strict dependency repair/new gates and committed hosted build under Task12; independent Task11/forward review; exact fresh metadata/root-only forward application; reviewed runtime handoff; root-controlled directRPC negative attempts and actual scored-result → generated report → clinician review/patient UI proof. Preserve source27's dated evidence and fixture state; do not relabel it. All root-owned untracked records and the new Task12 plan edit are excluded from this documentation-only checkpoint. Original canonical6f0037fc/inboxd9604/archive and prepared8191B/86a461 forward stay unchanged.
