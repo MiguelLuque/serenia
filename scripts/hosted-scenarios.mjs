@@ -167,9 +167,21 @@ if(mode==='fixtures'){
 }else if(mode==='cleanup'){
   // Invoke only after the task-owned Next process is stopped and durable work completed.
   const runtime=JSON.parse(readFileSync(privateFile(resolve(directory,'runtime.json')),'utf8'))
-  let live=false;try{process.kill(runtime.pid,0);live=true}catch{}
+  let live=false;try{process.kill(runtime.pid,0);live=true}catch(error){if(error.code!=='ESRCH')throw error}
   assert.equal(live,false,'Stop only the recorded task-owned runtime before scoped cleanup')
-  for(const name of Object.keys(manifest.actors)){
+  const names=Object.keys(manifest.actors).sort((a,b)=>Number(a==='clinician')-Number(b==='clinician'))
+  // Validate every identity and every prior deletion before making further changes.
+  for(const name of names)actor(name)
+  for(const name of names){
+    const a=actor(name)
+    if(!a.cleanedAt)continue
+    const result=await admin.auth.admin.getUserById(a.userId)
+    if(result.error&&(result.error.status!==404||result.error.code!=='user_not_found'))ok(result)
+    assert.ok(result.data?.user===null&&result.error?.status===404&&result.error?.code==='user_not_found','Recorded cleaned fixture must be verified absent')
+  }
+  // Patient cascades must remove reviewed reports before deleting their fixture reviewer.
+  for(const name of names){
+    if(actor(name).cleanedAt)continue
     const a=actor(name),auth=await login(name);ok(await auth.client.auth.signOut({scope:'global'}))
     ok(await admin.auth.admin.deleteUser(a.userId));a.cleanedAt=new Date().toISOString();save()
   }
