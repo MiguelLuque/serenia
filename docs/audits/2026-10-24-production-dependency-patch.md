@@ -11,6 +11,8 @@ Detalles de rangos upstream, fuentes oficiales, comandos/exits y límites en `.s
 
 ## Runtime25oct tras revisión
 
+Este apartado conserva el checkpoint de handoff07:09:21UTC. Su continuación (PHQ9=12/revisión/proyección/stop/limpieza/revisión final) está en la [aceptación25oct](2026-10-25-mvp-acceptance.md). El audit estricto refrescado25oct también dio producción/full0 sin excepciones; no se ejecutó de nuevo el conjunto nativo completo sin cambios de producto.
+
 Root aprobó Task11/12 y aplicó el forward86a461 como20261024203657; el implementador no hizo DDL. Tras comprobar identidad fresca11147/loopback/cwd/parent/state y hashes, se envió SIGTERM sólo al listener antiguo (señal0, ausencia/puerto libre comprobados; exit real desconocido por handle perdido). Estado nuevo privado `/private/tmp/serenia-hosted-acceptance-patched-20261024-8a6dkdog`; un único actor nuevo, sin modo fixtures ni replay de los seis anteriores.
 
 Mismo artefactof2/build7-SFAHJkzrF9ef47Bhjl7: checkpoint0, parada prevista SIGKILL/launcher1 conservada, arranque NORMAL mismoestado y verify0 del MISMO runwrun_01M5RY1CHPA2DXK3F7PKPSV4GY. PID31819→31879/handle34811,1jobattempt/1informe/23eventos/3pasos previos sin duplicar;5turnos/10mensajes. Providerfase automática5conv/2structured(1falloprevisto+1recuperación)/0fast/0denials. La lista vacía de cuestionarios es correcta para este actor sin test; no demuestra todavía PHQ9no0.

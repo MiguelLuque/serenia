@@ -1,0 +1,125 @@
+{
+  "projectId": "brpozobkoatabctjjadc",
+  "scope": "TECHNICAL_SYNTHETIC_MVP",
+  "status": "EXECUTED_VERIFIED_PENDING_FINAL_REVIEW",
+  "runtime": {
+    "sourceCommit": "f2d69ea088403a3f3e641d20112318b54a344577",
+    "buildId": "7-SFAHJkzrF9ef47Bhjl7",
+    "lockSha256": "cb963dbb3901c1f91e74c86c979e68062a823c464383250f72f95f7d26c9a425",
+    "artifactSha256": "bc0ef03700d0c28d3de31bb188208916ee110dd08315caab71908c03fee6ca9f",
+    "inventoriedFiles": 876,
+    "finalListenerStopped": true,
+    "finalLauncherExit": null,
+    "cleanupHarnessSource": "bc3c0917fe69973ca854a164aace759be0b7bd88"
+  },
+  "nativeGates": {
+    "sourceCommit": "f2d69ea088403a3f3e641d20112318b54a344577",
+    "observedDate": "2026-10-24",
+    "exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "tests": 758,
+    "testFiles": 65,
+    "wirePrevious": 20,
+    "wireRoundtrips": 24
+  },
+  "cleanupHarnessChecks": {
+    "sourceCommit": "bc3c0917fe69973ca854a164aace759be0b7bd88",
+    "focusedTests": 19,
+    "testFiles": 2,
+    "focusedExit": 0,
+    "lintExit": 0,
+    "typecheckExit": 0,
+    "syntaxExit": 0,
+    "fullSuiteRerun": false,
+    "newServerBuild": false
+  },
+  "hostedScoredFacts": {
+    "questionnaire": "PHQ9",
+    "answers": 9,
+    "score": 12,
+    "band": "moderate",
+    "flags": [],
+    "generatedAndReviewedFactsEqual": true,
+    "directJwtRejectedMutations": 7,
+    "rejectedMutationSqlstate": "23514",
+    "currentReviewedReports": 1,
+    "createdTasks": 1,
+    "patientRawAssessmentRows": 0,
+    "patientPublicSummaryAndTaskMatch": true
+  },
+  "sameOriginalRunRestart": {
+    "runId": "wrun_01M5RY1CHPA2DXK3F7PKPSV4GY",
+    "events": 23,
+    "createdRunEvents": 1,
+    "jobAttempts": 1,
+    "prefixStepsNotRepeated": 3,
+    "proofSha256": "39d7d8444a01cd9e39aac80f7d1ea70dcaa4388c20bac3c4d2fa4d69081beed8"
+  },
+  "cleanup": {
+    "reviewedSource": "bc3c0917fe69973ca854a164aace759be0b7bd88",
+    "order": [
+      "patched restart-only state",
+      "original remaining patients",
+      "original fixture clinician"
+    ],
+    "firstFailedAttemptExit": 1,
+    "patchedStateExit": 0,
+    "originalResumeExit": 0,
+    "originalPreviouslyCleaned": 3,
+    "additionalActorsRemoved": 4,
+    "allGeneratedActorsRemoved": 7,
+    "priorCleanedTimestampsPreserved": true,
+    "postcheck": {
+      "observedAt": "2026-10-25 14:54:37.335732+00",
+      "rawSha256": "d7d6e02675fcbd2bb7c89ddaa7e2c3a79b9d82f0b871c70d15a3eb549659dcfd",
+      "projectId": "brpozobkoatabctjjadc",
+      "historyCount": 43,
+      "original40HistoryUnchanged": true,
+      "exactThreeStoredSqlHashes": [
+        "6f0037fc74e115455e379795cdcb1c5318e4a9f65660d048f8ca5d7af30069b0",
+        "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+        "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504"
+      ],
+      "catalogUnchanged": true,
+      "authUsers": 2,
+      "profiles": 2,
+      "definitions": 5,
+      "items": 65,
+      "clinicalTables": 20,
+      "allClinicalRows": 0,
+      "generatedAuthUsers": 0,
+      "generatedProfiles": 0,
+      "generatedAuthSessions": 0,
+      "activeJobs": 0,
+      "reviewBodyMd5": "7f83d3074a279a2740d1bf82a2977ebd",
+      "reviewIdentityAclUnchanged": true,
+      "limits": "Counts/catalog/history metadata and fixture-ID absence only; no post-fixture original account field identity proof or backup/production acceptance.",
+      "fixtureActorsRemoved": 7
+    }
+  },
+  "externalGates": [
+    "Clinical/legal and patient-data approval",
+    "Spanish clinical gold and online model-quality/latency/cost benchmark",
+    "Production World/queue ingress and cron scheduling",
+    "Hosted Auth SMTP/callback and leaked-password entitlement/configuration",
+    "Postgres maintenance mapping, backups and recovery acceptance"
+  ],
+  "deferredProductPhase": [
+    "UX",
+    "Conversational behavior",
+    "Preliminary diagnostic design with clinical review"
+  ],
+  "evidence": {
+    "postReviewPatientJwtSha256": "b912b8b889f000e7999998973628bfd53bbfcaee09224a622e5911ed58494817",
+    "negativeJwtRpcSha256": "9a875d40b0618b727746adf6260d07866c538fd055b52cccfa0fc90a80cabfc0",
+    "postCleanupSha256": "d7d6e02675fcbd2bb7c89ddaa7e2c3a79b9d82f0b871c70d15a3eb549659dcfd"
+  },
+  "limits": "Dated synthetic technical acceptance, not clinical efficacy, legal approval, public deployment or universal security assurance. Post-fixture aggregate counts do not prove original account field identity."
+}

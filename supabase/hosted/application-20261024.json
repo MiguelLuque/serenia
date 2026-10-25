@@ -1,0 +1,119 @@
+{
+  "projectId": "brpozobkoatabctjjadc",
+  "organizationId": "jhmhzzaqbzvvppwtwfhz",
+  "region": "eu-west-1",
+  "plan": "Free",
+  "sourceCommit": "27f82d8e8d46257dff8517dbca5592e4a4681df9",
+  "applicationStatus": "APPLIED_VERIFIED",
+  "acceptanceStatus": "EXECUTED_VERIFIED_PENDING_FINAL_REVIEW",
+  "mechanism": "Sequential official MCP atomic migrations: canonical, verified poststate, inbox; later separately reviewed questionnaire-facts forward after source/dependency/build approval.",
+  "canonical": {
+    "project_id": "brpozobkoatabctjjadc",
+    "name": "serenia_robust_mvp_hosted_atomic",
+    "sha256": "6f0037fc74e115455e379795cdcb1c5318e4a9f65660d048f8ca5d7af30069b0",
+    "bytes": 93052,
+    "preflightAt": "2026-10-24 09:23:17.958432+00",
+    "hostedVersion": "20261024092459",
+    "storedStatementsSha256": "6f0037fc74e115455e379795cdcb1c5318e4a9f65660d048f8ca5d7af30069b0",
+    "localVersions": [
+      "20261010075359",
+      "20261010123627",
+      "20261010231957",
+      "20261012083833",
+      "20261012084307",
+      "20261013073246"
+    ]
+  },
+  "forward": {
+    "project_id": "brpozobkoatabctjjadc",
+    "name": "serenia_final_inbox_pending_review",
+    "bytes": 5172,
+    "sha256": "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+    "hostedVersion": "20261024092547",
+    "storedStatementsSha256": "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+    "localVersion": "20261013213559"
+  },
+  "postcheckBeforeFixtures": {
+    "observedAt": "2026-10-24 09:26:11.663254+00",
+    "historyCount": 42,
+    "original40VersionNameStatementsMd5Unchanged": true,
+    "catalogSemanticFingerprintsUnchanged": true,
+    "authUsers": 2,
+    "profiles": 2,
+    "definitions": 5,
+    "items": 65,
+    "clinicalRows": 0,
+    "inboxFunctionBodyMd5": "9c91fd44e4c712465ebb44692b30c1da"
+  },
+  "transactionPreservation": "Canonical nonce-based locked full-row aggregates for Auth/users/profiles/catalog compared internally before/after DDL; mismatch raises and rolls back. No account or clinical row values exported.",
+  "releaseLimits": [
+    "Next/Workflow exercised only on local loopback with hosted DB/Auth",
+    "Synthetic models and generated test actors only; all seven actors removed after global signout",
+    "Native UI/JWT/restart and post-cleanup executed; final independent closure review pending",
+    "Clinical/legal/model-quality/production-platform gates remain separate"
+  ],
+  "sourceCommitScope": "Canonical and inbox application; the questionnaire review forward source is recorded separately.",
+  "reviewFactsForward": {
+    "project_id": "brpozobkoatabctjjadc",
+    "name": "serenia_review_questionnaire_facts_immutable",
+    "sourceCommit": "f1ff5b7",
+    "sourceMigration": "supabase/migrations/20261024145433_review_questionnaire_facts_immutable.sql",
+    "bytes": 8191,
+    "sha256": "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504",
+    "hostedVersion": "20261024203657",
+    "storedStatementsSha256": "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504",
+    "beforeBodyMd5": "119e629fd31c44c55476ca45d1d88282",
+    "afterBodyMd5": "7f83d3074a279a2740d1bf82a2977ebd",
+    "signatureOwnerConfigAclUnchanged": true
+  },
+  "postcheckAfterReviewForward": {
+    "observedAt": "2026-10-24 20:37:09.448388+00",
+    "historyCount": 43,
+    "original40VersionNameStatementsMd5Unchanged": true,
+    "priorCanonicalInboxStoredStatementsSha256Unchanged": true,
+    "catalogSemanticFingerprintsUnchanged": true,
+    "authUsersIncludingFixtures": 8,
+    "profilesIncludingFixtures": 8,
+    "clinicalSessionsAllFixtures": 6,
+    "definitions": 5,
+    "items": 65,
+    "activeJobs": 0
+  },
+  "postCleanup25October": {
+    "observedAt": "2026-10-25 14:54:37.335732+00",
+    "rawSha256": "d7d6e02675fcbd2bb7c89ddaa7e2c3a79b9d82f0b871c70d15a3eb549659dcfd",
+    "projectId": "brpozobkoatabctjjadc",
+    "historyCount": 43,
+    "original40HistoryUnchanged": true,
+    "exactThreeStoredSqlHashes": [
+      "6f0037fc74e115455e379795cdcb1c5318e4a9f65660d048f8ca5d7af30069b0",
+      "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+      "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504"
+    ],
+    "catalogUnchanged": true,
+    "authUsers": 2,
+    "profiles": 2,
+    "definitions": 5,
+    "items": 65,
+    "clinicalTables": 20,
+    "allClinicalRows": 0,
+    "generatedAuthUsers": 0,
+    "generatedProfiles": 0,
+    "generatedAuthSessions": 0,
+    "activeJobs": 0,
+    "reviewBodyMd5": "7f83d3074a279a2740d1bf82a2977ebd",
+    "reviewIdentityAclUnchanged": true,
+    "limits": "Counts/catalog/history metadata and fixture-ID absence only; no post-fixture original account field identity proof or backup/production acceptance.",
+    "fixtureActorsRemoved": 7
+  },
+  "patchedRuntime": {
+    "sourceCommit": "f2d69ea088403a3f3e641d20112318b54a344577",
+    "buildId": "7-SFAHJkzrF9ef47Bhjl7",
+    "lockSha256": "cb963dbb3901c1f91e74c86c979e68062a823c464383250f72f95f7d26c9a425",
+    "artifactSha256": "bc0ef03700d0c28d3de31bb188208916ee110dd08315caab71908c03fee6ca9f",
+    "inventoriedFiles": 876,
+    "finalListenerStopped": true,
+    "finalLauncherExit": null,
+    "cleanupHarnessSource": "bc3c0917fe69973ca854a164aace759be0b7bd88"
+  }
+}
