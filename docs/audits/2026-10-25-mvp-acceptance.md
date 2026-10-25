@@ -1,6 +1,6 @@
 # Serenia: cierre de aceptación técnica —25octubre2026
 
-Rama `codex/serenia-robust-mvp`. La aceptación sintética de BD/Auth hospedados y Next/Workflow local está en revisión final. UX, comportamiento y diagnóstico previo pertenecen a la siguiente fase que el usuario aplazó expresamente hasta cerrar esta base. Este documento sustituye como estado actual al [checkpoint24oct](2026-10-24-mvp-status.md), conservando sus fuentes y fallos históricos.
+Rama `codex/serenia-robust-mvp`. La aceptación sintética de BD/Auth hospedados y Next/Workflow local **está aceptada técnicamente** tras la revisión independiente final. UX, comportamiento y diagnóstico previo pertenecen a la siguiente fase que el usuario aplazó expresamente hasta cerrar esta base. Este documento sustituye como estado actual al [checkpoint24oct](2026-10-24-mvp-status.md), conservando sus fuentes y fallos históricos.
 
 ## Fuente y verificación
 
@@ -68,7 +68,7 @@ La corrección externa `bc3c091` recibió SPEC/QUALITY y clearance operacional i
 
 Postcheck oficial14:54:35–37UTC: **2Auth/2perfiles,0usuarios/perfiles/sesionesAuth de los siete actores generados,0filas en20tablas clínicas/operativas,0jobs activos,43migraciones**. Las40originales, los tres SHA SQL almacenados, catálogo5definiciones/65items y firma/ACL/cuerpo actual7f83 de revisión coinciden. SHA256 del raw `d7d6e02675fcbd2bb7c89ddaa7e2c3a79b9d82f0b871c70d15a3eb549659dcfd`. Se conservaron artefactos y pruebas privadas; estos agregados no son backup ni prueba de igualdad de todos los campos originales después de fixtures. [Recibo técnico](../../supabase/hosted/acceptance-20261025.json).
 
-La revisión independiente final de limpieza/postcheck/documentación sigue pendiente de veredicto explícito. Las aprobaciones previas de fuente y objetos1–15 conservan su mapa y no sustituyen ese último gate.
+**Revisión final: especificación y calidad aprobadas para el MVP técnico sintético completo.** El revisor continuó el mapa ya aceptado de fuente/objetos1–15 y comprobó16limpieza,17postcheck y18entrega. Tasks7/11/12 y Entrega están cerradas, sin nuevos hallazgos. [Informe literal y veredicto](2026-10-25-independent-review.md), SHA256 `8e1f4d20aec7347c42e8f5bf232956602f1504ae1a46fcec5cb3feb442b44384`. El HEAD documental revisado es48913a3; esta finalización posterior sólo archiva el veredicto y actualiza estados/checkboxes, sin cambiar producto, SQL, pruebas ni artefacto.
 
 ## Límites y siguiente fase
 

@@ -5,7 +5,7 @@
   "plan": "Free",
   "sourceCommit": "27f82d8e8d46257dff8517dbca5592e4a4681df9",
   "applicationStatus": "APPLIED_VERIFIED",
-  "acceptanceStatus": "EXECUTED_VERIFIED_PENDING_FINAL_REVIEW",
+  "acceptanceStatus": "TECHNICAL_SYNTHETIC_ACCEPTED",
   "mechanism": "Sequential official MCP atomic migrations: canonical, verified poststate, inbox; later separately reviewed questionnaire-facts forward after source/dependency/build approval.",
   "canonical": {
     "project_id": "brpozobkoatabctjjadc",
@@ -49,7 +49,7 @@
   "releaseLimits": [
     "Next/Workflow exercised only on local loopback with hosted DB/Auth",
     "Synthetic models and generated test actors only; all seven actors removed after global signout",
-    "Native UI/JWT/restart and post-cleanup executed; final independent closure review pending",
+    "Native UI/JWT/restart, cleanup and independent technical synthetic closure accepted; production gates separate",
     "Clinical/legal/model-quality/production-platform gates remain separate"
   ],
   "sourceCommitScope": "Canonical and inbox application; the questionnaire review forward source is recorded separately.",
@@ -115,5 +115,14 @@
     "finalListenerStopped": true,
     "finalLauncherExit": null,
     "cleanupHarnessSource": "bc3c0917fe69973ca854a164aace759be0b7bd88"
+  },
+  "independentReview": {
+    "status": "APPROVED_TECHNICAL_SYNTHETIC_MVP",
+    "reviewer": "final_closure_review",
+    "date": "2026-10-25",
+    "reviewedDocumentationCommit": "48913a384c74be4d9721bd17b2246e09527d4688",
+    "sourceReport": "final-closure-20261025-review.md",
+    "sourceReportSha256": "8e1f4d20aec7347c42e8f5bf232956602f1504ae1a46fcec5cb3feb442b44384",
+    "archive": "docs/audits/2026-10-25-independent-review.md"
   }
 }

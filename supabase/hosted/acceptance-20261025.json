@@ -1,7 +1,7 @@
 {
   "projectId": "brpozobkoatabctjjadc",
   "scope": "TECHNICAL_SYNTHETIC_MVP",
-  "status": "EXECUTED_VERIFIED_PENDING_FINAL_REVIEW",
+  "status": "TECHNICAL_SYNTHETIC_ACCEPTED",
   "runtime": {
     "sourceCommit": "f2d69ea088403a3f3e641d20112318b54a344577",
     "buildId": "7-SFAHJkzrF9ef47Bhjl7",
@@ -49,10 +49,11 @@
     "generatedAndReviewedFactsEqual": true,
     "directJwtRejectedMutations": 7,
     "rejectedMutationSqlstate": "23514",
-    "currentReviewedReports": 1,
     "createdTasks": 1,
     "patientRawAssessmentRows": 0,
-    "patientPublicSummaryAndTaskMatch": true
+    "patientPublicSummaryAndTaskMatch": true,
+    "reviewedReportVersionsObservedDuringScenario": 1,
+    "observedBeforeCleanup": true
   },
   "sameOriginalRunRestart": {
     "runId": "wrun_01M5RY1CHPA2DXK3F7PKPSV4GY",
@@ -121,5 +122,14 @@
     "negativeJwtRpcSha256": "9a875d40b0618b727746adf6260d07866c538fd055b52cccfa0fc90a80cabfc0",
     "postCleanupSha256": "d7d6e02675fcbd2bb7c89ddaa7e2c3a79b9d82f0b871c70d15a3eb549659dcfd"
   },
-  "limits": "Dated synthetic technical acceptance, not clinical efficacy, legal approval, public deployment or universal security assurance. Post-fixture aggregate counts do not prove original account field identity."
+  "limits": "Dated synthetic technical acceptance, not clinical efficacy, legal approval, public deployment or universal security assurance. Post-fixture aggregate counts do not prove original account field identity.",
+  "independentReview": {
+    "status": "APPROVED_TECHNICAL_SYNTHETIC_MVP",
+    "reviewer": "final_closure_review",
+    "date": "2026-10-25",
+    "reviewedDocumentationCommit": "48913a384c74be4d9721bd17b2246e09527d4688",
+    "sourceReport": "final-closure-20261025-review.md",
+    "sourceReportSha256": "8e1f4d20aec7347c42e8f5bf232956602f1504ae1a46fcec5cb3feb442b44384",
+    "archive": "docs/audits/2026-10-25-independent-review.md"
+  }
 }
