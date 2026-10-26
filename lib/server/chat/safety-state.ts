@@ -25,9 +25,9 @@ type Supabase = SupabaseClient<Database>
  * lo borra. Mientras coexistan, este módulo solo branchea en CSSRS — una
  * instancia ASQ residual caería al fallback textual (defensivo).
  *
- * Failsafe: cualquier error de BD se traga (console.error) y devuelve
- * `never_assessed`. La función NUNCA lanza — el chat no se rompe por un
- * fallo aquí.
+ * Contrato base (tres argumentos): errores de BD devuelven `never_assessed`.
+ * El piloto puede optar por `strict`: selecciona C-SSRS antes de limitar las
+ * instancias y rechaza errores/datos no interpretables sin exponer valores.
  */
 interface QuestionnaireFlag {
   reason: string
@@ -88,6 +88,7 @@ function extractTextFromParts(parts: unknown): string {
 async function deriveTextualCheckState(
   supabase: Supabase,
   sessionId: string,
+  strict = false,
 ): Promise<SafetyState> {
   const { data, error } = await supabase
     .from('messages')
@@ -96,7 +97,10 @@ async function deriveTextualCheckState(
     .in('role', ['assistant', 'user'])
     .order('created_at', { ascending: true })
 
-  if (error || !data) return { kind: 'never_assessed' }
+  if (error || !data) {
+    if (strict) throw new Error('safety_state_unavailable')
+    return { kind: 'never_assessed' }
+  }
 
   let lastAssistantCheckAt: string | null = null
   let lastPatientResponseAt: string | null = null
@@ -130,6 +134,68 @@ async function deriveTextualCheckState(
   return { kind: 'never_assessed' }
 }
 
+function cssrsResultState(
+  instance: { scored_at: string | null; created_at: string },
+  result: { severity_band: string; flags_json: unknown },
+  strict = false,
+): SafetyState {
+  if (strict && (!Array.isArray(result.flags_json) || result.flags_json.some(flag =>
+    !flag || typeof flag !== 'object' || typeof flag.reason !== 'string' || typeof flag.itemOrder !== 'number',
+  ))) throw new Error('safety_state_unavailable')
+
+  const flags = parseFlags(result.flags_json)
+  const scoredAt = instance.scored_at ?? instance.created_at
+  const behaviorRecent = flags.some(flag => flag.reason === 'acute_risk' && flag.itemOrder === 7)
+  switch (result.severity_band) {
+    case 'acute_risk': return { kind: 'cssrs_acute_risk', scoredAt, flags, behaviorRecent }
+    case 'high_risk': return { kind: 'cssrs_high_risk', scoredAt }
+    case 'moderate_risk': return { kind: 'cssrs_moderate_risk', scoredAt }
+    case 'low_risk': return { kind: 'cssrs_low_risk', scoredAt }
+    case 'negative': return { kind: 'cssrs_negative', scoredAt }
+    default:
+      if (strict) throw new Error('safety_state_unavailable')
+      return { kind: 'cssrs_negative', scoredAt }
+  }
+}
+
+async function getStrictSessionSafetyState(supabase: Supabase, sessionId: string, openedAt: string): Promise<SafetyState> {
+  try {
+    const { data: definition, error: definitionError } = await supabase
+      .from('questionnaire_definitions')
+      .select('id')
+      .eq('code', 'CSSRS')
+      .eq('is_active', true)
+      .single()
+    if (definitionError || !definition) throw new Error('safety_state_unavailable')
+
+    const { data: instance, error: instanceError } = await supabase
+      .from('questionnaire_instances')
+      .select('id, questionnaire_id, status, created_at, scored_at')
+      .eq('session_id', sessionId)
+      .eq('questionnaire_id', definition.id)
+      .gte('created_at', openedAt)
+      .in('status', ['proposed', 'in_progress', 'scored'])
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (instanceError) throw new Error('safety_state_unavailable')
+    if (!instance) return await deriveTextualCheckState(supabase, sessionId, true)
+    if (instance.status !== 'scored') return { kind: 'cssrs_pending', proposedAt: instance.created_at }
+
+    const { data: result, error: resultError } = await supabase
+      .from('questionnaire_results')
+      .select('severity_band, flags_json')
+      .eq('instance_id', instance.id)
+      .single()
+    if (resultError || !result) throw new Error('safety_state_unavailable')
+    return cssrsResultState(instance, result, true)
+  } catch {
+    // No query values, Supabase error payloads or causes cross this boundary.
+    throw new Error('safety_state_unavailable')
+  }
+}
+
 /**
  * Deriva el `SafetyState` actual de la sesión.
  *
@@ -141,7 +207,9 @@ async function deriveTextualCheckState(
  *  2. Si no hay C-SSRS relevante, caemos al fallback heurístico textual
  *     sobre `messages` (último assistant que dijo "Línea 024" / "estás
  *     a salvo" + al menos una respuesta user posterior).
- *  3. Cualquier error → `never_assessed` con `console.error`.
+ *  3. Modo base: errores → `never_assessed` con `console.error`.
+ *     `strict: true` selecciona la definición C-SSRS activa primero y lanza
+ *     ante lecturas fallidas, resultado ausente o banda/flags no interpretables.
  *
  * Decisión deliberada: NO contemplamos `phq9_item9_clean` ni una variante
  * "PHQ-9 item 9 ≥ 1 → low_risk". El bug observado era de cribado dedicado.
@@ -151,7 +219,9 @@ export async function getSessionSafetyState(
   supabase: Supabase,
   sessionId: string,
   openedAt: string,
+  options: { strict?: boolean } = {},
 ): Promise<SafetyState> {
+  if (options.strict) return getStrictSessionSafetyState(supabase, sessionId, openedAt)
   try {
     // 1. Buscamos el cuestionario más reciente (cualquier estado relevante)
     //    de la sesión actual.
@@ -212,35 +282,7 @@ export async function getSessionSafetyState(
           return { kind: 'never_assessed' }
         }
 
-        const flags = parseFlags(result.flags_json)
-        const scoredAt = instances.scored_at ?? instances.created_at
-
-        // Override behaviorRecent: flag con reason=acute_risk e itemOrder=7
-        // (ítem 6b). Distingue del flag suicidality del 5/6 lifetime.
-        const behaviorRecent = flags.some(
-          (f) => f.reason === 'acute_risk' && f.itemOrder === 7,
-        )
-
-        switch (result.severity_band) {
-          case 'acute_risk':
-            return {
-              kind: 'cssrs_acute_risk',
-              scoredAt,
-              flags,
-              behaviorRecent,
-            }
-          case 'high_risk':
-            return { kind: 'cssrs_high_risk', scoredAt }
-          case 'moderate_risk':
-            return { kind: 'cssrs_moderate_risk', scoredAt }
-          case 'low_risk':
-            return { kind: 'cssrs_low_risk', scoredAt }
-          case 'negative':
-            return { kind: 'cssrs_negative', scoredAt }
-          default:
-            // Banda inesperada → tratar como negativo conservador.
-            return { kind: 'cssrs_negative', scoredAt }
-        }
+        return cssrsResultState(instances, result)
       }
 
       // Cualquier otro cuestionario scored (PHQ-9, GAD-7, BDI-II, BAI)

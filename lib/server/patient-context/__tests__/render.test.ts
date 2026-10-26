@@ -366,6 +366,20 @@ describe('renderPatientContextBlock — historic tier', () => {
 // ── Test 4: first session (tier='none', tierBDraft=null) ──────────────────────
 
 describe('renderPatientContextBlock — first session', () => {
+  it('recognizes a returning patient without an assessment instead of restarting intake', () => {
+    const block = renderPatientContextBlock(makeNoneCtx({
+      isFirstSession: false,
+      sessionNumber: 2,
+      previousSession: { closedAt: daysAgo(7), closureReason: 'inactivity', daysAgo: 7 },
+    }))
+
+    expect(block).not.toContain('primera sesión')
+    expect(block).not.toContain('ni sesiones anteriores registradas')
+    expect(block).toContain('Sesión nº 2')
+    expect(block).toContain('sin resumen clínico disponible')
+    expect(block).toContain('No presupongas que se completó el trabajo anterior')
+  })
+
   it('contains first session header and intake disclaimer', () => {
     const block = renderPatientContextBlock(makeNoneCtx())
     expect(block).toContain('[CONTEXTO DEL PACIENTE — primera sesión]')
@@ -387,6 +401,40 @@ describe('renderPatientContextBlock — first session', () => {
 // ── Test 5: Truncation ────────────────────────────────────────────────────────
 
 describe('renderPatientContextBlock — truncation', () => {
+  it('budgets inherited metadata and optional hints without cutting fixed correction rules', () => {
+    const ctx = makeTierACtx({
+      patient: { displayName: 'N'.repeat(3000), age: 30 },
+      recentQuestionnaires: [{ code: 'PHQ9', score: 12, band: 'B'.repeat(3000), scoredAt: daysAgo(1), deltaVsPrevious: null }],
+    })
+    const { block } = renderPatientContextBlockWithMeta(ctx, { retakeHint: 'H'.repeat(3000) })
+
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(block).toContain('Ideación suicida: none — autolesión: none')
+    expect(block).toContain('- Si el paciente contradice el snapshot, valida primero ("tienes razón, gracias por aclararlo"), no justifiques la fuente, y sigue por donde él lleva.')
+    expect(block).toContain('- No re-explores en profundidad lo ya mapeado en el snapshot.')
+    expect(block.trimEnd()).toMatch(/---$/)
+  })
+
+  it.each(['tierA', 'historic'] as const)('preserves correction rules and recorded risk with five maximum-length agreements (%s)', (tier) => {
+    const ctx = tier === 'historic' ? makeHistoricCtx() : makeTierACtx()
+    ctx.pendingTasks = Array.from({ length: 5 }, (_, i) => ({
+      id: `maximum-task-${i}`,
+      descripcion: `Acuerdo ${i} ${'T'.repeat(490)}`,
+      estado: 'pendiente',
+      acordadaEn: daysAgo(1),
+    }))
+    ctx.validated!.summary.risk_assessment = { ...baseRisk, suicidality: 'passive', self_harm: 'historic' }
+
+    const { block, truncatedSections } = renderPatientContextBlockWithMeta(ctx)
+
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(block).toContain('Ideación suicida: passive — autolesión: historic')
+    expect(block).toContain('- Si el paciente contradice el snapshot, valida primero ("tienes razón, gracias por aclararlo"), no justifiques la fuente, y sigue por donde él lleva.')
+    expect(block).toContain('- No re-explores en profundidad lo ya mapeado en el snapshot.')
+    expect(block.trimEnd()).toMatch(/---$/)
+    expect(truncatedSections).toContain('pending_tasks_capped')
+  })
+
   it('block.length <= 2500 when content is huge; cascade steps 1+2 both fire (areas + presenting dropped); chief_complaint, risk_assessment and instructions survive', () => {
     // 400-char chief_complaint (will be capped to 300, then to 150 if step 3 fires)
     const hugeCc = 'X'.repeat(400)
@@ -747,10 +795,10 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
     expect(truncatedSections).toEqual(['areas_for_exploration', 'presenting_issues'])
   })
 
-  it('returns [areas_for_exploration, presenting_issues, chief_complaint_capped] when step 3 fires', () => {
-    // Force step 3 to fire by making non-truncatable sections (tasks, questionnaires)
-    // plus chief_complaint eat enough budget that even after dropping areas +
-    // presenting, the block still exceeds 2500 — then chief_complaint is capped to 150.
+  it('reports lower-priority task reduction after capping the complaint and preserves fixed sections', () => {
+    // Tasks and questionnaires leave too little room after dropping areas +
+    // presenting, so the complaint is capped and task descriptions share the
+    // remaining data budget. Risk and correction instructions stay complete.
     const hugeCc = 'C'.repeat(800)
     const hugePresenting = Array.from({ length: 10 }, (_, i) => `Síntoma ${i}: ${'A'.repeat(120)}`)
     const hugeAreas = Array.from({ length: 10 }, (_, i) => `Área ${i}: ${'B'.repeat(120)}`)
@@ -799,11 +847,14 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
       'areas_for_exploration',
       'presenting_issues',
       'chief_complaint_capped',
+      'pending_tasks_capped',
     ])
     // chief_complaint was capped to 150 (149 C's + '…')
     expect(block).toContain('C'.repeat(149) + '…')
     // Full 400 C's would mean the 300-cap ran; step 3 replaces with 150-cap.
     expect(block).not.toContain('C'.repeat(200))
+    expect(block).toContain('Ideación suicida: passive — autolesión: historic')
+    expect(block).toContain('- No re-explores en profundidad lo ya mapeado en el snapshot.')
   })
 })
 
@@ -987,7 +1038,7 @@ describe('renderProtocolPhaseSection', () => {
 
   it('returns the maintenance block when completed=true regardless of phase', () => {
     const out = renderProtocolPhaseSection(8, true)
-    expect(out).toContain('[PROTOCOLO COMPLETADO — MANTENIMIENTO]')
+    expect(out).toContain('[CONTINUIDAD TRAS OCHO SESIONES CERRADAS — MANTENIMIENTO]')
     expect(out).toContain('NO reinicies el protocolo')
     // The phase-8 block should NOT appear in the maintenance output
     expect(out).not.toContain('[PROTOCOLO Y FASE ACTUAL — Sesión 8')

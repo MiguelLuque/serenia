@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clinical": "NEXT_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 SUPABASE_TELEMETRY_DISABLED=1 FEATURE_CLINICAL_CONVERSATION_PILOT=on FEATURE_CROSS_SESSION_CONTEXT=on next dev --hostname 127.0.0.1 --port 3217",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings=0",

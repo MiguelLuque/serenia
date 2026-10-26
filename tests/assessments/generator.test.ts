@@ -189,6 +189,12 @@ describe('generateAssessment', () => {
 
 
 describe('Task11 exported legacy writer uses persisted questionnaire facts', () => {
+  it('does not turn an unavailable risk read into a successful no-events draft', async () => {
+    const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [] }, risk_events: { error: new Error('risk read unavailable') } })
+    await expect(generateAssessment(db as unknown as Parameters<typeof generateAssessment>[0], 'session-1')).rejects.toThrow('risk read unavailable')
+    expect(generateObjectMock).not.toHaveBeenCalled()
+  })
   it.each([{ questionnaires: [] }, { questionnaires: [{ code: 'FAKE', score: 99, band: 'fake', flags: [] }] }])('overrides model facts %j before the legacy insert', async ({ questionnaires }) => {
     generateObjectMock.mockResolvedValue({ object: { ...summaryResult, questionnaires }, usage: {} })
     const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, messages: { rows: makeMessages(4) },

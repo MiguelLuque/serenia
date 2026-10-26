@@ -49,6 +49,9 @@ function detectServerClose(
       if (
         'state' in part &&
         part.state === 'output-available' &&
+        'output' in part && part.output !== null &&
+        typeof part.output === 'object' &&
+        'closed' in part.output && part.output.closed === true &&
         (part.type === 'tool-confirm_close_session' ||
           part.type === 'tool-close_session_crisis')
       ) {

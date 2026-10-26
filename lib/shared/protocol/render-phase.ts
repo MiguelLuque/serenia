@@ -247,8 +247,8 @@ export function renderProtocolPhaseBlock(phase: ProtocolPhase): string {
  * supervisor ante recaída marcada).
  */
 export function renderProtocolMaintenanceBlock(): string {
-  return `[PROTOCOLO COMPLETADO — MANTENIMIENTO]
-El paciente completó las 8 sesiones del protocolo TCC/ACT. Esta es una sesión de mantenimiento.
+  return `[CONTINUIDAD TRAS OCHO SESIONES CERRADAS — MANTENIMIENTO]
+Se han registrado al menos ocho sesiones cerradas. El contador no acredita que se hayan trabajado las ocho fases ni que se hayan alcanzado sus objetivos clínicos. Comprueba con el paciente qué se trabajó y qué quedó pendiente antes de acordar el foco actual.
 
 Reglas:
 - NO reinicies el protocolo de 8 sesiones a no ser que el clínico lo haya marcado como recaída.

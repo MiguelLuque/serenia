@@ -57,6 +57,7 @@ function renderQuestionnaires(
 // ── Text truncation helpers ──────────────────────────────────────────────────
 
 function truncate(text: string, maxLen: number): string {
+  if (maxLen <= 0) return ''
   if (text.length <= maxLen) return text
   return text.slice(0, maxLen - 1) + '…'
 }
@@ -70,7 +71,7 @@ function renderList(items: string[], maxLen: number, maxItems: number): string[]
 function renderPatientLine(
   ctx: PatientContext,
 ): string {
-  const name = ctx.patient.displayName ?? 'el paciente'
+  const name = truncate(ctx.patient.displayName ?? 'el paciente', 100)
   const agePart = ctx.patient.age !== null ? `, ${ctx.patient.age} años` : ''
   const sessionPart = `Sesión nº ${ctx.sessionNumber}`
   const daysPart =
@@ -83,20 +84,38 @@ function renderPatientLine(
 
 // ── Pending tasks ────────────────────────────────────────────────────────────
 
-function renderPendingTasks(tasks: PatientContext['pendingTasks']): string {
+function renderPendingTasks(
+  tasks: PatientContext['pendingTasks'],
+  descriptionLimit = Infinity,
+  shownLimit = 5,
+): string {
   if (tasks.length === 0) return ''
 
-  const shown = tasks.slice(0, 5)
+  const shown = tasks.slice(0, shownLimit)
   const overflow = tasks.length - shown.length
 
   const lines = shown.map(
-    (t) => `- "${t.descripcion}" (${t.estado}, acordada el ${formatDate(t.acordadaEn)})`,
+    (t) => `- "${truncate(t.descripcion, descriptionLimit)}" (${t.estado}, acordada el ${formatDate(t.acordadaEn)})`,
   )
   if (overflow > 0) {
     lines.push(`- +${overflow} acuerdos más`)
   }
 
   return `Acuerdos abiertos de sesiones anteriores:\n${lines.join('\n')}`
+}
+
+/** Keep complete task lines and dates; shorten their data before fixed rules. */
+function renderPendingTasksWithinBudget(
+  tasks: PatientContext['pendingTasks'],
+  budget: number,
+): string {
+  for (let shown = Math.min(5, tasks.length); shown > 0; shown -= 1) {
+    const minimum = renderPendingTasks(tasks, 1, shown)
+    if (minimum.length > budget) continue
+    const descriptionLimit = 1 + Math.floor((budget - minimum.length) / shown)
+    return renderPendingTasks(tasks, descriptionLimit, shown)
+  }
+  return ''
 }
 
 // ── Risk assessment ──────────────────────────────────────────────────────────
@@ -278,7 +297,7 @@ function assembleTierAOrHistoric(
   block = partsNoPresenting.join('\n')
   if (block.length <= 2500) return { block, truncatedSections }
 
-  // Step 3: truncate chief_complaint to 150 chars and hard-cut at 2500
+  // Step 3: truncate chief_complaint to 150 chars, preserving fixed sections.
   truncatedSections.push('chief_complaint_capped')
   const shortComplaint = truncate(summary.chief_complaint, 150)
   const partsFinal: string[] = []
@@ -308,7 +327,41 @@ function assembleTierAOrHistoric(
   block = partsFinal.join('\n')
   if (block.length <= 2500) return { block, truncatedSections }
 
-  return { block: block.slice(0, 2500), truncatedSections }
+  // Reserve the complete risk section and instructions before allocating the
+  // remaining space to data. Cutting the assembled string could erase those
+  // invariants when five valid 500-character agreements consumed the budget.
+  let keptQuestionnaires = questionnairesSection
+  let keptInstructions = instructions
+  const assembleReserved = (keptTasks = '') => [
+    header,
+    patientLine,
+    `Motivo de consulta:\n${shortComplaint}`,
+    ...(keptQuestionnaires ? [keptQuestionnaires] : []),
+    ...(keptTasks ? [keptTasks] : []),
+    riskSection,
+    keptInstructions,
+    '---',
+  ].join('\n\n')
+
+  if (assembleReserved().length > 2500 && keptQuestionnaires) {
+    keptQuestionnaires = ''
+    truncatedSections.push('questionnaires')
+  }
+  if (assembleReserved().length > 2500 && retakeHint) {
+    keptInstructions = baseInstructions
+    const hintBudget = Math.max(0, 2500 - assembleReserved().length - 3)
+    keptInstructions = appendHintBullet(baseInstructions, truncate(retakeHint, hintBudget))
+    truncatedSections.push('retake_hint_capped')
+  }
+
+  let keptTasks = ''
+  if (tasksSection) {
+    const taskBudget = Math.max(0, 2500 - assembleReserved().length - 2)
+    keptTasks = renderPendingTasksWithinBudget(ctx.pendingTasks, taskBudget)
+    truncatedSections.push('pending_tasks_capped')
+  }
+
+  return { block: assembleReserved(keptTasks), truncatedSections }
 }
 
 // ── Main exports ─────────────────────────────────────────────────────────────
@@ -374,6 +427,18 @@ export function renderPatientContextBlockWithMeta(
 
     case 'none':
     default: {
+      if (!ctx.isFirstSession) {
+        return {
+          block: [
+            '[CONTEXTO DEL PACIENTE — retorno sin resumen clínico disponible]',
+            renderPatientLine(ctx),
+            'Hay historia de sesiones, pero no hay un resumen clínico disponible. No presupongas que se completó el trabajo anterior. Pregunta qué necesita hoy y aclara lo pendiente sin reiniciar el intake completo.',
+            '',
+            '---',
+          ].join('\n'),
+          truncatedSections: [],
+        }
+      }
       // `none` has no Instructions section; a retake hint for a first-session
       // patient with questionnaire history is not expected, so we ignore it
       // rather than inventing a section just to host it.
@@ -463,7 +528,8 @@ export function renderIntakeBlock(
 
 /**
  * Devuelve el bloque [PROTOCOLO Y FASE ACTUAL] correcto según el estado:
- * - `completed = true` → bloque de mantenimiento (post-sesión 8).
+ * - `completed = true` → continuidad tras ocho cierres administrativos.
+ *   El contador no acredita trabajo clínico completado.
  * - `completed = false` → bloque de la fase 1-8 indicada.
  *
  * Mantengo el nombre en español ("section") porque el caller lo trata como

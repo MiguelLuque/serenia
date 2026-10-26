@@ -4,7 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import { llm } from '@/lib/shared/llm/models'
-import { loadPromptFromMarkdown } from '@/lib/server/llm/prompts/loader'
+import { getClinicalReportPrompt } from '@/lib/server/llm/prompts'
+import { formatRiskEventForAssessment } from '@/lib/server/assessments/risk-observation'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
 import {
   AssessmentGenerationSchema,
@@ -269,17 +270,15 @@ export async function generateAssessmentStep(
     )
   }
 
-  const { data: riskRows } = await supabase
+  const { data: riskRows, error: riskError } = await supabase
     .from('risk_events')
     .select('risk_type, severity, source_type, created_at, payload_json')
     .eq('session_id', session.id)
     .eq('user_id', session.user_id)
     .order('created_at', { ascending: true })
 
-  const riskBlocks = (riskRows ?? []).map(
-    (r) =>
-      `- ${r.created_at}: ${r.risk_type} (${r.severity}) from ${r.source_type}`,
-  )
+  if (riskError) throw riskError
+  const riskBlocks = (riskRows ?? []).map(formatRiskEventForAssessment)
 
   const closureNote = session.closure_reason
     ? `Cierre de sesión: ${session.closure_reason}.`
@@ -309,9 +308,7 @@ export async function generateAssessmentStep(
   }
 
   const userPrompt = sections.join('\n')
-  const systemPrompt = loadPromptFromMarkdown(
-    'docs/agents/prompts/clinical-report.md',
-  )
+  const systemPrompt = getClinicalReportPrompt()
 
   const { object: summary, usage } = await generateObject({
     model: llm.structured(),

@@ -20,6 +20,10 @@ function readSupportedPrompt(path: string): string {
       return readFileSync(join(process.cwd(), 'docs/agents/prompts/session-therapist.md'), 'utf-8')
     case 'docs/agents/prompts/clinical-report.md':
       return readFileSync(join(process.cwd(), 'docs/agents/prompts/clinical-report.md'), 'utf-8')
+    case 'docs/agents/prompts/session-therapist.pilot.md':
+      return readFileSync(join(process.cwd(), 'docs/agents/prompts/session-therapist.pilot.md'), 'utf-8')
+    case 'docs/agents/prompts/clinical-report.pilot.md':
+      return readFileSync(join(process.cwd(), 'docs/agents/prompts/clinical-report.pilot.md'), 'utf-8')
     default:
       throw new Error('Unsupported prompt path')
   }

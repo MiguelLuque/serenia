@@ -377,6 +377,149 @@ describe('getSessionSafetyState — failsafe', () => {
   })
 })
 
+type StoredRow = Record<string, unknown>
+
+/** In-memory query boundary that applies filters/order/limit to complete rows. */
+function makeFilteringSupabase(options: {
+  instances?: StoredRow[]
+  band?: string
+  flags?: unknown
+  results?: StoredRow[]
+  messages?: StoredRow[]
+  failTable?: string
+  throwOnTable?: string
+  definitions?: StoredRow[]
+} = {}) {
+  const tables: Record<string, StoredRow[]> = {
+    questionnaire_definitions: options.definitions ?? [
+      { id: CSSRS_DEF_ID, code: 'CSSRS', is_active: true },
+      { id: PHQ9_DEF_ID, code: 'PHQ9', is_active: true },
+    ],
+    questionnaire_instances: options.instances ?? [cssrsScoredInstance()],
+    questionnaire_results: options.results ?? [{ instance_id: CSSRS_INSTANCE_ID, severity_band: options.band ?? 'high_risk', flags_json: options.flags ?? [] }],
+    messages: options.messages ?? [],
+  }
+  return {
+    from(table: string) {
+      if (options.throwOnTable === table) throw new Error('private query values must not escape')
+      let rows = [...(tables[table] ?? [])]
+      let rowLimit = Infinity
+      const ordering: Array<{ field: string; ascending: boolean }> = []
+      const finish = (single: boolean) => {
+        const ordered = [...rows].sort((left, right) => {
+          for (const { field, ascending } of ordering) {
+            const comparison = String(left[field]).localeCompare(String(right[field]))
+            if (comparison) return ascending ? comparison : -comparison
+          }
+          return 0
+        }).slice(0, rowLimit)
+        return Promise.resolve({ data: single ? ordered[0] ?? null : ordered, error: options.failTable === table ? { message: 'private query values must not escape' } : null })
+      }
+      const query = {
+        select: () => query,
+        eq: (field: string, value: unknown) => { rows = rows.filter(row => row[field] === value); return query },
+        gte: (field: string, value: string) => { rows = rows.filter(row => String(row[field]) >= value); return query },
+        in: (field: string, values: unknown[]) => { rows = rows.filter(row => values.includes(row[field])); return query },
+        order: (field: string, value: { ascending: boolean }) => { ordering.push({ field, ascending: value.ascending }); return query },
+        limit: (value: number) => { rowLimit = value; return query },
+        single: () => finish(true),
+        maybeSingle: () => finish(true),
+        then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => finish(false).then(resolve, reject),
+      }
+      return query
+    },
+  } as unknown as Parameters<typeof getSessionSafetyState>[0]
+}
+
+describe('getSessionSafetyState — strict pilot read', () => {
+  const cssrsRow = () => ({ ...cssrsScoredInstance(), session_id: SESSION_ID })
+
+  it('finds the current-session CSSRS even when a different questionnaire is more recent, while baseline stays compatible', async () => {
+    const supabase = makeFilteringSupabase({ instances: [
+      cssrsRow(),
+      { id: 'phq9-newer', questionnaire_id: PHQ9_DEF_ID, session_id: SESSION_ID, status: 'scored', created_at: '2026-04-28T12:05:00Z', scored_at: '2026-04-28T12:05:00Z' },
+    ] })
+
+    expect((await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO)).kind).toBe('never_assessed')
+    expect(await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).toEqual({ kind: 'cssrs_high_risk', scoredAt: NOW_ISO })
+  })
+
+  it('does not use another session or an instance from before this session opened', async () => {
+    const supabase = makeFilteringSupabase({ instances: [
+      { ...cssrsRow(), session_id: 'other-session', created_at: '2026-04-28T12:10:00Z' },
+      { ...cssrsRow(), created_at: '2026-04-27T12:00:00Z' },
+    ] })
+
+    expect(await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).toEqual({ kind: 'never_assessed' })
+  })
+
+  it('uses the latest relevant CSSRS pending state instead of an older scored one', async () => {
+    const supabase = makeFilteringSupabase({ instances: [
+      cssrsRow(),
+      { ...cssrsRow(), id: 'pending-cssrs', status: 'in_progress', created_at: '2026-04-28T12:05:00Z', scored_at: null },
+    ] })
+
+    expect(await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).toEqual({ kind: 'cssrs_pending', proposedAt: '2026-04-28T12:05:00Z' })
+  })
+
+  it.each([
+    ['negative', 'cssrs_negative'],
+    ['low_risk', 'cssrs_low_risk'],
+    ['moderate_risk', 'cssrs_moderate_risk'],
+    ['high_risk', 'cssrs_high_risk'],
+  ])('preserves the canonical %s result without changing its band', async (band, kind) => {
+    const supabase = makeFilteringSupabase({ instances: [cssrsRow()], band })
+
+    expect(await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).toEqual({ kind, scoredAt: NOW_ISO })
+  })
+
+  it('preserves the structured acute recent-behavior flag', async () => {
+    const flags = [{ reason: 'acute_risk', itemOrder: 7 }]
+    const supabase = makeFilteringSupabase({ instances: [cssrsRow()], band: 'acute_risk', flags })
+
+    expect(await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).toEqual({ kind: 'cssrs_acute_risk', scoredAt: NOW_ISO, flags, behaviorRecent: true })
+  })
+
+  it.each(['questionnaire_definitions', 'questionnaire_instances', 'questionnaire_results', 'messages'])('rejects a failed %s read without exposing values or fabricating absence', async failTable => {
+    const supabase = makeFilteringSupabase({ instances: failTable === 'messages' ? [] : [cssrsRow()], failTable })
+
+    await expect(getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).rejects.toThrow(/^safety_state_unavailable$/)
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not convert an unknown band into a negative result in strict mode', async () => {
+    const supabase = makeFilteringSupabase({ instances: [cssrsRow()], band: 'unrecognized-private-band' })
+
+    await expect(getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).rejects.toThrow(/^safety_state_unavailable$/)
+    expect((await getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: false })).kind).toBe('cssrs_negative')
+  })
+
+  it('rejects a scored instance without its result rather than reporting an unassessed patient', async () => {
+    const supabase = makeFilteringSupabase({ instances: [cssrsRow()], results: [] })
+
+    await expect(getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).rejects.toThrow(/^safety_state_unavailable$/)
+  })
+
+  it('does not silently drop malformed acute flags in strict mode', async () => {
+    const supabase = makeFilteringSupabase({ instances: [cssrsRow()], band: 'acute_risk', flags: [{ reason: 'acute_risk' }] })
+
+    await expect(getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).rejects.toThrow(/^safety_state_unavailable$/)
+  })
+
+  it('rejects a missing active CSSRS definition instead of treating it as an unassessed patient', async () => {
+    const supabase = makeFilteringSupabase({ definitions: [{ id: CSSRS_DEF_ID, code: 'CSSRS', is_active: false }] })
+
+    await expect(getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).rejects.toThrow(/^safety_state_unavailable$/)
+  })
+
+  it('sanitizes unexpected query exceptions in strict mode', async () => {
+    const supabase = makeFilteringSupabase({ throwOnTable: 'questionnaire_definitions' })
+
+    await expect(getSessionSafetyState(supabase, SESSION_ID, NOW_ISO, { strict: true })).rejects.toThrow(/^safety_state_unavailable$/)
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
+  })
+})
+
 describe('SafetyState type', () => {
   it('discriminated union exhaustivo (compile-time)', () => {
     const cases: SafetyState[] = [

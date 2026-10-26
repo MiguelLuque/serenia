@@ -3,8 +3,9 @@ import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
 import { llm } from '@/lib/shared/llm/models'
-import { loadPromptFromMarkdown } from '@/lib/server/llm/prompts/loader'
+import { getClinicalReportPrompt } from '@/lib/server/llm/prompts'
 import { loadQuestionnaireFacts } from './questionnaire-facts'
+import { formatRiskEventForAssessment } from './risk-observation'
 
 type Supabase = SupabaseClient<Database>
 type AssessmentRow = Database['public']['Tables']['assessments']['Row']
@@ -152,16 +153,14 @@ export async function generateAssessment(
     `- ${report.code} (${name}): puntuación ${report.score}, banda ${report.band}, flags ${JSON.stringify(report.flags)}`,
   )
 
-  const { data: riskRows } = await supabase
+  const { data: riskRows, error: riskError } = await supabase
     .from('risk_events')
     .select('risk_type, severity, source_type, created_at, payload_json')
     .eq('session_id', sessionId)
     .order('created_at', { ascending: true })
 
-  const riskBlocks = (riskRows ?? []).map(
-    (r) =>
-      `- ${r.created_at}: ${r.risk_type} (${r.severity}) from ${r.source_type}`,
-  )
+  if (riskError) throw riskError
+  const riskBlocks = (riskRows ?? []).map(formatRiskEventForAssessment)
 
   const closureNote = session.closure_reason
     ? `Cierre de sesión: ${session.closure_reason}.`
@@ -182,9 +181,7 @@ export async function generateAssessment(
     riskBlocks.length > 0 ? riskBlocks.join('\n') : '(ninguno)',
   ].join('\n')
 
-  const systemPrompt = loadPromptFromMarkdown(
-    'docs/agents/prompts/clinical-report.md',
-  )
+  const systemPrompt = getClinicalReportPrompt()
 
   const { object: summary, usage } = await generateObject({
     model: llm.structured(),

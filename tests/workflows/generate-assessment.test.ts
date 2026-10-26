@@ -145,6 +145,25 @@ it('refuses foreign conversation ownership before reading transcript with servic
   expect(supabase.from).not.toHaveBeenCalledWith('messages')
 })
 
+it('refuses a missing risk read rather than presenting no risk events to the model', async () => {
+  const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+    messages: { rows: makeMessages(4) }, questionnaire_instances: { rows: [] },
+    risk_events: { error: new Error('risk read unavailable') } })
+  createServiceRoleClientMock.mockReturnValue(db)
+  await expect(generateAssessmentStep(makeSession())).rejects.toThrow('risk read unavailable')
+  expect(generateObjectMock).not.toHaveBeenCalled()
+})
+
+it('identifies a lexical event as an automatic observation in the report input', async () => {
+  const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+    messages: { rows: makeMessages(4) }, questionnaire_instances: { rows: [] },
+    risk_events: { rows: [{ risk_type: 'suicidal_ideation', severity: 'high', source_type: 'conversation', created_at: '2026-10-25', payload_json: { signal: 'textual_crisis' } }] } })
+  createServiceRoleClientMock.mockReturnValue(db)
+  generateObjectMock.mockResolvedValue({ object: summaryResult, usage: {} })
+  await generateAssessmentStep(makeSession())
+  expect(generateObjectMock.mock.calls[0][0].prompt).toContain('observación léxica automática')
+})
+
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
     id: 'session-1',

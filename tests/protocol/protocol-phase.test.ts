@@ -115,7 +115,15 @@ describe('renderProtocolPhaseBlock', () => {
 describe('renderProtocolMaintenanceBlock', () => {
   it('contiene el marker MANTENIMIENTO', () => {
     const block = renderProtocolMaintenanceBlock()
-    expect(block).toContain('[PROTOCOLO COMPLETADO — MANTENIMIENTO]')
+    expect(block).toContain('[CONTINUIDAD TRAS OCHO SESIONES CERRADAS — MANTENIMIENTO]')
+  })
+
+  it('does not infer completed clinical work from the administrative session count', () => {
+    const block = renderProtocolMaintenanceBlock()
+    expect(block).not.toContain('El paciente completó las 8 sesiones')
+    expect(block).not.toContain('PROTOCOLO COMPLETADO')
+    expect(block).toContain('El contador no acredita que se hayan trabajado las ocho fases')
+    expect(block).toContain('qué quedó pendiente')
   })
 
   it('marca explícitamente que la copy está pendiente de firma clínica', () => {
