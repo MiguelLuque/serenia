@@ -1,6 +1,6 @@
 # Pablo conversation pilot Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Entregar variante ejecutable y casos ficticios para revisión de evaluación y conversación por Pablo.
 
@@ -28,9 +28,9 @@ Sin SQL, bandas/cortes, nuevas escalas, proveedores, claves, datos reales, publi
 
 **Interfaces:** `clinicalPilotEnabled(env = process.env): boolean`; `getClinicalReportPrompt(): string`; getters seleccionan cuatro assets literales (dos base, dos piloto), sin rutas libres.
 
-- [ ] Escribir prueba que falla: on selecciona piloto fuera de producción; off mantiene base; production+on rechaza; drafts/rutas arbitrarias siguen rechazados.
-- [ ] Implementar selección, prompts según spec, script loopback `dev:clinical` y documentación de flag.
-- [ ] Verificar `rtk npm test -- tests/llm/clinical-pilot.test.ts tests/llm/prompts.test.ts tests/llm/evaluation.test.ts` y guardar evidencia.
+- [x] Escribir prueba que falla: on selecciona piloto fuera de producción; off mantiene base; production+on rechaza; drafts/rutas arbitrarias siguen rechazados.
+- [x] Implementar selección, prompts según spec, script loopback `dev:clinical` y documentación de flag.
+- [x] Verificar `rtk npm test -- tests/llm/clinical-pilot.test.ts tests/llm/prompts.test.ts tests/llm/evaluation.test.ts` y guardar evidencia.
 
 ### Task 2: Contexto coherente
 
@@ -38,9 +38,9 @@ Sin SQL, bandas/cortes, nuevas escalas, proveedores, claves, datos reales, publi
 
 **Interfaces:** Conservar firmas públicas. El renderer respeta `isFirstSession`; instrucciones/riesgo se preservan en el límite2500; mantenimiento distingue cierres y trabajo completado.
 
-- [ ] Regresiones RED con cinco tareas de500 y retorno sesión2 sin informe.
-- [ ] Corregir presupuesto por secciones, retorno y afirmación de protocolo completado.
-- [ ] Ejecutar tests de render/protocolo y tipos; informar límites longitudinales sin nueva persistencia.
+- [x] Regresiones RED con cinco tareas de500 y retorno sesión2 sin informe.
+- [x] Corregir presupuesto por secciones, retorno y afirmación de protocolo completado.
+- [x] Ejecutar tests de render/protocolo y tipos; informar límites longitudinales sin nueva persistencia.
 
 ### Task 3: Orquestación contextual de prueba
 
@@ -48,9 +48,9 @@ Sin SQL, bandas/cortes, nuevas escalas, proveedores, claves, datos reales, publi
 
 **Interfaces:** `buildPilotSafetyNotice({crisis,safetyState}): string`; la ruta sólo cambia bypass léxico cuando piloto está habilitado. API/RPC/schema externos intactos.
 
-- [ ] RED: aclaración repetida llega al modelo en piloto; misma señal conserva bypass base; fallback con contexto fallido/expiración conserva respuesta de seguridad; estado agudo no desaparece del prompt.
-- [ ] Implementar aviso e integración. Conservar `p_crisis/p_urgent`, precedencias y guard SQL.
-- [ ] Ejecutar tests de piloto, seguridad, cierre y boundary; no declarar clasificación clínica validada por mocks.
+- [x] RED: aclaración repetida llega al modelo en piloto; misma señal conserva bypass base; fallback con contexto fallido/expiración conserva respuesta de seguridad; estado agudo no desaparece del prompt.
+- [x] Implementar aviso e integración. Conservar `p_crisis/p_urgent`, precedencias y guard SQL.
+- [x] Ejecutar tests de piloto, seguridad, cierre y boundary; no declarar clasificación clínica validada por mocks.
 
 ### Task 4: Devolución y reporte fieles
 
@@ -58,15 +58,15 @@ Sin SQL, bandas/cortes, nuevas escalas, proveedores, claves, datos reales, publi
 
 **Interfaces:** Mismo esquema JSON; prompts vía getter central. En piloto hechos canónicos de todas las instancias scored actuales; error de lectura de riesgo se propaga. Evento textual se identifica como observación automática en contexto del informe.
 
-- [ ] RED: resultado no desaparece por mensaje posterior y otro cuestionario no lo oculta; lectura riesgo fallida impide generación.
-- [ ] Implementar hechos disponibles y anotación de procedencia; no afirmar que se recibió/devolvió por timestamp.
-- [ ] Ejecutar tests de resultados/generador/workflow y tipos.
+- [x] RED: resultado no desaparece por mensaje posterior y otro cuestionario no lo oculta; lectura riesgo fallida impide generación.
+- [x] Implementar hechos disponibles y anotación de procedencia; no afirmar que se recibió/devolvió por timestamp.
+- [x] Ejecutar tests de resultados/generador/workflow y tipos.
 
 ### Task 5: Material de prueba, revisión y aceptación
 
 **Files:** `docs/handoff/para-pablo-piloto-2026-10-25/README.md`, casos/rúbrica y `docs/audits/2026-10-25-pablo-pilot-acceptance.md`.
 
-- [ ] Conservar notas originales, localizar evidencia, redactar diferencias de esta versión y11 episodios con ramas/criterios no ejecutados.
-- [ ] Revisión independiente del diff completo y corregir fallos materiales con regresiones.
-- [ ] Commit local de fuentes revisadas y ejecutar `rtk npm run verify` (siete gates, logs privados; no build de cambios sin commit). Declarar fallos/no ejecutados explícitamente.
-- [ ] Entregar comando de arranque local, modo base para comparación, guía y resultados técnicos; pruebas de Pablo/calidad de modelo quedan separadas.
+- [x] Conservar notas originales, localizar evidencia, redactar diferencias de esta versión y11 episodios con ramas/criterios no ejecutados.
+- [x] Revisión independiente del diff completo y corregir fallos materiales con regresiones.
+- [x] Commit local de fuentes revisadas y ejecutar `rtk npm run verify` (siete gates, logs privados; no build de cambios sin commit). Declarar fallos/no ejecutados explícitamente.
+- [x] Entregar comando de arranque local, modo base para comparación, guía y resultados técnicos; pruebas de Pablo/calidad de modelo quedan separadas.

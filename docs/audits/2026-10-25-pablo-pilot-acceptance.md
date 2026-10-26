@@ -2,7 +2,7 @@
 
 Preparación 25-10-2026; verificación integrada 26-10-2026. Base: `4b546a4`. Variante de prompts: `0.1.0-pilot`.
 
-Estado de esta anotación: implementación, revisión independiente y correcciones verificadas; gates integrales de build/BD/dependencias pendientes. No convertir pruebas sintéticas en aceptación clínica.
+Estado: versión local preparada para prueba ficticia supervisada por Pablo. Implementación, revisión independiente, correcciones y siete gates integrales verificados. La revisión clínica y las conversaciones reales con el proveedor siguen pendientes.
 
 ## Entrega
 
@@ -34,7 +34,27 @@ Después de las correcciones: **842/842 pruebas en71 archivos**, lint y typechec
 
 ## Gates integrales
 
-Pendiente registrar comando, commit del build, exits y directorio de evidencia de los siete gates de `rtk npm run verify`. El build aislado exige fuente committed y se atribuirá a ese commit exacto. Si faltan Docker/red/permisos no se considerará pasado un gate por haberlo intentado.
+`rtk npm run verify` terminó con exit0 el26-10-2026. Fuente construida: **`38384a315febd7abb4f63e1ed02772eb38effac8`**, sin cambios locales al ejecutar el gate. Lock SHA256 `cb963dbb3901c1f91e74c86c979e68062a823c464383250f72f95f7d26c9a425`; Node24.14.1. La actualización documental posterior no se atribuye a otro build.
+
+| Gate | Resultado |
+| --- | --- |
+| test | PASS —842/842 en71 archivos |
+| lint | PASS |
+| typecheck | PASS |
+| workflow:wire | PASS |
+| db:test | PASS —Postgres efímero; sin BD alojada |
+| audit:dependencies | PASS —gate estricto vigente |
+| build:isolated | PASS —archive del commit exacto, entorno sintético limpio |
+
+Resultados y logs íntegros: `/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-ukeqhe/results.json` y logs contiguos. Build: `/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-build-3jLWl5/project`; metadata/result/build.log en su directorio padre. El build de producción compila las ramas del piloto pero no habilita su ejecución: el flag piloto se rechaza en producción por diseño.
+
+## Arranque local comprobado
+
+Se ejecutó `rtk npm run dev:clinical`, con piloto/continuidad activados y telemetría desactivada. Listener observado: node PID59534 en127.0.0.1:3217. `/registro` devolvió HTTP200; el navegador mostró su formulario y permitió navegar a `/login`, donde se vieron los campos y botón de acceso. POST anónimo a `/api/chat` fue redirigido por el proxy de autenticación; no inició generación ni creó datos.
+
+La comprobación se detuvo antes de iniciar sesión: no se usaron cuentas, transcripciones reales ni modelos de pago. No acredita el recorrido autenticado contra BD/proveedor, disponibilidad de credenciales del modelo ni calidad clínica. La guía indica ese requisito y cómo registrar un fallo de configuración sin confundirlo con el método. El servicio permanece local para la prueba, sin publicación remota.
+
+`next dev` actualizó su bloque generado de `AGENTS.md` y añadió `/.swc` a `.gitignore`. Se inspeccionó el diff y el generador instalado; son cambios auxiliares de desarrollo, sin modificar el código ejecutable construido ni las instrucciones clínicas. Se conservan para evitar suciedad repetida al arrancar.
 
 ## Límites de aceptación
 

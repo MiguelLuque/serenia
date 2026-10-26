@@ -52,3 +52,4 @@ docs/handoff/respuesta de pablo/
 # Isolated CLI/cache and generated Workflow artifacts
 /.cache/
 /app/.well-known/workflow/
+/.swc
