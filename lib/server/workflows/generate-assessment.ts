@@ -262,7 +262,7 @@ export async function generateAssessmentStep(
     const flagsLabel = report.flags.length > 0 ? JSON.stringify(report.flags) : 'ninguno'
     const headerLine = `- ${report.code} (${name}): puntuación ${report.score}, banda ${report.band}, flags ${flagsLabel}`
 
-    const itemLines = formatItemLines(answerRows)
+    const itemLines = formatItemLines(answerRows, report.code)
     questionnaireBlocks.push(
       itemLines.length > 0
         ? `${headerLine}\n${itemLines.map((l) => `  ${l}`).join('\n')}`
@@ -458,10 +458,10 @@ function isUniqueViolation(err: unknown): boolean {
  * rules in `clinical-report.md` directly checkable ("ítem 5 = No"). We only
  * fall back to the numeric if the label is missing for any reason.
  */
-function formatItemLines(rows: unknown): string[] {
+function formatItemLines(rows: unknown, code: string): string[] {
   if (!Array.isArray(rows)) return []
 
-  type Parsed = { order: number; prompt: string; answer: string }
+  type Parsed = { order: number; prompt: string; answer: string; numeric: number | undefined }
   const parsed: Parsed[] = []
 
   for (const row of rows) {
@@ -490,11 +490,33 @@ function formatItemLines(rows: unknown): string[] {
       continue
     }
 
-    parsed.push({ order: item.order_index, prompt: item.prompt, answer })
+    parsed.push({ order: item.order_index, prompt: item.prompt, answer,
+      numeric: typeof r.answer_numeric === 'number' ? r.answer_numeric : undefined })
   }
 
   parsed.sort((a, b) => a.order - b.order)
-  return parsed.map((p) => `Item ${p.order}: ${p.prompt} — ${p.answer}`)
+  return parsed.map((p) => {
+    // validateAnswers normalizes CSSRS skip branches to zero. Those rows do
+    // not establish that the person was asked or explicitly denied the item.
+    // Preserve scoring, but never turn a normalized zero into direct evidence.
+    const skipParent = code === 'CSSRS'
+      ? [3, 4, 5].includes(p.order) ? 2 : p.order === 7 ? 6 : null
+      : null
+    const skipApplies = skipParent !== null && parsed.some(item => item.order === skipParent && item.numeric === 0)
+    let answer = p.answer
+    const normalizedLabel = p.answer.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const labelValue = ['si', '1'].includes(normalizedLabel) ? 1 : ['no', '0'].includes(normalizedLabel) ? 0 : null
+    if (code === 'CSSRS' && labelValue !== null && p.numeric !== undefined && labelValue !== p.numeric) {
+      answer += ` [Discrepancia entre etiqueta y valor numérico ${p.numeric}; requiere revisión]`
+    } else if (skipApplies && p.numeric === 0) {
+      answer = `[No aplicable por regla de salto desde ítem ${skipParent}; valor 0 normalizado, sin constancia de respuesta directa]`
+    } else if (skipApplies) {
+      // Do not hide a contradictory positive or an unverified coding as a
+      // skipped negative. Keep the supplied value visible for human review.
+      answer += ' [Discrepancia con regla de salto; requiere revisión]'
+    }
+    return `Item ${p.order}: ${p.prompt} — ${answer}`
+  })
 }
 
 async function assertConversationOwner(supabase: Supabase, conversationId: string, userId: string) {

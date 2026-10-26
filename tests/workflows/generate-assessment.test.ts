@@ -500,6 +500,47 @@ describe('generateAssessmentWorkflow', () => {
   // checkable. These tests pin the exact format so a future refactor can't
   // silently revert the contract.
   describe('T5: questionnaire item-level lines in user prompt', () => {
+    it.each([
+      { ideation: 0, behavior: 0, skipped: [3, 4, 5, 7] },
+      { ideation: 1, behavior: 0, skipped: [7] },
+      { ideation: 0, behavior: 1, skipped: [3, 4, 5] },
+      { ideation: 1, behavior: 1, skipped: [] },
+      { ideation: 0, behavior: 0, skipped: [4, 5, 7], conflicting: 3 },
+      { ideation: 0, behavior: 0, skipped: [4, 5, 7], conflicting: 3, storedNumeric: 0, storedRaw: 'Sí' },
+      { ideation: 0, behavior: 0, skipped: [4, 5, 7], conflicting: 3, storedNumeric: 1, storedRaw: 'No' },
+    ])('distinguishes CSSRS normalized values from direct answers: %j', async ({ ideation, behavior, skipped, conflicting, storedNumeric, storedRaw }) => {
+      generateObjectMock.mockResolvedValue({ object: summaryResult, usage: {} })
+      const db = makeSupabase({
+        clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+        messages: { rows: makeMessages(4) },
+        questionnaire_instances: { rows: [{ id: 'cssrs-1', questionnaire_id: 'cssrs-def', status: 'scored' }] },
+        questionnaire_definitions: { rows: { code: 'CSSRS', name: 'C-SSRS' } },
+        questionnaire_results: { rows: { total_score: 0, severity_band: 'negative', flags_json: [] } },
+        questionnaire_answers: { rows: [7, 5, 3, 1, 6, 4, 2].map(order => ({
+          answer_numeric: order === conflicting ? storedNumeric ?? 1 : order === 2 ? ideation : order === 6 ? behavior : 0,
+          answer_raw: order === conflicting && storedRaw ? storedRaw : (order === conflicting ? 1 : order === 2 ? ideation : order === 6 ? behavior : 0) ? 'Sí' : 'No',
+          item: { order_index: order, prompt: `Pregunta ${order}` },
+        })) },
+        risk_events: { rows: [] },
+      })
+      createServiceRoleClientMock.mockReturnValue(db)
+      const result = await generateAssessmentStep(makeSession())
+      const prompt = generateObjectMock.mock.calls[0][0].prompt as string
+      for (const order of skipped) {
+        expect(prompt).toContain(`Item ${order}: Pregunta ${order} — [No aplicable por regla de salto`)
+        expect(prompt).not.toContain(`Item ${order}: Pregunta ${order} — No\n`)
+      }
+      if (conflicting) {
+        if (storedRaw) {
+          expect(prompt).toContain(`Item ${conflicting}: Pregunta ${conflicting} — ${storedRaw} [Discrepancia entre etiqueta y valor numérico ${storedNumeric}`)
+        } else expect(prompt).toContain(`Item ${conflicting}: Pregunta ${conflicting} — Sí [Discrepancia con regla de salto`)
+      }
+      for (const order of [1, 2, 3, 4, 5, 6, 7].filter(n => !skipped.includes(n) && n !== conflicting)) {
+        expect(prompt).toContain(`Item ${order}: Pregunta ${order} — ${(order === 2 ? ideation : order === 6 ? behavior : 0) ? 'Sí' : 'No'}`)
+      }
+      expect(result.questionnaires).toEqual([{ code: 'CSSRS', score: 0, band: 'negative', flags: [] }])
+    })
+
     it('ASQ instance: includes the 5 items with their prompts and labels (Paciente D regression)', async () => {
       generateObjectMock.mockResolvedValue({
         object: summaryResult,

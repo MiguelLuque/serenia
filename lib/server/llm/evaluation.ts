@@ -56,13 +56,16 @@ export async function runOfflineEvaluation(rawCorpus: unknown) {
   assert.equal((await evaluateAuxiliary('Texto sintético', { provider: 'jev', mode: 'shadow', transport: async () => ({ status: 200, body: syntheticResponse }) })).status, 'abstain')
   assert.equal((await evaluateAuxiliary('Texto sintético', { provider: 'openai', mode: 'shadow', transport: async () => ({ status: 200, body: '{}' }) })).status, 'error')
   assert.deepEqual(estimateCost('decisionsLuna', { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }), { status: 'estimated', usd: .0001, pricingSnapshot: '2026-10-23', measured: false })
-  const prompts = ['docs/agents/prompts/session-therapist.md', 'docs/agents/prompts/clinical-report.md'].map(path => {
+  const inventory = (paths: string[]) => paths.map(path => {
     const artifact = getPromptArtifact(path)
     return { path: artifact.path, version: artifact.version, sourceSha256: artifact.sourceSha256, bodySha256: artifact.bodySha256 }
   })
+  const prompts = inventory(['docs/agents/prompts/session-therapist.md', 'docs/agents/prompts/clinical-report.md'])
+  const pilotPrompts = inventory(['docs/agents/prompts/session-therapist.pilot.md', 'docs/agents/prompts/clinical-report.pilot.md'])
   return {
     mode: 'offline_synthetic', onlineBudgetUsd: 0, caseSeeds: corpus.cases.length, clinicalGold: 'PENDING_HUMAN_APPROVAL',
-    corpusSha256: hash(JSON.stringify(corpus)), schemaSha256: hash(JSON.stringify(z.toJSONSchema(AssessmentGenerationSchema))), prompts,
+    corpusSha256: hash(JSON.stringify(corpus)), schemaSha256: hash(JSON.stringify(z.toJSONSchema(AssessmentGenerationSchema))), prompts, pilotPrompts,
+    pilotEvaluation: { artifactInventory: 'PASS', modelConversations: 'NOT_RUN', clinicalReview: 'PENDING_HUMAN_APPROVAL' },
     checks: { corpus: 'PASS', lexicalFixtures: 'PASS', schemaFixtures: 'PASS', scorerFixture: 'PASS', promptOrder: 'PASS', auxiliaryFixtures: 'PASS', costFixture: 'PASS' },
     online: { compatibility: 'NOT_RUN', quality: 'NOT_RUN', latency: 'NOT_RUN', calibration: 'NOT_RUN', measuredCost: 'NOT_RUN' },
     limits: '26 case seeds, 9 lexical fixtures, 1 valid/4 invalid schema fixtures, PHQ9 fixture, 2 prompt order fixtures, auxiliary off/abstain/error and tariff arithmetic. Not 26 model runs or route integration runs. Human rubric and heldout split are proposed, not approved.',

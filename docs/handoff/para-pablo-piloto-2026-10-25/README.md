@@ -2,6 +2,8 @@
 
 25 de octubre de 2026. Variante `0.1.0-pilot`. Preparada para casos ficticios supervisados; pendiente de valoración de Pablo. Esta entrega trabaja el método y la experiencia de conversación.
 
+Actualización en rama26octubre: variante `0.2.0-pilot`, con [síntesis científica](../../research/2026-10-26-psychological-assessment-evidence.md) y [ocho episodios adicionales](evidencia-casos-2026-10-26.md) de evaluación contextual. Se corrigen procedencia de saltos en el informe y reutilización de informes rechazados. La validación clínica sigue pendiente. El despliegue `a852e9c` conserva0.1 hasta publicar expresamente esta actualización; las pruebas de código no son conversaciones ejecutadas con el proveedor.
+
 ## Qué hemos recuperado de tus notas
 
 Los cuatro originales están en `docs/handoff/respuesta de pablo/*.md.txt`. Se comprobó que las copias `_utf8/` son textualmente equivalentes, normalizando sólo codificación/BOM/saltos. Son respuestas intercaladas en nuestras plantillas: no atribuimos a Pablo todo el documento ni una aprobación de este ensamblaje nuevo.

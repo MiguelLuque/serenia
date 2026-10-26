@@ -68,6 +68,39 @@ function noRows(): TableResponse {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('buildPatientContext', () => {
+  it.each(['rejected', 'superseded', 'draft_ai'])('keeps %s report status distinct from an unreviewed draft', async (status) => {
+    const row = {
+      status,
+      summary_json: { ...baseSummary, chief_complaint: 'Interpretación que el clínico rechazó' },
+      clinical_sessions: { closed_at: daysAgo(1), status: 'closed' },
+    }
+    const supabase = { from: vi.fn((table: string) => {
+      if (table !== 'assessments') return makeChain(table === 'clinical_sessions'
+        ? ok({ closed_at: daysAgo(1), closure_reason: 'user_request' }, 1)
+        : noRows())
+      // Apply status predicates to a synthetic stored row, as the Data API
+      // does. The assertion concerns the resulting memory, not query spelling.
+      let matchesStatus = true
+      const chain = makeChain(noRows())
+      chain.in = vi.fn((column: string, values: string[]) => {
+        if (column === 'status') matchesStatus = values.includes(status)
+        return chain
+      })
+      chain.eq = vi.fn((column: string, value: string) => {
+        if (column === 'status') matchesStatus = value === status
+        return chain
+      })
+      chain.maybeSingle = vi.fn(() => Promise.resolve(ok(matchesStatus ? row : null)))
+      return chain
+    }) }
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 2, now: NOW })
+    expect(ctx.isFirstSession).toBe(false)
+    expect(ctx.sessionNumber).toBe(2)
+    expect(ctx.previousSession).not.toBeNull()
+    expect(ctx.tier).toBe(status === 'draft_ai' ? 'tierB' : 'none')
+    expect(ctx.tierBDraft?.summary.chief_complaint ?? null).toBe(status === 'draft_ai' ? row.summary_json.chief_complaint : null)
+  })
+
   // 1. No history → tier=none, isFirstSession=true
   it('case 1: no history → tier=none, isFirstSession=true, validated=null, tierBDraft=null, sessionNumber=1', async () => {
     const supabase = makeSupabase((table) => {

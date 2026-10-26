@@ -166,11 +166,12 @@ export async function buildPatientContext(
       .limit(1)
       .maybeSingle(),
 
-    // Q2: latest draft assessment from a closed session
+    // Q2: latest unreviewed draft from a closed session. Rejected reports
+    // must not re-enter the conversation as if still awaiting review.
     supabase
       .from('assessments')
       .select('summary_json, clinical_sessions!assessments_session_id_fkey!inner(closed_at, status)')
-      .in('status', ['draft_ai', 'rejected'])
+      .eq('status', 'draft_ai')
       .eq('user_id', userId)
       .eq('clinical_sessions.status', 'closed')
       .order('closed_at', { referencedTable: 'clinical_sessions', ascending: false })
