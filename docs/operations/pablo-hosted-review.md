@@ -35,3 +35,9 @@ Mantener la continuidad configurada según el entorno revisado. No publicar secr
 Configuración Git y destino comprobados. Credencial Vercel renovada por el usuario. Creada una única cuenta nueva de rol paciente y verificado su login/sign-out; perfil pendiente de onboarding, sin aceptar consentimientos por Pablo. Flags de producción configurados sólo para su UUID; continuidad existente verificada on. Test de configuración/identidad69/69 y revisión independiente del delta sin hallazgos materiales. Release y CI/despliegue se registrarán con sus resultados efectivos al finalizar. La lectura de perfiles reales solicitada inicialmente fue rechazada por revisión automática; se abandonó y se sustituyó por creación de una cuenta ficticia autorizada por el usuario.
 
 Última instrucción sobre correo: el destinatario aún no se conoce; guardar como borrador y **no enviar**. El borrador privado puede contener las credenciales autorizadas; el documento en Git sólo mantiene instrucciones/plantilla sin contraseñas.
+
+## Compatibilidad con el plan Hobby
+
+El primer despliegue Git de `6ba0c7c` fue rechazado antes de compilar por el cron `*/15 * * * *`. Se adapta a `0 8 * * *` (una vez al día, horaUTC) para mantener el plan existente. [Vercel documenta el límite diario y la precisión horaria de Hobby](https://vercel.com/docs/cron-jobs/usage-and-pricing).
+
+La limpieza de sesiones abandonadas puede demorarse hasta el siguiente barrido; no se promete un cierre en15min ni respuesta clínica por cron. Para las pruebas se recomienda cerrar manualmente cada sesión y comprobar su informe. El límite técnico de conversación sigue aplicándose al admitir turnos. `CRON_SECRET` debe existir como secreto de producción para autenticar la llamada de Vercel; no se publica su valor. Esta adaptación no cambia bandas, criterios de urgencia o permisos.
