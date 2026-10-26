@@ -52,7 +52,9 @@ Para comparar, parar el proceso con Ctrl+C y arrancar la referencia sin flag pil
 rtk proxy env FEATURE_CLINICAL_CONVERSATION_PILOT=off FEATURE_CROSS_SESSION_CONTEXT=on NEXT_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 npm run dev -- --hostname 127.0.0.1 --port 3217
 ```
 
-Usar el mismo caso, mismo modelo y una sesión nueva. No comparar variantes cambiando simultáneamente modelo o historia. Esperar a que se genere el informe antes de parar/cambiar modo; los trabajos usan la configuración del proceso que los ejecuta. El piloto se rechaza en `NODE_ENV=production` y no es una opción del navegador.
+Usar el mismo caso, mismo modelo y una sesión nueva. No comparar variantes cambiando simultáneamente modelo o historia. Esperar a que se genere el informe antes de parar/cambiar modo; los trabajos usan la configuración del proceso que los ejecuta. El piloto no es una opción del navegador.
+
+Actualización para publicación26octubre: puede habilitarse en Vercel sólo para UUID de cuentas de prueba expresamente incluidas en una lista del servidor. Sin lista válida no se activa en producción; los demás usuarios conservan la referencia. El [procedimiento de revisión alojada](/Users/miguelluque/git/serenia/docs/operations/pablo-hosted-review.md) recoge identidad, destino y límites. La URL y el acceso se comunican tras comprobar el despliegue; la dirección local anterior sólo funciona en el equipo de desarrollo.
 
 ## Prueba propuesta, 30–45 minutos
 

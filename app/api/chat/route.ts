@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const { session, service } = owned
   const { data: ready, error: readinessError } = await supabase.rpc('get_onboarding_ready')
   if (readinessError || ready !== true) return Response.json({ error: 'Completa los datos y la aceptación vigente', onboardingRequired: true }, { status: 403 })
-  const pilot = clinicalPilotEnabled()
+  const pilot = clinicalPilotEnabled(process.env, user.id)
   const crisis = detectCrisis(lastUserText)
   const highSignalCrisis = crisis.detected && hasHighSignalTerm(crisis.matchedTerms)
   const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
         if (crisis.detected) throw error
       }
     }
-    const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
+    const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
     checkContextBudget([systemPrompt, ...messages])
     return { messages, systemPrompt }
   }

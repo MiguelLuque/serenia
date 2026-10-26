@@ -308,7 +308,7 @@ export async function generateAssessmentStep(
   }
 
   const userPrompt = sections.join('\n')
-  const systemPrompt = getClinicalReportPrompt()
+  const systemPrompt = getClinicalReportPrompt(session.user_id)
 
   const { object: summary, usage } = await generateObject({
     model: llm.structured(),

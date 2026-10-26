@@ -181,7 +181,7 @@ export async function generateAssessment(
     riskBlocks.length > 0 ? riskBlocks.join('\n') : '(ninguno)',
   ].join('\n')
 
-  const systemPrompt = getClinicalReportPrompt()
+  const systemPrompt = getClinicalReportPrompt(session.user_id)
 
   const { object: summary, usage } = await generateObject({
     model: llm.structured(),
