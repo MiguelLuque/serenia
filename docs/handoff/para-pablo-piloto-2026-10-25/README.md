@@ -4,6 +4,8 @@
 
 Actualización en rama26octubre: variante `0.2.0-pilot`, con [síntesis científica](../../research/2026-10-26-psychological-assessment-evidence.md) y [ocho episodios adicionales](evidencia-casos-2026-10-26.md) de evaluación contextual. Se corrigen procedencia de saltos en el informe y reutilización de informes rechazados. La validación clínica sigue pendiente. El despliegue `a852e9c` conserva0.1 hasta publicar expresamente esta actualización; las pruebas de código no son conversaciones ejecutadas con el proveedor.
 
+La [aceptación técnica de0.2](../../audits/2026-10-26-evidence-informed-assessment-acceptance.md) recoge860pruebas, siete gates y SHA construido. Para el método de evaluación, usar la síntesis y los casos; la aceptación técnica no sustituye su revisión.
+
 ## Qué hemos recuperado de tus notas
 
 Los cuatro originales están en `docs/handoff/respuesta de pablo/*.md.txt`. Se comprobó que las copias `_utf8/` son textualmente equivalentes, normalizando sólo codificación/BOM/saltos. Son respuestas intercaladas en nuestras plantillas: no atribuimos a Pablo todo el documento ni una aprobación de este ensamblaje nuevo.
