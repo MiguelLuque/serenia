@@ -1,4 +1,4 @@
-import { convertToModelMessages, createUIMessageStreamResponse, streamText, tool, type UIMessage, type UIMessageChunk } from 'ai'
+import { convertToModelMessages, createUIMessageStreamResponse, stepCountIs, streamText, tool, type UIMessage, type UIMessageChunk } from 'ai'
 import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
@@ -23,8 +23,10 @@ import { clinicalPilotEnabled } from '@/lib/server/llm/clinical-pilot'
 import { buildPilotSafetyNotice } from '@/lib/shared/chat/pilot-safety-notice'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
 import { renderPilotQuestionnaireFacts } from '@/lib/server/chat/pilot-questionnaire-context'
+import { modelHistoryParts } from '@/lib/server/chat/tool-feedback'
 
 export const maxDuration = 60
+const MAX_OUTPUT_TOKENS = 2500
 
 function replay(chunks: UIMessageChunk[]) {
   return createUIMessageStreamResponse({ stream: new ReadableStream({ start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } }), headers: { 'Cache-Control': 'no-store' } })
@@ -85,9 +87,12 @@ export async function POST(req: Request) {
     const { data: rows, error: historyError } = await service.from('messages').select('id, role, parts, created_at').eq('session_id', sessionId).eq('conversation_id', session.conversation_id).order('created_at', { ascending: true }).order('id', { ascending: true }).limit(161)
     if (historyError) throw historyError
     if (!rows || rows.length >= 161 || !rows.some(row => row.id === turn.userMessageId)) throw new Error('context_limit')
-    // Only persisted server data contributes history. Full tool parts are
-    // retained for UI rehydration; model history contains conversational text.
-    const messages: UIMessage[] = (rows ?? []).filter(row => row.role === 'user' || row.role === 'assistant').map(row => ({ id: row.id, role: row.role as 'user' | 'assistant', parts: (Array.isArray(row.parts) ? row.parts : []).flatMap(part => part && typeof part === 'object' && !Array.isArray(part) && part.type === 'text' && typeof part.text === 'string' ? [{ type: 'text' as const, text: part.text }] : []) })).filter(message => message.parts.length > 0)
+    // Full parts stay available for UI rehydration. The pilot additionally
+    // projects confirmed known tool outcomes, never their free-form arguments.
+    const messages: UIMessage[] = (rows ?? []).filter(row => row.role === 'user' || row.role === 'assistant').map(row => {
+      const role = row.role as 'user' | 'assistant'
+      return { id: row.id, role, parts: modelHistoryParts(role, row.parts, pilot) }
+    }).filter(message => message.parts.length > 0)
     checkContextBudget(messages)
     const safetyState = await getSessionSafetyState(supabase, sessionId, session.opened_at, { strict: pilot })
     const crisisNotice = pilot ? buildPilotSafetyNotice({ safetyState, crisis }) : buildCrisisNotice({ safetyState, crisis })
@@ -132,6 +137,22 @@ export async function POST(req: Request) {
     const patientCodes = listPatientCodes()
     let proposal: string | null = null
     let closeReason: string | null = null
+    let modelStep = 0
+    let toolContinuationRequired = false
+    let validToolContinuation = false
+    let actionQueue: Promise<unknown> = Promise.resolve()
+    const runToolAction = <T,>(action: () => Promise<T>) => {
+      if (!pilot) return action()
+      const result = actionQueue.then(async () => {
+        if (modelStep > 0) return { skipped: true as const, reason: 'tool_followup_read_only' as const }
+        if (closeReason) return { skipped: true as const, reason: 'session_closing' as const }
+        return action()
+      })
+      // Serialize operations even when the provider emits parallel calls.
+      // A rejected action still reaches the SDK as an error result.
+      actionQueue = result.catch(() => undefined)
+      return result
+    }
     const close = async (reason: string) => {
       const { data, error } = await service.rpc('close_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_reason: reason })
       if (error) throw error
@@ -143,10 +164,31 @@ export async function POST(req: Request) {
     const result = streamText({
       model: llm.conversational(), system: systemPrompt,
       messages: await convertToModelMessages(messages),
-      maxOutputTokens: 2500, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
+      maxOutputTokens: MAX_OUTPUT_TOKENS, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
+      stopWhen: stepCountIs(pilot ? 2 : 1),
+      prepareStep: ({ stepNumber, messages: stepMessages, steps }) => {
+        if (!pilot) return
+        modelStep = stepNumber
+        checkContextBudget([systemPrompt, ...stepMessages])
+        if (stepNumber > 0) {
+          let remaining = MAX_OUTPUT_TOKENS
+          for (const step of steps) {
+            const used = step.usage.outputTokens
+            if (typeof used !== 'number' || !Number.isSafeInteger(used) || used < 0) throw new Error('response_limit')
+            remaining -= used
+          }
+          if (remaining <= 0) throw new Error('response_limit')
+          return { toolChoice: 'none', activeTools: [], maxOutputTokens: remaining }
+        }
+      },
+      onStepFinish: step => {
+        if (!pilot) return
+        if (step.stepNumber === 0) toolContinuationRequired = step.toolCalls.length > 0
+        else validToolContinuation = step.toolCalls.length === 0 && step.text.trim().length > 0
+      },
       tools: {
-        propose_close_session: tool({ description: 'Propone cierre por user_request o time_limit. Espera aceptación explícita del siguiente turno antes de confirmar.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => { proposal = reason; return { proposed: true, reason } } }),
-        confirm_close_session: tool({ description: 'Confirma exclusivamente la propuesta anterior con el mismo motivo y aceptación explícita del turno siguiente.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => {
+        propose_close_session: tool({ description: 'Propone cierre por user_request o time_limit. Espera aceptación explícita del siguiente turno antes de confirmar.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => runToolAction(async () => { proposal = reason; return { proposed: true, reason } }) }),
+        confirm_close_session: tool({ description: 'Confirma exclusivamente la propuesta anterior con el mismo motivo y aceptación explícita del turno siguiente.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => runToolAction(async () => {
           if (acceptsClosure(lastUserText)) return close(reason)
           let proposalRenewed = false
           const normalized = lastUserText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -159,14 +201,14 @@ export async function POST(req: Request) {
             ? 'La sesión sigue abierta. Para confirmar el cierre pendiente, puedes responder «Sí, cerramos».'
             : 'La sesión sigue abierta. Si quieres terminar, podemos volver a proponer el cierre y confirmarlo en el siguiente turno.'
           return { closed: false, reason: 'confirmation_required', proposalRenewed }
-        } }),
-        close_session_crisis: tool({ description: 'Cierra por señal de crisis registrada, sin pedir aceptación. Da primero los recursos de seguridad.', inputSchema: z.object({}), execute: async () => close('crisis_detected') }),
-        propose_questionnaire: tool({ description: 'Propone PHQ9 o GAD7 para screening y BDI2/BAI para profundización tras primario moderado. C-SSRS (CSSRS) tiene prioridad ante señal suicida/autolesión. Los cuestionarios scored no bloquean otros; como máximo un cuestionario pendiente. Anuncia por texto y espera consentimiento, excepto la atención urgente a seguridad.', inputSchema: z.object({ code: z.enum(patientCodes as [QuestionnaireCode,...QuestionnaireCode[]]), reason: z.string().min(10).max(300) }), execute: async ({ code, reason }) => {
+        }) }),
+        close_session_crisis: tool({ description: 'Cierra por señal de crisis registrada, sin pedir aceptación. Da primero los recursos de seguridad.', inputSchema: z.object({}), execute: async () => runToolAction(async () => close('crisis_detected')) }),
+        propose_questionnaire: tool({ description: 'Propone PHQ9 o GAD7 para screening y BDI2/BAI para profundización tras primario moderado. C-SSRS (CSSRS) tiene prioridad ante señal suicida/autolesión. Los cuestionarios scored no bloquean otros; como máximo un cuestionario pendiente. Anuncia por texto y espera consentimiento, excepto la atención urgente a seguridad.', inputSchema: z.object({ code: z.enum(patientCodes as [QuestionnaireCode,...QuestionnaireCode[]]), reason: z.string().min(10).max(300) }), execute: async ({ code, reason }) => runToolAction(async () => {
           if (code !== 'CSSRS' && await getActiveInstanceForSession(supabase, sessionId)) return { skipped: true, reason: 'already_active' }
           const instance = await createInstance(supabase, { userId: user.id, sessionId, conversationId: session.conversation_id, questionnaireCode: code, triggerReason: reason, requestId, turnToken: token })
           createdQuestionnaire = { code, reason, instanceId: instance.id }
           return { proposed: true, code, instanceId: instance.id }
-        } }),
+        }) }),
       },
     })
     let responseMessage: UIMessage | undefined
@@ -182,7 +224,7 @@ export async function POST(req: Request) {
       chunks.push(value)
       if (JSON.stringify(chunks).length > 100_000) { await reader.cancel(); throw new Error('response_limit') }
     }
-    if (!responseMessage?.parts.length) throw new Error('empty_response')
+    if (!responseMessage?.parts.length || (toolContinuationRequired && !validToolContinuation)) throw new Error('empty_response')
     if (closureClarification) {
       const text = `\n\n${closureClarification}`
       const id = `server-close-clarification-${requestId}`
