@@ -47,6 +47,8 @@ Files: components/chat/{chat-view,chat-input}.tsx y pruebas jsdom.
 
 ### Task4 — Revisión y aceptación
 
-- [ ] Revisión independiente, corregir hallazgos materiales con RED→GREEN.
-- [ ] Commit fuente y siete gates completos; registrar SHA/logs y límites del proveedor/prueba clínica.
-- [ ] Recibo y guía para Pablo; mantener rama sin publicar.
+- [x] Revisión independiente, corregir hallazgos materiales con RED→GREEN.
+- [x] Commit fuente y siete gates completos; registrar SHA/logs y límites del proveedor/prueba clínica.
+- [x] Recibo y guía para Pablo; mantener rama sin publicar.
+
+Aceptación: fuente c18d4ea, siete gates PASS,927 tests; ver docs/audits/2026-10-27-session-time-boundaries.md. Rama conservada sin publicar.
