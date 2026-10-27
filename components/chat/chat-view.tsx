@@ -9,9 +9,8 @@ import { MessageBubble } from './message-bubble'
 import { ChatInput } from './chat-input'
 import { CrisisBanner } from './crisis-banner'
 import { QuestionnaireCard } from './questionnaire-card'
-import { getOwnedChatState } from '@/app/app/chat-recovery-actions'
+import { closeOwnedSessionFromView, getOwnedChatState } from '@/app/app/chat-recovery-actions'
 import type { ChatRecovery } from '@/lib/shared/chat/recovery'
-import { endSessionAction } from '@/app/app/actions'
 
 interface ActiveQuestionnaire {
   instanceId: string
@@ -29,6 +28,7 @@ interface ChatViewProps {
   sessionId: string
   initialMessages: UIMessage[]
   expiresAt: Date
+  serverNow?: Date
   activeQuestionnaire?: ActiveQuestionnaire | null
   initialRecovery?: ChatRecovery | null
 }
@@ -46,6 +46,10 @@ function detectServerClose(
   let hit: 'none' | 'confirm' | 'crisis' = 'none'
   for (const message of messages) {
     for (const part of message.parts) {
+      if (part.type === 'data-session-closed' && typeof part.data === 'object' && part.data !== null && 'closed' in part.data && part.data.closed === true && 'reason' in part.data) {
+        if (part.data.reason === 'crisis_detected') return 'crisis'
+        if (part.data.reason === 'time_limit' || part.data.reason === 'user_request' || part.data.reason === 'inactivity') hit = 'confirm'
+      }
       if (
         'state' in part &&
         part.state === 'output-available' &&
@@ -69,11 +73,16 @@ export function ChatView({
   sessionId,
   initialMessages,
   expiresAt,
+  serverNow,
   activeQuestionnaire,
   initialRecovery = null,
 }: ChatViewProps) {
   const router = useRouter()
-  const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt))
+  const [clock, setClock] = useState(() => ({ serverNow: serverNow?.getTime() ?? Date.now(), expiresAt: expiresAt.getTime(), monotonic: performance.now() }))
+  const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt, serverNow?.getTime() ?? Date.now()))
+  const [draft, setDraft] = useState('')
+  const [closing, setClosing] = useState(false)
+  const [closeNotice, setCloseNotice] = useState('')
   const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
   const listRef = useRef<HTMLDivElement>(null)
@@ -119,7 +128,6 @@ export function ChatView({
     messages: initialMessages,
     onError: () => { failedRef.current = true; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
     // The installed SDK constructor stores fetch; it runs only when sending.
-    // eslint-disable-next-line react-hooks/refs
     transport: new DefaultChatTransport({
       api: '/api/chat',
       fetch: trackedFetch,
@@ -154,15 +162,41 @@ export function ChatView({
       if (state.closed) {
         transitionRef.current += 1
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
-        router.refresh()
         return null
       }
+      if (state.timing) syncClock(state.timing)
       setRecovery(state.recovery ?? localFallback)
       setMessages(state.messages)
       return { operation, read }
     } catch {
       if (isCurrentTransition(operation) && recoveryReadRef.current === read) setRecoveryError(true)
       return null
+    }
+  }
+
+  function syncClock(timing: { serverNow: number; expiresAt: number }) {
+    setClock({ ...timing, monotonic: performance.now() })
+    setMinsLeft(minutesRemaining(new Date(timing.expiresAt), timing.serverNow))
+  }
+
+  async function finishSession() {
+    if (closing || isClosed || status === 'submitted' || status === 'streaming') return
+    const operation = ++transitionRef.current
+    setClosing(true); setCloseNotice('')
+    try {
+      const result = await closeOwnedSessionFromView(sessionId, isTimeExpired ? 'time_limit' : 'user_request')
+      if (!isCurrentTransition(operation)) return
+      if (result.closed) { transitionRef.current += 1; setExternallyClosed(true); setRecovery(null); setUrgentMode(false) }
+      else {
+        syncClock(result.timing)
+        setCloseNotice(result.reason === 'turn_pending'
+          ? 'Hay una respuesta en curso. Espera o comprueba su estado antes de cerrar.'
+          : 'El servidor indica que aún queda tiempo. Puedes continuar o terminar la sesión.')
+      }
+    } catch {
+      if (isCurrentTransition(operation)) setCloseNotice('No se pudo confirmar el cierre. Tu borrador se conserva; comprueba el estado guardado o vuelve a intentarlo.')
+    } finally {
+      if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId) setClosing(false)
     }
   }
 
@@ -207,7 +241,7 @@ export function ChatView({
   }
 
   async function send(text: string): Promise<boolean> {
-    if ((recovery || isTimeExpired) && !urgentMode) return false
+    if (closing || isClosed || ((recovery || isTimeExpired) && !urgentMode)) return false
     const operation = ++transitionRef.current
     failedRef.current = false; clearError()
     const requestId = crypto.randomUUID()
@@ -220,7 +254,7 @@ export function ChatView({
   }
 
   useEffect(() => {
-    if (status !== 'ready') return
+    if (status !== 'ready' || isClosed) return
     for (const message of messages) {
       for (const part of message.parts) {
         // Plan 4: questionnaire proposal refreshes the server component
@@ -238,7 +272,7 @@ export function ChatView({
         }
       }
     }
-  }, [messages, status, router])
+  }, [messages, status, router, isClosed])
 
   // Plan 4.2: on crisis close, push the patient to /app after a short
   // beat so the home page's red Línea 024 banner
@@ -247,22 +281,32 @@ export function ChatView({
   // end-of-session banner below has a link to /app when the patient is
   // ready.
   useEffect(() => {
-    if (closeSignal !== 'crisis') return
+    if (closeSignal !== 'crisis' || draft.trim()) return
     if (crisisRedirectRef.current) return
     crisisRedirectRef.current = true
     const timer = setTimeout(() => {
       router.push('/app')
     }, 1800)
     return () => clearTimeout(timer)
-  }, [closeSignal, router])
+  }, [closeSignal, router, draft])
 
   useEffect(() => {
-    if (isExpired) return
+    if (isClosed) return
     const interval = setInterval(() => {
-      setMinsLeft(minutesRemaining(expiresAt))
-    }, 30_000)
+      setMinsLeft(minutesRemaining(new Date(clock.expiresAt), clock.serverNow + Math.max(0, performance.now() - clock.monotonic)))
+    }, 1000)
     return () => clearInterval(interval)
-  }, [expiresAt, isExpired])
+  }, [clock, isClosed])
+
+  useEffect(() => {
+    if (isClosed) return
+    const sync = () => { if (document.visibilityState === 'visible') void rehydrate() }
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', sync)
+    return () => { window.removeEventListener('focus', sync); document.removeEventListener('visibilitychange', sync) }
+    // Snapshots use the same transition guards as manual recovery.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, status, isClosed])
 
   useEffect(() => {
     if (listRef.current) {
@@ -280,33 +324,35 @@ export function ChatView({
         }`}
       >
         <span>
-          {isExpired
+          {isClosed
             ? 'La sesión ha terminado.'
-            : `${minsLeft} min restantes`}
+            : isTimeExpired ? 'Tiempo agotado · cierre pendiente de confirmar' : `${minsLeft} min restantes`}
         </span>
         <div className="flex items-center gap-3">
           {isEnding && !isExpired && (
             <span className="font-medium">Queda poco tiempo.</span>
           )}
-          {!isExpired && (
-            <form action={endSessionAction}>
-              <input type="hidden" name="sessionId" value={sessionId} />
+          {!isClosed && (
               <button
-                type="submit"
+                type="button"
+                disabled={closing || status === 'submitted' || status === 'streaming'}
+                onClick={() => void finishSession()}
                 className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-100"
               >
-                Terminar sesión
+                {closing ? 'Confirmando cierre…' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
               </button>
-            </form>
           )}
         </div>
       </div>
+
+      {closeNotice && <p role="status" className="px-3 py-2 text-sm">{closeNotice}</p>}
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <p className="text-center text-sm text-slate-500">
             Empieza la conversación cuando estés lista.
           </p>
+
         ) : (
           messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
@@ -321,10 +367,15 @@ export function ChatView({
               Vuelve al inicio.
             </Link>
           </p>
+          {draft.trim() && <div className="mt-3 text-left">
+            <label htmlFor={`unsent-${sessionId}`} className="font-medium">Borrador sin enviar</label>
+            <textarea id={`unsent-${sessionId}`} value={draft} readOnly className="mt-1 block w-full rounded border p-2" />
+            <p>Este texto no se ha enviado. Puedes copiarlo antes de salir. Si necesitas ayuda inmediata, los recursos de seguridad siguen disponibles abajo.</p>
+          </div>}
         </div>
       ) : (
         <>
-          {isTimeExpired && <p role="status" className="border-t bg-slate-50 p-3 text-sm">La sesión ha terminado para la conversación ordinaria. Tu borrador se conserva. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
+          {isTimeExpired && <p role="status" className="border-t bg-slate-50 p-3 text-sm">Tiempo agotado para mensajes nuevos ordinarios. Tu borrador se conserva. Una respuesta ya aceptada puede terminar y puedes reintentar el mismo turno. Confirma el cierre cuando termine. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
           {!isTimeExpired && activeQuestionnaire &&
             activeQuestionnaire.status !== 'scored' && (
               <QuestionnaireCard
@@ -341,8 +392,8 @@ export function ChatView({
               />
             )}
           {(isTimeExpired || recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
-            <p role="status" aria-live="polite">{recovery ? recovery.canRetry ? 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'No se completó la respuesta. Tu texto se conserva; estamos comprobando el turno guardado.' : 'Esperando respuesta. Puedes seguir escribiendo.'}</p>
-            {recovery?.canRetry && !urgentMode && <button type="button" disabled={isTimeExpired || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
+            <p role="status" aria-live="polite">{recovery ? recovery.canRetry ? 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'No se completó la respuesta. Tu texto se conserva; estamos comprobando el turno guardado.' : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.' : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'}</p>
+            {recovery?.canRetry && !urgentMode && <button type="button" disabled={closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
             <button type="button" onClick={() => { transitionRef.current += 1; if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
             <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
             {recoveryError && <p role="alert">No se pudo comprobar el estado. Conserva tu texto y vuelve a comprobarlo o recarga.</p>}
@@ -350,8 +401,9 @@ export function ChatView({
           {urgentMode && <p role="status" className="px-3 text-sm">Escribe una señal nueva de peligro inmediato para ti, como pensamientos de hacerte daño o quitarte la vida. Solo una señal explícita admitida por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. Si hay peligro inmediato para ti o para otra persona, llama al 112. También puedes llamar al 024.</p>}
           <ChatInput
             status={recovery && !urgentMode ? 'submitted' : status}
-            disabled={isTimeExpired && !urgentMode}
+            disabled={closing || (isTimeExpired && !urgentMode)}
             onSend={send}
+            draft={{ value: draft, onChange: setDraft }}
           />
         </>
       )}

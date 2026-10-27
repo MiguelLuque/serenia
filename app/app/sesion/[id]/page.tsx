@@ -1,11 +1,7 @@
 import { redirect } from 'next/navigation'
 import { safeValidateUIMessages, type UIMessage } from 'ai'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
-import {
-  closeSession,
-  isSessionExpired,
-  SESSION_MAX_DURATION_MS,
-} from '@/lib/server/sessions/service'
+import { SESSION_MAX_DURATION_MS } from '@/lib/shared/chat/session-time'
 import { getActiveInstanceForSession } from '@/lib/server/questionnaires/service'
 import { ChatRecoverySchema } from '@/lib/shared/chat/recovery'
 import { ChatView } from '@/components/chat/chat-view'
@@ -89,11 +85,6 @@ export default async function SessionPage({
   if (!session) redirect('/app')
   if (session.status !== 'open') redirect('/app')
 
-  if (isSessionExpired({ opened_at: session.opened_at })) {
-    await closeSession(supabase, session.id, 'time_limit')
-    redirect('/app')
-  }
-
   const { data: rows } = await supabase
     .from('messages')
     .select('id, role, parts')
@@ -136,6 +127,7 @@ export default async function SessionPage({
       initialRecovery={recovery}
       initialMessages={initialMessages}
       expiresAt={expiresAt}
+      serverNow={new Date()}
       activeQuestionnaire={activeQuestionnaire}
     />
   )

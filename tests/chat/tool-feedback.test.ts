@@ -3,7 +3,7 @@ import { MockLanguageModelV3 } from 'ai/test'
 import type { LanguageModelV3StreamPart, LanguageModelV3StreamResult } from '@ai-sdk/provider'
 import { chatHarness } from '@/tests/helpers/chat-harness'
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers() })
 
 const usage = { inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 5, text: 5, reasoning: undefined } }
 function stream(parts: LanguageModelV3StreamPart[], reason: 'stop' | 'tool-calls', reportedTokens: number | null = 5): LanguageModelV3StreamResult {
@@ -50,6 +50,20 @@ it('uses a single generation for a normal reply without tools', async () => {
   const h = await chatHarness({ model })
   expect((await h.post()).status).toBe(200)
   expect(model.doStreamCalls).toHaveLength(1)
+})
+
+it('uses the real SDK expiry error path without starting a late follow-up', async () => {
+  pilot(); vi.useFakeTimers({ toFake: ['Date'] }); const start = Date.now()
+  const model = new MockLanguageModelV3({ doStream: async () => {
+    vi.setSystemTime(start + 60 * 60_000)
+    return stream([call('propose_close_session', { reason: 'time_limit' })], 'tool-calls')
+  } })
+  const h = await chatHarness({ model })
+  const response = await h.post()
+  expect(response.status).toBe(200)
+  expect(model.doStreamCalls).toHaveLength(1)
+  expect(await response.text()).toContain('data-session-closed')
+  expect(h.state.session.status).toBe('closed')
 })
 
 it.each([false, true])('blocks a provider that calls another operation in the read-only continuation, with text=%s', async withText => {

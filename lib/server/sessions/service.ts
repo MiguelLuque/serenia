@@ -2,14 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/shared/supabase/types'
 import { enqueueAssessmentGeneration } from '@/lib/server/workflows'
 import type { ProtocolPhase } from '@/lib/shared/protocol/render-phase'
+import { SESSION_MAX_DURATION_MS, isSessionInactive } from '@/lib/shared/chat/session-time'
+export { SESSION_MAX_DURATION_MS, SESSION_INACTIVITY_MS } from '@/lib/shared/chat/session-time'
 
 type Supabase = SupabaseClient<Database>
 
 export type SessionRow = Database['public']['Tables']['clinical_sessions']['Row']
 
 // Constants
-export const SESSION_MAX_DURATION_MS = 60 * 60 * 1000 // 60 min
-export const SESSION_INACTIVITY_MS = 30 * 60 * 1000   // 30 min
 
 export type CloseReason = 'user_request' | 'time_limit' | 'crisis_detected' | 'inactivity'
 
@@ -35,10 +35,7 @@ export async function getOrResolveActiveSession(
   if (error) throw error
   if (!session) return null
 
-  const lastActivity = new Date(session.last_activity_at).getTime()
-  const inactiveDuration = Date.now() - lastActivity
-
-  if (inactiveDuration >= SESSION_INACTIVITY_MS) {
+  if (isSessionInactive(session)) {
     try { await closeSession(supabase, session.id, 'inactivity') }
     catch (error) {
       if (typeof error !== 'object' || !error || !('code' in error) || error.code !== '23514' || !('message' in error) || error.message !== 'Session activity resumed') throw error

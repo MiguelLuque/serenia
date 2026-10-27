@@ -10,9 +10,10 @@ vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: asyn
  auth: { getUser: async () => ({ data: { user: { id: 'patient' } }, error: null }) },
  rpc: async () => ({ data: fixture.closed || !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null }),
  from: (table: string) => {
-  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open' } : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }, ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
+  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open', opened_at: new Date().toISOString() } : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }, ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
  },
 }) }))
+vi.mock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn() }))
 import { ChatView } from '@/components/chat/chat-view'
 const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user', text: 'Mi texto original', status: 'failed' as const, canRetry: true, leaseUntil: '2026-01-01' }
 const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
@@ -25,7 +26,8 @@ it.each([null, recovery])('preserves an explicit urgent draft through the displa
  render(<ChatView {...props} initialMessages={[]} initialRecovery={initialRecovery} expiresAt={new Date(Date.now()+30_000)} />)
  fireEvent.change(screen.getByRole('textbox'),{target:{value:'Voy a matarme ahora'}})
  await act(async()=>{await vi.advanceTimersByTimeAsync(30_000)})
- expect(screen.getAllByText(/La sesión ha terminado/).length).toBeGreaterThan(0)
+ expect(screen.getAllByText(/Tiempo agotado/).length).toBeGreaterThan(0)
+ expect(screen.queryByText('La sesión ha terminado.')).toBeNull()
  const input=screen.queryByRole('textbox') as HTMLTextAreaElement|null
  expect(input?.value).toBe('Voy a matarme ahora')
  expect((screen.getByRole('button',{name:'Enviar'}) as HTMLButtonElement).disabled).toBe(true)
@@ -66,7 +68,7 @@ it('external close after transport error rehydrates closed UI without retry', as
  fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
  await waitFor(() => expect(screen.getAllByText(/La sesión ha terminado/).length).toBeGreaterThan(0))
  expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
- expect(fixture.refresh).toHaveBeenCalled()
+ expect(fixture.refresh).not.toHaveBeenCalled()
 })
 it('an exhausted turn exposes a non-retryable state and an urgent exit', () => {
  render(<ChatView {...props} initialRecovery={{ ...recovery, canRetry: false }} />)
@@ -216,4 +218,30 @@ it('normal send completion survives an in-flight manual snapshot and clears its 
  await act(async () => { fixture.releases.shift()!() })
  expect(screen.getByText('Respuesta guardada')).toBeTruthy()
  expect(screen.getByText('Mensaje normal pendiente')).toBeTruthy()
+})
+
+it('uses the server clock even when the browser wall clock is a day ahead', async () => {
+ vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-28T12:00:00Z'))
+ render(<ChatView {...props} initialRecovery={null} serverNow={new Date('2026-10-27T12:00:00Z')} expiresAt={new Date('2026-10-27T12:02:00Z')} />)
+ expect(screen.getByText('2 min restantes')).toBeTruthy()
+ vi.setSystemTime(new Date('2026-10-30T12:00:00Z'))
+ await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+ expect(screen.getByText('1 min restantes')).toBeTruthy()
+})
+it('allows retrying the same accepted turn after the displayed deadline', async () => {
+ const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} expiresAt={new Date(Date.now()-1000)} />)
+ const button = screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }) as HTMLButtonElement
+ expect(button.disabled).toBe(false)
+ fireEvent.click(button); await screen.findByText('Respuesta guardada')
+ expect(JSON.parse(fetch.mock.calls[0][1].body).requestId).toBe('retry-original')
+})
+it('keeps an unsent draft when a saved external closure arrives', async () => {
+ render(<ChatView {...props} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Un detalle que todavía no he enviado' } })
+ fixture.closed = true
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ const draft = await screen.findByRole('textbox', { name: 'Borrador sin enviar' }) as HTMLTextAreaElement
+ expect(draft.value).toBe('Un detalle que todavía no he enviado'); expect(draft.readOnly).toBe(true)
+ expect(fixture.refresh).not.toHaveBeenCalled()
 })

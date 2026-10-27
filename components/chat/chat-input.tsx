@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import type { ChatStatus } from 'ai'
@@ -9,10 +9,13 @@ interface ChatInputProps {
   onSend: (text: string) => void | boolean | Promise<void | boolean>
   status: ChatStatus
   disabled?: boolean
+  draft?: { value: string; onChange: Dispatch<SetStateAction<string>> }
 }
 
-export function ChatInput({ onSend, status, disabled = false }: ChatInputProps) {
-  const [text, setText] = useState('')
+export function ChatInput({ onSend, status, disabled = false, draft }: ChatInputProps) {
+  const [localText, setLocalText] = useState('')
+  const text = draft?.value ?? localText
+  const setText = draft?.onChange ?? setLocalText
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(false)
 

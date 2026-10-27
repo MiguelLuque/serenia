@@ -4,7 +4,9 @@ import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
 import { llm } from '@/lib/shared/llm/models'
 import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
-import { isSessionExpired } from '@/lib/server/sessions/service'
+import { getOrResolveActiveSession, isSessionExpired } from '@/lib/server/sessions/service'
+import { isSessionInactive } from '@/lib/shared/chat/session-time'
+import { buildSessionTimeNotice } from '@/lib/server/chat/session-time-notice'
 import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
 import { getSessionSafetyState } from '@/lib/server/chat/safety-state'
 import { buildCrisisNotice, hasHighSignalTerm } from '@/lib/shared/chat/crisis-notice'
@@ -53,18 +55,35 @@ export async function POST(req: Request) {
   const pilot = clinicalPilotEnabled(process.env, user.id)
   const crisis = detectCrisis(lastUserText)
   const highSignalCrisis = crisis.detected && hasHighSignalTerm(crisis.matchedTerms)
+  // Resolve only NEW ordinary idle turns. Existing IDs must retain replay and
+  // recovery, and safety signals must be recorded before any temporal closure.
+  if (session.status === 'open' && !crisis.detected && !isSessionExpired(session) && isSessionInactive(session)) {
+    const { data: prior, error: priorError } = await service.from('chat_turns').select('request_id').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
+    if (priorError) return Response.json({ error: 'No se pudo comprobar el turno. Conserva el texto y reintenta.' }, { status: 503 })
+    if (!prior) {
+      try {
+        const active = await getOrResolveActiveSession(supabase, user.id)
+        if (!active || active.id !== sessionId) return Response.json({ error: 'La sesión se cerró por inactividad. Tu texto no se ha enviado.', sessionClosed: true }, { status: 422 })
+      } catch { return Response.json({ error: 'No se pudo comprobar la sesión. Conserva el texto y reintenta.' }, { status: 503 }) }
+    }
+  }
   const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
   const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string }
   if (turn.replay) return replay(turn.chunks ?? [])
   const token = turn.token
-  const expired = isSessionExpired(session)
   let createdQuestionnaire: { code: QuestionnaireCode; reason: string; instanceId: string } | null = null
   let closureClarification: string | null = null
+  let closeReason: string | null = null
+  const crisisResourcesText = `Lo que cuentas necesita apoyo inmediato. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. No esperes a completar un cuestionario para pedir ayuda. La señal queda registrada para revisión clínica.`
+  const timeClosureText = 'Se ha alcanzado el límite de tiempo y la sesión ha terminado. El cierre queda registrado; cualquier informe que se genere requiere revisión clínica.'
+  const markClosed = (parts: UIMessage['parts'], chunks: UIMessageChunk[], reason: string) => {
+    const part = { type: 'data-session-closed' as const, data: { closed: true, reason } }
+    parts.push(part)
+    chunks.splice(chunks.length - 1, 0, part)
+  }
   const finishStaticReply = async (closeReason: 'crisis_detected' | 'time_limit' | null) => {
-    const text = crisis.detected
-      ? `Lo que cuentas necesita apoyo inmediato. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. No esperes a completar un cuestionario para pedir ayuda. La señal queda registrada para revisión clínica.`
-      : 'Se ha alcanzado el límite de tiempo de la sesión. La sesión se cerrará y el informe quedará pendiente de revisión clínica.'
+    const text = crisis.detected ? crisisResourcesText : timeClosureText
     const response = staticReply(`assistant-${requestId}`, text)
     if (createdQuestionnaire) {
       // The RPC already committed this instance. Preserve that real tool
@@ -78,6 +97,7 @@ export async function POST(req: Request) {
         { type: 'tool-input-available', toolCallId, toolName: 'propose_questionnaire', input },
         { type: 'tool-output-available', toolCallId, output })
     }
+    if (closeReason) markClosed(response.parts, response.chunks, closeReason)
     const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: response.parts as Json, p_chunks: response.chunks as unknown as Json, p_close_reason: closeReason ?? undefined })
     if (error) throw error
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
@@ -99,8 +119,6 @@ export async function POST(req: Request) {
     const questionnaireNotice = pilot
       ? renderPilotQuestionnaireFacts(await loadQuestionnaireFacts(supabase, sessionId, user.id))
       : await buildQuestionnaireResultNotice(supabase, sessionId, session.opened_at, session.conversation_id)
-    const minutesRemaining = Math.max(0, Math.ceil((60*60*1000 - (Date.now()-new Date(session.opened_at).getTime()))/60_000))
-    const timeNotice = minutesRemaining <= 10 ? `[AVISO DE TIEMPO] Quedan ${minutesRemaining} minutos. Propón un cierre tranquilo y espera aceptación explícita en el siguiente turno. El backend aplica el límite duro después de registrar cualquier señal nueva.\n` : ''
     let patientContextBlock = '', riskOpeningNotice = '', intakeBlock = '', protocolPhaseBlock = ''
     if (process.env.FEATURE_CROSS_SESSION_CONTEXT === 'on') {
       try {
@@ -115,16 +133,18 @@ export async function POST(req: Request) {
         if (crisis.detected) throw error
       }
     }
+    const timeNotice = buildSessionTimeNotice(session.opened_at)
     const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
     checkContextBudget([systemPrompt, ...messages])
-    return { messages, systemPrompt }
+    return { messages, systemPrompt, timeNotice }
   }
   let awaitingGeneration = false
+  let generationTimeExpired = false
   try {
     // Accepted text/risk already committed. RPC interruptions/time limits never
     // depend on context. Only the supervised pilot contextualizes ordinary
     // lexical signals; the reference response remains deterministic.
-    if (expired || turn.urgent || (!pilot && highSignalCrisis)) return await finishStaticReply(expired ? crisis.detected ? 'crisis_detected' : 'time_limit' : null)
+    if (isSessionExpired(session) || turn.urgent || (!pilot && highSignalCrisis)) return await finishStaticReply(isSessionExpired(session) ? crisis.detected ? 'crisis_detected' : 'time_limit' : null)
     let context: Awaited<ReturnType<typeof prepareContext>>
     try { context = await prepareContext() }
     catch (error) {
@@ -133,10 +153,10 @@ export async function POST(req: Request) {
       // outage alone does not introduce a new reason to close the session.
       return await finishStaticReply(error instanceof Error && error.message === 'context_limit' ? 'crisis_detected' : null)
     }
-    const { messages, systemPrompt } = context
+    if (isSessionExpired(session)) return await finishStaticReply(crisis.detected ? 'crisis_detected' : 'time_limit')
+    const { messages, systemPrompt, timeNotice } = context
     const patientCodes = listPatientCodes()
     let proposal: string | null = null
-    let closeReason: string | null = null
     let modelStep = 0
     let toolContinuationRequired = false
     let validToolContinuation = false
@@ -167,7 +187,10 @@ export async function POST(req: Request) {
       maxOutputTokens: MAX_OUTPUT_TOKENS, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
       stopWhen: stepCountIs(pilot ? 2 : 1),
       prepareStep: ({ stepNumber, messages: stepMessages, steps }) => {
-        if (!pilot) return
+        if (isSessionExpired(session)) { generationTimeExpired = true; throw new Error('session_time_limit') }
+        const system = systemPrompt.replace(timeNotice, buildSessionTimeNotice(session.opened_at))
+        checkContextBudget([system, ...stepMessages])
+        if (!pilot) return { system }
         modelStep = stepNumber
         checkContextBudget([systemPrompt, ...stepMessages])
         if (stepNumber > 0) {
@@ -178,8 +201,9 @@ export async function POST(req: Request) {
             remaining -= used
           }
           if (remaining <= 0) throw new Error('response_limit')
-          return { toolChoice: 'none', activeTools: [], maxOutputTokens: remaining }
+          return { system, toolChoice: 'none', activeTools: [], maxOutputTokens: remaining }
         }
+        return { system }
       },
       onStepFinish: step => {
         if (!pilot) return
@@ -187,7 +211,7 @@ export async function POST(req: Request) {
         else validToolContinuation = step.toolCalls.length === 0 && step.text.trim().length > 0
       },
       tools: {
-        propose_close_session: tool({ description: 'Propone cierre por user_request o time_limit. Espera aceptación explícita del siguiente turno antes de confirmar.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => runToolAction(async () => { proposal = reason; return { proposed: true, reason } }) }),
+        propose_close_session: tool({ description: 'Propone cierre anticipado por user_request o time_limit. Espera aceptación explícita del siguiente turno antes de confirmar. El límite duro se aplica en servidor.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => runToolAction(async () => { if (isSessionExpired(session)) return { skipped: true, reason: 'time_limit' }; proposal = reason; return { proposed: true, reason } }) }),
         confirm_close_session: tool({ description: 'Confirma exclusivamente la propuesta anterior con el mismo motivo y aceptación explícita del turno siguiente.', inputSchema: z.object({ reason: z.enum(['user_request','time_limit']) }), execute: async ({ reason }) => runToolAction(async () => {
           if (acceptsClosure(lastUserText)) return close(reason)
           let proposalRenewed = false
@@ -204,7 +228,9 @@ export async function POST(req: Request) {
         }) }),
         close_session_crisis: tool({ description: 'Cierra por señal de crisis registrada, sin pedir aceptación. Da primero los recursos de seguridad.', inputSchema: z.object({}), execute: async () => runToolAction(async () => close('crisis_detected')) }),
         propose_questionnaire: tool({ description: 'Propone PHQ9 o GAD7 para screening y BDI2/BAI para profundización tras primario moderado. C-SSRS (CSSRS) tiene prioridad ante señal suicida/autolesión. Los cuestionarios scored no bloquean otros; como máximo un cuestionario pendiente. Anuncia por texto y espera consentimiento, excepto la atención urgente a seguridad.', inputSchema: z.object({ code: z.enum(patientCodes as [QuestionnaireCode,...QuestionnaireCode[]]), reason: z.string().min(10).max(300) }), execute: async ({ code, reason }) => runToolAction(async () => {
+          if (isSessionExpired(session)) return { skipped: true, reason: 'time_limit' }
           if (code !== 'CSSRS' && await getActiveInstanceForSession(supabase, sessionId)) return { skipped: true, reason: 'already_active' }
+          if (isSessionExpired(session)) return { skipped: true, reason: 'time_limit' }
           const instance = await createInstance(supabase, { userId: user.id, sessionId, conversationId: session.conversation_id, questionnaireCode: code, triggerReason: reason, requestId, turnToken: token })
           createdQuestionnaire = { code, reason, instanceId: instance.id }
           return { proposed: true, code, instanceId: instance.id }
@@ -225,11 +251,21 @@ export async function POST(req: Request) {
       if (JSON.stringify(chunks).length > 100_000) { await reader.cancel(); throw new Error('response_limit') }
     }
     if (!responseMessage?.parts.length || (toolContinuationRequired && !validToolContinuation)) throw new Error('empty_response')
-    if (closureClarification) {
+    const expiredOnCompletion = isSessionExpired(session)
+    if (!closeReason && expiredOnCompletion) { closeReason = crisis.detected ? 'crisis_detected' : 'time_limit'; proposal = null }
+    if (closureClarification && !closeReason) {
       const text = `\n\n${closureClarification}`
       const id = `server-close-clarification-${requestId}`
       responseMessage.parts.push({ type: 'text', text })
       chunks.splice(chunks.length - 1, 0, { type: 'text-start', id }, { type: 'text-delta', id, delta: text }, { type: 'text-end', id })
+    }
+    if (closeReason) {
+      if (closeReason === 'time_limit' || expiredOnCompletion) {
+        const text = `\n\n${timeClosureText}${closeReason === 'crisis_detected' ? `\n\n${crisisResourcesText}` : ''}`, id = `server-time-close-${requestId}`
+        responseMessage.parts.push({ type: 'text', text })
+        chunks.splice(chunks.length - 1, 0, { type: 'text-start', id }, { type: 'text-delta', id, delta: text }, { type: 'text-end', id })
+      }
+      markClosed(responseMessage.parts, chunks, closeReason)
     }
     awaitingGeneration = false
     const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: responseMessage.parts as Json, p_chunks: chunks as unknown as Json, p_proposal: proposal ?? undefined, p_close_reason: closeReason ?? undefined })
@@ -237,6 +273,11 @@ export async function POST(req: Request) {
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
     return replay(chunks)
   } catch (error) {
+    if (awaitingGeneration && generationTimeExpired) {
+      awaitingGeneration = false
+      try { return await finishStaticReply(closeReason === 'crisis_detected' || crisis.detected ? 'crisis_detected' : 'time_limit') }
+      catch { /* Ambiguous persistence follows the same fenced recovery path. */ }
+    }
     // Only a model-generation failure may use this fallback. A failed/ambiguous
     // final write must keep the existing retry contract, never replace a
     // possibly committed contextual response with different text.

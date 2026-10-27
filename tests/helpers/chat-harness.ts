@@ -6,7 +6,7 @@ export const SESSION_ID = '11111111-1111-4111-8111-111111111111'
 export async function chatHarness(configuration: { model?: LanguageModel } = {}) {
   vi.resetModules()
   const state = {
-    session: { id: SESSION_ID, user_id: 'user-1', conversation_id: 'conv-1', status: 'open', opened_at: new Date().toISOString(), protocol_phase: 1 },
+    session: { id: SESSION_ID, user_id: 'user-1', conversation_id: 'conv-1', status: 'open', opened_at: new Date().toISOString(), last_activity_at: new Date().toISOString(), protocol_phase: 1 },
     onboardingReady: true,
     user: { id: 'user-1' } as { id: string } | null,
     conversationOwner: 'user-1',
@@ -19,13 +19,17 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     persistFailures: 0, generationFailure: false, urgentReply: false, criticalQuestionnaireEvidence: false,
     prompt: 'Active prompt', promptFailure: false, historyFailure: false, safetyFailure: false, omitAdmittedMessage: false,
     hook: async (_options: any) => { void _options },
+    contextHook: async () => {},
+    questionnaireHook: async () => {},
   }
   const chain = (table: string) => {
     const q: any = {}
     let rowLimit = Infinity
+    let requestId: string | undefined
     for (const method of ['select','eq','gt','gte','in','order','limit','single','maybeSingle']) q[method] = vi.fn(() => q)
     q.limit = vi.fn((limit: number) => { rowLimit = limit; return q })
-    q.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'clinical_sessions' ? state.session : table === 'conversations' ? { id: 'conv-1', user_id: state.conversationOwner } : table === 'session_close_proposals' ? state.proposal : table === 'messages' ? state.rows.filter(row => !state.omitAdmittedMessage || !row.id.startsWith('user-turn')).slice(0, rowLimit) : null, error: table === 'messages' && state.historyFailure ? new Error('history unavailable') : null, count: 0 }).then(resolve, reject)
+    q.eq = vi.fn((key: string, value: string) => { if (key === 'request_id') requestId = value; return q })
+    q.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'clinical_sessions' ? state.session : table === 'chat_turns' ? state.turns.get(requestId ?? '') ?? null : table === 'conversations' ? { id: 'conv-1', user_id: state.conversationOwner } : table === 'session_close_proposals' ? state.proposal : table === 'messages' ? state.rows.filter(row => !state.omitAdmittedMessage || !row.id.startsWith('user-turn')).slice(0, rowLimit) : null, error: table === 'messages' && state.historyFailure ? new Error('history unavailable') : null, count: 0 }).then(resolve, reject)
     return q
   }
   const service = { from: vi.fn(chain), rpc: vi.fn(async (name: string, args: any) => {
@@ -37,6 +41,7 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
       if (prior?.status === 'generating' || [...state.turns.values()].some(t => t.status !== 'completed' && t !== prior)) return { error: { code: '55P03' }, data: null }
       if (!prior) state.rows.push({ id: `user-${args.p_request_id}`, role: 'user', parts: [{ type: 'text', text: args.p_text }] })
       state.turns.set(args.p_request_id, { text: args.p_text, status: 'generating', previousRequest: state.previousRequest, lexicalEvent: args.p_crisis })
+      state.session.last_activity_at = new Date().toISOString()
       return { data: { replay: false, token: '11111111-1111-4111-8111-111111111111', urgent: state.urgentReply, userMessageId: `user-${args.p_request_id}` }, error: null }
     }
     if (name === 'finish_chat_turn') {
@@ -56,14 +61,14 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     }
     return { data: null, error: null }
   }) }
-  const authClient = { rpc: vi.fn(async () => ({ data: state.onboardingReady, error: null })), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
+  const authClient = { rpc: vi.fn(async (name: string) => { if (name === 'close_session_atomic') { state.session.status = 'closed'; return { data: null, error: null } }; return { data: state.onboardingReady, error: null } }), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
   vi.doMock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => authClient, createServiceRoleClient: () => service }))
   vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
   vi.doMock('@/lib/shared/llm/models', () => ({ llm: { conversational: () => configuration.model ?? 'synthetic-model' } }))
-  vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async (_client: any, _session: string, _openedAt: string, options?: { strict?: boolean }) => { state.safetyOptions.push(options); if (state.safetyFailure) throw new Error('safety unavailable'); return state.safety } }))
+  vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async (_client: any, _session: string, _openedAt: string, options?: { strict?: boolean }) => { state.safetyOptions.push(options); await state.contextHook(); if (state.safetyFailure) throw new Error('safety unavailable'); return state.safety } }))
   vi.doMock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn(async () => ({ runId: 'synthetic-run' })) }))
   vi.doMock('@/lib/server/assessments/questionnaire-facts', () => ({ loadQuestionnaireFacts: vi.fn(async () => []) }))
-  vi.doMock('@/lib/server/questionnaires/service', () => ({ createInstance: vi.fn(async (_client, input) => { state.questionnaireCreations.push(input); return { id: 'quiz' } }), getActiveInstanceForSession: async () => state.activeQuestionnaire ? { instance: { id: 'pending-quiz' } } : null }))
+  vi.doMock('@/lib/server/questionnaires/service', () => ({ createInstance: vi.fn(async (_client, input) => { state.questionnaireCreations.push(input); return { id: 'quiz' } }), getActiveInstanceForSession: async () => { await state.questionnaireHook(); return state.activeQuestionnaire ? { instance: { id: 'pending-quiz' } } : null } }))
   vi.doMock('ai', async importOriginal => {
     const actual = await importOriginal<typeof import('ai')>()
     return { ...actual, streamText: (options: any) => {

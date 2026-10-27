@@ -206,7 +206,7 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
             <CardHeader>
               <CardTitle>Empieza una sesión nueva</CardTitle>
               <CardDescription>
-                Las sesiones duran hasta 60 minutos. Se cierran tras 30 minutos de inactividad.
+                Las sesiones duran hasta 60 minutos. Tras 30 minutos de inactividad se comprueba el cierre al retomar la sesión o en la revisión automática.
               </CardDescription>
             </CardHeader>
             <CardContent>
