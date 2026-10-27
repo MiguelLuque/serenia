@@ -1,6 +1,6 @@
 # Conversation tool feedback — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Que el piloto reciba resultados de herramientas y los pueda explicar sin ciclos de nuevas acciones.
 
@@ -30,20 +30,20 @@
 
 **Files:** `tests/helpers/chat-harness.ts`; nuevo `tests/chat/tool-feedback.test.ts`; `app/api/chat/route.ts`.
 
-- [ ] Añadir modo de harness con SDK real y proveedor ficticio; regresión RED de resultado→segunda generación.
-- [ ] Añadir continuación acotada y ejecución serial/guard del servidor. Tools existentes y autorización sin cambios.
-- [ ] Verificar creación/bloqueo, cierres, proveedor desobediente, concurrencia, error/replay y referencia; GREEN focal.
+- [x] Añadir modo de harness con SDK real y proveedor ficticio; regresión RED de resultado→segunda generación.
+- [x] Añadir continuación acotada y ejecución serial/guard del servidor. Tools existentes y autorización sin cambios.
+- [x] Verificar creación/bloqueo, cierres, proveedor desobediente, concurrencia, error/replay y referencia; GREEN focal.
 
 ### Task2 — Contexto factual de operaciones anteriores
 
 **Files:** `lib/server/chat/tool-feedback.ts`; `tests/chat/tool-feedback-history.test.ts`; `app/api/chat/route.ts`.
 
-- [ ] RED para recuperar resultados confirmados, sin confundir propuesta con administración ni usar herramientas del usuario.
-- [ ] Proyectar sólo shapes conocidos, sin argumentos libres ni instrucciones; mantener presupuestos del historial.
-- [ ] Verificar integración en el prompt del siguiente turno y regresiones de frontera/contexto; GREEN focal.
+- [x] RED para recuperar resultados confirmados, sin confundir propuesta con administración ni usar herramientas del usuario.
+- [x] Proyectar sólo shapes conocidos, sin argumentos libres ni instrucciones; mantener presupuestos del historial.
+- [x] Verificar integración en el prompt del siguiente turno y regresiones de frontera/contexto; GREEN focal.
 
 ### Task3 — Revisión y aceptación
 
-- [ ] Revisión independiente de sólo lectura del delta; corregir hallazgos materiales con RED→GREEN.
-- [ ] Commit fuente y siete gates nativos; conservar todos los logs/exits y SHA construido.
-- [ ] Recibo técnico con límites; mantener sin publicar y sin declarar conversaciones/modelo/diagnóstico validados.
+- [x] Revisión independiente de sólo lectura del delta; corregir hallazgos materiales con RED→GREEN.
+- [x] Commit fuente y siete gates nativos; conservar todos los logs/exits y SHA construido.
+- [x] Recibo técnico con límites; mantener sin publicar y sin declarar conversaciones/modelo/diagnóstico validados.
