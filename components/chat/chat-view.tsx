@@ -161,6 +161,7 @@ export function ChatView({
       setRecoveryError(false)
       if (state.closed) {
         transitionRef.current += 1
+        setMessages(state.messages)
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
         return null
       }
@@ -213,11 +214,12 @@ export function ChatView({
 
   useEffect(() => {
     if (!recovery || recovery.status !== 'generating' || recovery.canRetry) return
-    const delay = Math.max(1000, new Date(recovery.leaseUntil).getTime() - Date.now() + 100)
+    const serverNow = clock.serverNow + Math.max(0, performance.now() - clock.monotonic)
+    const delay = Math.max(1000, new Date(recovery.leaseUntil).getTime() - serverNow + 100)
     const timer = setTimeout(() => void rehydrate(), delay)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recovery])
+  }, [recovery, clock])
 
   async function retry() {
     if (!recovery?.canRetry || retrying) return

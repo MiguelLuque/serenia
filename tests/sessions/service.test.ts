@@ -67,8 +67,9 @@ describe('isSessionExpired', () => {
   })
 
   it('returns false exactly at SESSION_MAX_DURATION_MS - 1ms', () => {
-    const openedAt = new Date(Date.now() - SESSION_MAX_DURATION_MS + 1).toISOString()
-    expect(isSessionExpired({ opened_at: openedAt })).toBe(false)
+    const now = Date.now()
+    const openedAt = new Date(now - SESSION_MAX_DURATION_MS + 1).toISOString()
+    expect(isSessionExpired({ opened_at: openedAt }, now)).toBe(false)
   })
 
   it('returns true exactly at SESSION_MAX_DURATION_MS', () => {

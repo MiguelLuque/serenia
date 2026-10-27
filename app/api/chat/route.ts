@@ -83,6 +83,9 @@ export async function POST(req: Request) {
     chunks.splice(chunks.length - 1, 0, part)
   }
   const finishStaticReply = async (closeReason: 'crisis_detected' | 'time_limit' | null) => {
+    // Context/model failures can cross the deadline too. Revalidate at the
+    // shared finalizer so fallback success cannot leave an expired turn open.
+    if (!closeReason && isSessionExpired(session)) closeReason = crisis.detected ? 'crisis_detected' : 'time_limit'
     const text = crisis.detected ? crisisResourcesText : timeClosureText
     const response = staticReply(`assistant-${requestId}`, text)
     if (createdQuestionnaire) {

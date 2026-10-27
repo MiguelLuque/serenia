@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { UIMessage } from 'ai'
 const f = vi.hoisted(() => ({ close: vi.fn(), state: vi.fn(), refresh: vi.fn(), push: vi.fn() }))
@@ -56,4 +56,13 @@ it('recognizes a committed static time closure and does not refresh a questionna
   render(<ChatView sessionId="closed" initialMessages={messages} serverNow={new Date(now)} expiresAt={new Date(now)} />)
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirmar cierre por tiempo' })).toBeNull())
   expect(screen.queryByRole('textbox')).toBeNull(); expect(f.refresh).not.toHaveBeenCalled()
+})
+it('checks a pending lease after two server minutes even if the browser is an hour behind', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(now - 60 * 60_000)
+  const recovery = { requestId: 'accepted', userMessageId: 'message', text: 'Hola', status: 'generating' as const, canRetry: false, leaseUntil: new Date(now + 2 * 60_000).toISOString() }
+  f.state.mockResolvedValue({ closed: false, recovery: { ...recovery, canRetry: true }, messages: [], timing: { serverNow: now + 2 * 60_000, expiresAt: now + 60 * 60_000 } })
+  render(<ChatView sessionId="lease-clock" initialMessages={[]} initialRecovery={recovery} serverNow={new Date(now)} expiresAt={new Date(now + 60 * 60_000)} />)
+  await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60_000 + 101) })
+  expect(f.state).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeTruthy()
 })

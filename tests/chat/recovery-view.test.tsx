@@ -70,6 +70,15 @@ it('external close after transport error rehydrates closed UI without retry', as
  expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
  expect(fixture.refresh).not.toHaveBeenCalled()
 })
+it('recovers the persisted final answer when the server closed but its HTTP response was lost', async () => {
+ fixture.closed = true; fixture.replied = true
+ vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('connection lost', { status: 503 })))
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await screen.findByText('Respuesta guardada')
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+ expect(fixture.refresh).not.toHaveBeenCalled()
+})
 it('an exhausted turn exposes a non-retryable state and an urgent exit', () => {
  render(<ChatView {...props} initialRecovery={{ ...recovery, canRetry: false }} />)
  expect(screen.getByText(/No se puede reintentar/)).toBeTruthy()
@@ -243,5 +252,24 @@ it('keeps an unsent draft when a saved external closure arrives', async () => {
  fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
  const draft = await screen.findByRole('textbox', { name: 'Borrador sin enviar' }) as HTMLTextAreaElement
  expect(draft.value).toBe('Un detalle que todavía no he enviado'); expect(draft.readOnly).toBe(true)
+ expect(fixture.refresh).not.toHaveBeenCalled()
+})
+it('retains text typed while the final admitted answer arrives with a persisted time closure', async () => {
+ fixture.failed = false
+ let finish!: () => void
+ vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = () => resolve(createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) {
+   c.enqueue({ type: 'start', messageId: 'final-answer' }); c.enqueue({ type: 'text-start', id: 'answer' })
+   c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta final guardada' }); c.enqueue({ type: 'text-end', id: 'answer' })
+   c.enqueue({ type: 'data-session-closed', data: { closed: true, reason: 'time_limit' } }); c.enqueue({ type: 'finish' }); c.close()
+ } }) })) })))
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Último mensaje admitido' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await waitFor(() => expect(finish).toBeTypeOf('function'))
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Borrador nuevo aún no enviado' } })
+ await act(async () => { finish() })
+ await screen.findByText('Respuesta final guardada')
+ const draft = await screen.findByRole('textbox', { name: 'Borrador sin enviar' }) as HTMLTextAreaElement
+ expect(draft.value).toBe('Borrador nuevo aún no enviado')
  expect(fixture.refresh).not.toHaveBeenCalled()
 })
