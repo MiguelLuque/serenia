@@ -123,6 +123,44 @@ do $$ declare j profile_extraction_jobs%rowtype; target uuid; o jsonb; begin
 end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000101',true);
+-- Review I1: a pending correction remains confirmable after its target was rejected.
+-- Restore this fixture afterward so existing confirmed-target transitions remain covered.
+-- Admin-only fixture isolates the target-state guard; clients cannot mutate status.
+savepoint profile_superseded_target;
+reset role;
+update profile_observations set status='superseded' where quote='Vivo en Sevilla.';
+set local role authenticated;
+do $$ declare b profile_observations%rowtype; begin
+ select * into b from profile_observations where quote='Ahora vivo en Cádiz.';
+ perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',b.id,'confirm',b.updated_at));
+ perform pg_temp.profile_assert((select status='pending' and updated_at=b.updated_at from profile_observations where id=b.id),'superseded target rejects confirmation without changing correction');
+ perform pg_temp.profile_assert((select status='superseded' from profile_observations where id=b.supersedes_id),'superseded target is never restored');
+end $$;
+rollback to savepoint profile_superseded_target;
+release savepoint profile_superseded_target;
+savepoint profile_rejected_target;
+do $$ declare a profile_observations%rowtype; b profile_observations%rowtype; sibling profile_observations%rowtype; rejected_version timestamptz; begin
+ select * into a from profile_observations where quote='Vivo en Sevilla.';
+ select * into b from profile_observations where quote='Ahora vivo en Cádiz.';
+ select * into sibling from profile_observations where quote='Ahora vivo en Málaga.';
+ perform review_profile_observation(a.id,'reject',a.updated_at);
+ select updated_at into rejected_version from profile_observations where id=a.id;
+ perform pg_temp.profile_assert(rejected_version>a.updated_at,'reject target advances its version');
+ perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',b.id,'confirm',b.updated_at-interval '1 second'));
+ perform review_profile_observation(b.id,'confirm',b.updated_at);
+ perform pg_temp.profile_assert((select status='rejected' and updated_at=rejected_version from profile_observations where id=a.id),'confirm correction preserves rejected target and version');
+ perform pg_temp.profile_assert((select status='confirmed' and supersedes_id=a.id and updated_at>b.updated_at from profile_observations where id=b.id),'confirm new source retains provenance and advances version');
+ perform pg_temp.profile_assert((select status='superseded' and supersedes_id=a.id and updated_at>sibling.updated_at from profile_observations where id=sibling.id),'confirm resolves pending siblings and advances versions');
+ perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',b.id,'reject',b.updated_at));
+ perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',sibling.id,'confirm',sibling.updated_at));
+ select * into b from profile_observations where id=b.id;
+ perform review_profile_observation(b.id,'reject',b.updated_at);
+ perform pg_temp.profile_assert((select status='rejected' and updated_at=rejected_version from profile_observations where id=a.id),'reject correction does not restore its rejected target');
+ select * into sibling from profile_observations where id=sibling.id;
+ perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',sibling.id,'confirm',sibling.updated_at));
+end $$;
+rollback to savepoint profile_rejected_target;
+release savepoint profile_rejected_target;
 do $$ declare o profile_observations%rowtype; begin
  perform pg_temp.profile_assert(exists(select 1 from jsonb_array_elements(get_profile_memory()->'observations') x where x->>'quote'='Vivo en Sevilla.' and (x->>'disputed')::boolean),'pending correction disputes target');
  select * into o from profile_observations where quote='Ahora vivo en Cádiz.';
