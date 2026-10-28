@@ -43,12 +43,12 @@ Files nuevos: lib/shared/profile/schema.ts; lib/server/profile/{config,extractor
 
 Interfaces TS: `progressiveProfileEnabled(env=process.env):boolean`; `ProfileMemorySchema`; `ProfileExtractionSchema`; `validateProfileExtraction(output,sourceText,knownTargets)`; `extractProfileObservations(sourceText,knownTargets)`; `renderProfileContext(memory,currentText)`; `loadProfileContext(client,currentText)` con error aislado; `enqueueProfileExtraction(userId?:string,limit=1)`; `dispatchProfileJob(job)`; `extractProfileWorkflow({jobId,token})`. Usar tipos Task1. Modificar systemPrompt con `profileContextBlock?:string` vacío por defecto; no reordenar piezas existentes. Nueva memoria se carga sólo con flag y own authenticatedclient.
 
-- [ ] RED validación: arrays>5,cita ausente/alterada,fuente>8000,citas>400,duplicados/target extraño; empty válido; schema no admite campos diagnósticos. Cubrir unicode/tercero/histórico como corpus semántico, sin etiquetar mocks como calidad de proveedor.
-- [ ] Implementar extractSchema/strictOutput+prompt, modelo structured existente, límites1500/20s/0retries; devolver citas originales exclusivamente. Guardar source ownership desde job, nunca modelo.
-- [ ] RED Workflow/outbox: argumentos sóloIDs, replay, fallo de start/model/finish/consent, enqueued ack tardío, cola recuperada. Un step procesa y persiste completo, return sólo IDs/contadores; maxRetries0.
-- [ ] Implementar dispatch y nudge siguiente propio, after no bloqueante tras claim/replay y cron flagguardado10/2. Salida malformada→failed backoff, no ghost observations.
-- [ ] RED contexto: confirmed/pending/fechas/disputa,corrección,reject/superseded omitidos, budget4000/8,relevancia simple, escapeJSON y fallos/flagoff sin query/rotura del chat. Implementar proyección/lectura aislada y fresh context cada turno.
-- [ ] Ampliar preload sintético sólo para marker de extracción (sin bypass Auth/RPC); correr tests de perfil/chat/cron/workflow y typecheck/lint GREEN. Commit archivos propios y revisión del task.
+- [x] RED validación: arrays>5,cita ausente/alterada,fuente>8000,citas>400,duplicados/target extraño; empty válido; schema no admite campos diagnósticos. Cubrir unicode/tercero/histórico como corpus semántico, sin etiquetar mocks como calidad de proveedor.
+- [x] Implementar extractSchema/strictOutput+prompt, modelo structured existente, límites1500/20s/0retries; devolver citas originales exclusivamente. Guardar source ownership desde job, nunca modelo.
+- [x] RED Workflow/outbox: argumentos sóloIDs, replay, fallo de start/model/finish/consent, enqueued ack tardío, cola recuperada. Un step procesa y persiste completo, return sólo IDs/contadores; maxRetries0.
+- [x] Implementar dispatch y nudge siguiente propio, after no bloqueante tras claim/replay y cron flagguardado10/2. Salida malformada→failed backoff, no ghost observations.
+- [x] RED contexto: confirmed/pending/fechas/disputa,corrección,reject/superseded omitidos, budget4000/8,relevancia simple, escapeJSON y fallos/flagoff sin query/rotura del chat. Implementar proyección/lectura aislada y fresh context cada turno.
+- [x] Ampliar preload sintético sólo para marker de extracción (sin bypass Auth/RPC); correr tests de perfil/chat/cron/workflow y typecheck/lint GREEN. Commit archivos propios y revisión del task.
 
 ### Task 3: Control del usuario
 
