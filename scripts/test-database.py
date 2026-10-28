@@ -261,6 +261,113 @@ try:
         touching.result()
     query(f"do $$ begin if (select status from clinical_sessions where id='{race_sid}')<>'open' or exists(select 1 from assessment_jobs where session_id='{race_sid}') then raise exception 'Stale inactivity job created'; end if; end $$;")
     print('PASS concurrent touch/inactivity lock revalidation preserves active session without outbox')
+    query((ROOT / 'supabase/tests/progressive-profile.sql').read_text())
+    print('PASS progressive profile grants, sources, consent, fencing, ordering, corrections and cascades')
+    # Profile queue/review races use independent connections and observed lock barriers.
+    def profile_value(sql):
+        result = docker('exec', '-i', name, 'psql', '-X', '-At', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=False)
+        if result.returncode:
+            raise RuntimeError(result.stdout + result.stderr)
+        return result.stdout.strip()
+
+    def profile_barrier(application):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if profile_value(f"select count(*) from pg_stat_activity where application_name='{application}' and wait_event='PgSleep';") == '1':
+                return
+            time.sleep(.02)
+        raise RuntimeError('Profile lock barrier not observed: ' + application)
+
+    pu = '00000000-0000-0000-0000-000000000201'
+    pv = '00000000-0000-0000-0000-000000000202'
+    pc = '10000000-0000-0000-0000-000000000201'
+    pd = '10000000-0000-0000-0000-000000000202'
+    ps = '20000000-0000-0000-0000-000000000201'
+    pt = '20000000-0000-0000-0000-000000000202'
+    owner = f"set role authenticated; select set_config('request.jwt.claim.sub','{pu}',false);"
+    other = f"set role authenticated; select set_config('request.jwt.claim.sub','{pv}',false);"
+    query(f"""insert into auth.users(id) values('{pu}'),('{pv}');
+      update user_profiles set informal_name='Synthetic',pronouns='elle',birth_date='1990-01-01',reason_for_consulting='Synthetic profile races' where user_id in ('{pu}','{pv}');
+      insert into consents(user_id,consent_version,server_recorded,payload_json) values('{pu}','technical-draft-2026-10-11',true,'{{"birthDate":"1990-01-01"}}'),('{pv}','technical-draft-2026-10-11',true,'{{"birthDate":"1990-01-01"}}');
+      insert into conversations(id,user_id) values('{pc}','{pu}'),('{pd}','{pv}');
+      insert into clinical_sessions(id,conversation_id,user_id) values('{ps}','{pc}','{pu}'),('{pt}','{pd}','{pv}');""")
+    query(owner + 'select set_profile_enabled(true);')
+    query(other + 'select set_profile_enabled(true);')
+    query(f"""insert into messages(id,session_id,conversation_id,role,parts,created_at) values
+      ('40000000-0000-0000-0000-000000000201','{ps}','{pc}','user','[{{"type":"text","text":"Vivo en Sevilla."}}]',now()-interval '1 minute'),
+      ('40000000-0000-0000-0000-000000000202','{ps}','{pc}','user','[{{"type":"text","text":"Ahora vivo en Cádiz. Ahora vivo en Málaga."}}]',now()),
+      ('40000000-0000-0000-0000-000000000203','{pt}','{pd}','user','[{{"type":"text","text":"Otro usuario."}}]',now());""")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(profile_value, [server + f"select count(*) from claim_profile_jobs('{pu}',1);"] * 2))
+    if sorted(claims) != ['0', '1']:
+        raise RuntimeError('Profile concurrent claims were not exclusive')
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        holding = pool.submit(query, f"set application_name='profile-independent-user'; begin; select 1 from profile_settings where user_id='{pu}' for update; select pg_sleep(1); commit;")
+        profile_barrier('profile-independent-user')
+        if profile_value(server + f"select user_id from claim_profile_jobs(null,10);") != pv:
+            raise RuntimeError('Profile locked owner blocked independent user')
+        holding.result()
+    job = json.loads(profile_value(f"select row_to_json(j) from profile_extraction_jobs j where source_message_id='40000000-0000-0000-0000-000000000201';"))
+    start = server + f"select start_profile_job('{job['id']}','{job['token']}');"
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for attempt in [pool.submit(query, start), pool.submit(query, start)]:
+            try: attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'Profile worker already started' not in str(error): raise
+    if successes != 1: raise RuntimeError('Profile concurrent start not exclusive')
+    payload = json.dumps([{'category': 'context', 'quote': 'Vivo en Sevilla.', 'time_scope': 'current', 'supersedes_id': None}], ensure_ascii=False)
+    finish = server + f"select finish_profile_job('{job['id']}','{job['token']}','{payload}','synthetic');"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(query, [finish, finish]))
+    obs = json.loads(profile_value(f"select row_to_json(o) from profile_observations o where job_id='{job['id']}';"))
+    review = owner + f"select review_profile_observation('{obs['id']}','confirm','{obs['updated_at']}');"
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for attempt in [pool.submit(query, review), pool.submit(query, review)]:
+            try: attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'Profile observation changed; reload' not in str(error): raise
+    if successes != 1: raise RuntimeError('Profile stale concurrent review accepted')
+    job2 = json.loads(profile_value(server + f"select row_to_json(j) from claim_profile_jobs('{pu}',1) j;"))
+    query(server + f"select start_profile_job('{job2['id']}','{job2['token']}');")
+    payload = json.dumps([{'category': 'context', 'quote': quote, 'time_scope': 'current', 'supersedes_id': obs['id']} for quote in ['Ahora vivo en Cádiz.', 'Ahora vivo en Málaga.']], ensure_ascii=False)
+    query(server + f"select finish_profile_job('{job2['id']}','{job2['token']}','{payload}','synthetic');")
+    siblings = json.loads(profile_value(f"select json_agg(o) from profile_observations o where job_id='{job2['id']}';"))
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        attempts = [pool.submit(query, owner + f"select review_profile_observation('{o['id']}','confirm','{o['updated_at']}');") for o in siblings]
+        for attempt in attempts:
+            try: attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'Profile observation changed; reload' not in str(error): raise
+    if successes != 1: raise RuntimeError('Profile sibling correction winners diverged')
+    if profile_value(f"select count(*) from profile_observations where user_id='{pu}' and status='confirmed';") != '1':
+        raise RuntimeError('Profile correction left multiple confirmed facts')
+    query("delete from messages where id='40000000-0000-0000-0000-000000000201';")
+    if profile_value(f"select count(*) from profile_observations where user_id='{pu}' and status='confirmed' and supersedes_id is null;") != '1':
+        raise RuntimeError('Deleting old source erased independent correction')
+    other_job = json.loads(profile_value(f"select row_to_json(j) from profile_extraction_jobs j where user_id='{pv}';"))
+    query(server + f"select start_profile_job('{other_job['id']}','{other_job['token']}');")
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        disabling = pool.submit(query, f"set application_name='profile-disable-finish'; begin; {other} select set_profile_enabled(false); select pg_sleep(1); commit;")
+        profile_barrier('profile-disable-finish')
+        try:
+            query(server + f"select finish_profile_job('{other_job['id']}','{other_job['token']}','[]','synthetic');")
+        except RuntimeError as error:
+            if 'Profile consent inactive' not in str(error): raise
+        else: raise RuntimeError('Concurrent opt-out permitted completion')
+        disabling.result()
+    query(other + 'select set_profile_enabled(true);')
+    try:
+        query(server + f"select finish_profile_job('{other_job['id']}','{other_job['token']}','[]','synthetic');")
+    except RuntimeError as error:
+        if 'Profile claim stale' not in str(error): raise
+    else: raise RuntimeError('Re-enable resurrected old generation')
+    if profile_value(f"select count(*) from profile_observations where user_id='{pv}';") != '0':
+        raise RuntimeError('Opt-out race persisted observations')
+    query(f"delete from auth.users where id in ('{pu}','{pv}');")
+    print('PASS profile concurrent claims/start/replay/reviews, sibling correction winner, independent owners and opt-out fencing')
     query((ROOT / 'supabase/tests/read-policy-equivalence.sql').read_text())
     print('PASS baseline/new read rowsets across owner, foreign, clinician, anon and inherited authenticated role')
 finally:
