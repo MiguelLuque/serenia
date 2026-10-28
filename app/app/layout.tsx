@@ -6,6 +6,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app/app-sidebar'
+import { progressiveProfileEnabled } from '@/lib/server/profile/config'
 import { patientDisplayName } from '@/lib/shared/clinician/display-name'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppSidebar
         displayName={patientDisplayName(profile) ?? ''}
         role={(profile?.role as 'patient' | 'clinician') ?? 'patient'}
+        profileMemoryEnabled={progressiveProfileEnabled()}
       />
       <SidebarInset>
         <header className="flex h-12 items-center gap-2 border-b px-3 md:hidden">

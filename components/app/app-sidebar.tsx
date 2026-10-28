@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, NotebookText, LogOut, Inbox, Users } from 'lucide-react'
+import { Home, NotebookText, LogOut, Inbox, Users, Brain } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,7 @@ import { logoutAction } from '@/app/(auth)/actions'
 interface AppSidebarProps {
   displayName: string
   role: 'patient' | 'clinician'
+  profileMemoryEnabled?: boolean
 }
 
 const patientNav = [
@@ -41,9 +42,11 @@ function isNavItemActive(href: string, pathname: string): boolean {
   return pathname.startsWith(href)
 }
 
-export function AppSidebar({ displayName, role }: AppSidebarProps) {
+export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: AppSidebarProps) {
   const pathname = usePathname()
-  const items = role === 'clinician' ? clinicianNav : patientNav
+  const items = role === 'clinician' ? clinicianNav : profileMemoryEnabled
+    ? [...patientNav, { href: '/app/perfil', label: 'Lo que recuerda Serenia', icon: Brain }]
+    : patientNav
 
   return (
     <Sidebar collapsible="icon">
