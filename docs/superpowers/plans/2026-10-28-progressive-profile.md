@@ -32,10 +32,10 @@ Files: migration generada mediante wrapper `migration new progressive_profile`; 
 
 Interfaces: todas tablas/RPC del apartado RPC contract de Spec; DTO JSON como allí; source_created_at obtenido de message.created_at y session_id por FK. JSON observations usa category/quote/time_scope/supersedes_id. Estados/lease2min/claims3/backoff30s exactamente Spec.
 
-- [ ] Escribir regresiones SQL y añadirlas a db:test; ejecutar antes de migración para observar RED por tablas/funciones ausentes.
-- [ ] Implementar schema/RLS/grants/triggers/RPC con fuentes y targets propios, citas exactas, rechazo de escritura parcial y matriz de estado/fencing/consent.
-- [ ] Verificar db:test GREEN y concurrencia de claim/review; generar migración con CLI (no nombre inventado). Aplicar sólo esa migración a stack local comprobado, sin reset, y registrar versión local sin inventar historial.
-- [ ] Generar tipos con db:types:generate; ejecutar db:verify GREEN y conservar evidencia. Commit sólo archivos de Task1 y self-review. Revisión independiente del task.
+- [x] Escribir regresiones SQL y añadirlas a db:test; ejecutar antes de migración para observar RED por tablas/funciones ausentes.
+- [x] Implementar schema/RLS/grants/triggers/RPC con fuentes y targets propios, citas exactas, rechazo de escritura parcial y matriz de estado/fencing/consent.
+- [x] Verificar db:test GREEN y concurrencia de claim/review; generar migración con CLI (no nombre inventado). Aplicar sólo esa migración a stack local comprobado, sin reset, y registrar versión local sin inventar historial.
+- [x] Generar tipos con db:types:generate; ejecutar db:verify GREEN y conservar evidencia. Commit sólo archivos de Task1 y self-review. Revisión independiente del task.
 
 ### Task 2: Extracción, cola y contexto
 
