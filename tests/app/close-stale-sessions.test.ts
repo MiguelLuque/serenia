@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- database doubles */
 import { describe,expect,it,vi,beforeEach,afterEach } from 'vitest'
-const {createServiceRoleClient,dispatchAssessmentJob}=vi.hoisted(()=>({createServiceRoleClient:vi.fn(),dispatchAssessmentJob:vi.fn()}))
+const {createServiceRoleClient,dispatchAssessmentJob,enqueueProfileExtraction}=vi.hoisted(()=>({createServiceRoleClient:vi.fn(),dispatchAssessmentJob:vi.fn(),enqueueProfileExtraction:vi.fn()}))
 vi.mock('@/lib/server/supabase/server',()=>({createServiceRoleClient}))
 vi.mock('@/lib/server/workflows',()=>({dispatchAssessmentJob,enqueueAssessmentGeneration:vi.fn()}))
+vi.mock('@/lib/server/profile/dispatch',()=>({enqueueProfileExtraction}))
 import {POST,GET} from '@/app/api/internal/close-stale-sessions/route'
 const previous=process.env.CRON_SECRET
 let rows:any[],jobs:any[],query:any,rpc:ReturnType<typeof vi.fn>
@@ -13,8 +14,9 @@ beforeEach(()=>{
   rpc=vi.fn(async(name:string)=>({data:name==='claim_assessment_jobs'?jobs:null,error:null}))
   createServiceRoleClient.mockReturnValue({from:vi.fn(()=>query),rpc})
   dispatchAssessmentJob.mockReset().mockResolvedValue({runId:'synthetic-run'})
+  enqueueProfileExtraction.mockReset().mockResolvedValue({enqueued:2,failed:1})
 })
-afterEach(()=>{process.env.CRON_SECRET=previous})
+afterEach(()=>{process.env.CRON_SECRET=previous;vi.unstubAllEnvs()})
 const request=(authorized=true)=>new Request('http://localhost/api/internal/close-stale-sessions',{method:'POST',headers:authorized?{authorization:'Bearer synthetic-secret'}:{}})
 describe('bounded authorized closure and recovery sweep',()=>{
   it('accepts the correct secret without a browser cookie',async()=>{expect((await POST(request())).status).toBe(200)})
@@ -62,5 +64,22 @@ describe('bounded authorized closure and recovery sweep',()=>{
   it('supports GET cron with the same independent secret authentication',async()=>{
     expect((await GET(request())).status).toBe(200)
     expect((await GET(request(false))).status).toBe(401)
+  })
+  it('does not query/dispatch profile jobs with flag off',async()=>{
+    vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE','off')
+    await POST(request())
+    expect(enqueueProfileExtraction).not.toHaveBeenCalled()
+  })
+  it('recovers at most ten profile jobs behind the flag and reports safe counts',async()=>{
+    vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE','on')
+    expect(await(await POST(request())).json()).toMatchObject({profile:{enqueued:2,failed:1}})
+    expect(enqueueProfileExtraction).toHaveBeenCalledWith(undefined,10)
+  })
+  it('returns a generic recoverable error when the profile claim fails',async()=>{
+    vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE','on')
+    enqueueProfileExtraction.mockRejectedValue(new Error('PRIVATE'))
+    const response=await POST(request())
+    expect(response.status).toBe(503)
+    expect(await response.text()).not.toContain('PRIVATE')
   })
 })

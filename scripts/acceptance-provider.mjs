@@ -41,10 +41,34 @@ const syntheticSummary = {
   proposed_tasks: [{ descripcion: 'Registrar una actividad agradable ficticia', nota: null }],
 }
 const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } }
+const primaryQuote = 'Me preocupa dormir mal.'
+const correctionQuote = 'Ahora duermo bien.'
+function profileFixture(prompt) {
+  const latest = prompt.filter(message => message.role === 'user').at(-1)
+  const text = (latest?.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('')
+  const input = JSON.parse(text)
+  if (input.sourceText === '[PERFIL_SINTETICO] Me preocupa dormir mal.') return { observations: [{ category: 'concern', quote: primaryQuote, time_scope: 'current', supersedes_id: null }] }
+  if (input.sourceText === '[PERFIL_CORRECCION] Ahora duermo bien.') {
+    const target = input.knownTargets.find(target => target.status === 'confirmed' && target.category === 'concern' && target.quote === primaryQuote)
+    return { observations: [{ category: 'concern', quote: correctionQuote, time_scope: 'current', supersedes_id: target?.id ?? null }] }
+  }
+  return { observations: [] }
+}
+function profileContextMetadata(prompt) {
+  const system = prompt.filter(message => message.role === 'system').map(message => message.content).join('\n')
+  const start = system.indexOf('[MEMORIA DE AUTORREPORTE — PERFIL PROGRESIVO]')
+  const end = system.indexOf('[FIN MEMORIA DE AUTORREPORTE]', start)
+  const present = start >= 0 && end > start
+  const quotes = present ? system.slice(start, end).split('\n').flatMap(line => {
+    try { const parsed = JSON.parse(line); return typeof parsed.quote === 'string' ? [parsed] : [] } catch { return [] }
+  }) : []
+  // Fixed fixture booleans/counts only: never persist source, quotes or prompts.
+  return { present, quotes: quotes.length, confirmed: quotes.filter(row => row.status === 'confirmed').length, pending: quotes.filter(row => row.status === 'pending').length, corrections: quotes.filter(row => Boolean(row.correction_of)).length, fixturePrimary: quotes.some(row => row.quote === primaryQuote), fixtureCorrection: quotes.some(row => row.quote === correctionQuote) }
+}
 function attempt(modelId, prompt) {
   const marker = createHash('sha256').update(JSON.stringify(prompt)).digest('hex').slice(0, 16)
   const prior = existsSync(ledger) ? readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(row => row.kind === 'model' && row.marker === marker).length : 0
-  record({ kind: 'model', modelId, marker, attempt: prior + 1 })
+  record({ kind: 'model', modelId, marker, attempt: prior + 1, ...(modelId === 'synthetic/conversational' ? { profileContext: profileContextMetadata(prompt) } : {}) })
   return prior + 1
 }
 function model(modelId) {
@@ -54,7 +78,9 @@ function model(modelId) {
       attempt(modelId, options.prompt)
       if (modelId !== 'synthetic/structured') throw new Error('Unexpected generate mode')
       if (readControl(directory).structured === 'fail') throw new Error('Synthetic durable retry checkpoint')
-      return { content: [{ type: 'text', text: JSON.stringify(syntheticSummary) }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] }
+      const extraction = options.prompt.some(message => message.role === 'system' && typeof message.content === 'string' && message.content.startsWith('[profile-v1]\n'))
+      const output = extraction ? profileFixture(options.prompt) : syntheticSummary
+      return { content: [{ type: 'text', text: JSON.stringify(output) }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] }
     },
     async doStream(options) {
       const count = attempt(modelId, options.prompt)

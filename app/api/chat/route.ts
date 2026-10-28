@@ -1,5 +1,6 @@
 import { convertToModelMessages, createUIMessageStreamResponse, stepCountIs, streamText, tool, type UIMessage, type UIMessageChunk } from 'ai'
 import { z } from 'zod'
+import { after } from 'next/server'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
 import { llm } from '@/lib/shared/llm/models'
@@ -26,6 +27,9 @@ import { buildPilotSafetyNotice } from '@/lib/shared/chat/pilot-safety-notice'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
 import { renderPilotQuestionnaireFacts } from '@/lib/server/chat/pilot-questionnaire-context'
 import { modelHistoryParts } from '@/lib/server/chat/tool-feedback'
+import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { loadProfileContext } from '@/lib/server/profile/context'
+import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 
 export const maxDuration = 60
 const MAX_OUTPUT_TOKENS = 2500
@@ -69,6 +73,11 @@ export async function POST(req: Request) {
   }
   const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
+  if (progressiveProfileEnabled()) {
+    after(async () => {
+      try { await enqueueProfileExtraction(user.id, 1) } catch { /* Admission already persisted; the durable queue remains recoverable. */ }
+    })
+  }
   const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string }
   if (turn.replay) return replay(turn.chunks ?? [])
   const token = turn.token
@@ -137,8 +146,16 @@ export async function POST(req: Request) {
       }
     }
     const timeNotice = buildSessionTimeNotice(session.opened_at)
-    const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
-    checkContextBudget([systemPrompt, ...messages])
+    const profileContextBlock = await loadProfileContext(supabase, lastUserText)
+    const promptPieces = { basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock }
+    let systemPrompt = buildChatSystemPrompt({ ...promptPieces, profileContextBlock })
+    try { checkContextBudget([systemPrompt, ...messages]) }
+    catch (error) {
+      if (!profileContextBlock) throw error
+      // Optional memory cannot break an otherwise admissible conversation.
+      systemPrompt = buildChatSystemPrompt(promptPieces)
+      checkContextBudget([systemPrompt, ...messages])
+    }
     return { messages, systemPrompt, timeNotice }
   }
   let awaitingGeneration = false
