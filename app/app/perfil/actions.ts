@@ -47,7 +47,7 @@ export async function reviewProfileObservationAction(input: unknown): Promise<Pr
       // Preserve PostgreSQL microseconds and offset; never round-trip via Date.
       p_expected_updated_at: parsed.data.expectedUpdatedAt,
     })
-    if (error?.code === '40001') return { ok: false, conflict: true, error: 'Este dato ha cambiado. Recarga el perfil antes de revisarlo.' }
+    if (error?.code === 'PT409' || error?.code === '40001') return { ok: false, conflict: true, error: 'Este dato ha cambiado. Recarga el perfil antes de revisarlo.' }
     if (error) return unavailable
     revalidatePath('/app/perfil')
     return { ok: true }

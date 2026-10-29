@@ -44,8 +44,8 @@ describe('patient profile actions', () => {
     expect(await reviewProfileObservationAction(review)).toMatchObject({ ok: false })
     expect(mocks.rpc.mock.calls.every(([name]) => name === 'get_onboarding_ready')).toBe(true)
   })
-  it('surfaces stale review as a reloadable conflict without raw errors', async () => {
-    mocks.rpc.mockImplementation(async (name: string) => name === 'get_onboarding_ready' ? { data: true, error: null } : { error: { code: '40001', message: 'PRIVATE TOKEN' } })
+  it.each(['PT409', '40001'])('surfaces stale review %s as a reloadable conflict without raw errors', async code => {
+    mocks.rpc.mockImplementation(async (name: string) => name === 'get_onboarding_ready' ? { data: true, error: null } : { error: { code, message: 'PRIVATE TOKEN' } })
     expect(await reviewProfileObservationAction(review)).toMatchObject({ ok: false, conflict: true, error: expect.stringMatching(/recarga/i) })
     expect(mocks.revalidate).not.toHaveBeenCalled()
   })

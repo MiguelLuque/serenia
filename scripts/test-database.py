@@ -100,7 +100,45 @@ try:
                     if query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='review_assessment_atomic';").splitlines()[2].strip() != '1':
                         raise RuntimeError('Review signature drift left an overload')
                 print('PASS review forward rejects body/config/owner/ACL/security/signature drift atomically')
+            if 'profile_nonretryable_conflicts' in path.name:
+                profile_signatures = [
+                    'public.review_profile_observation(uuid,text,timestamptz)',
+                    'public.start_profile_job(uuid,uuid)',
+                    'public.update_profile_job(uuid,uuid,text,text)',
+                ]
+                profile_oids = ','.join("'" + signature + "'::regprocedure" for signature in profile_signatures)
+                profile_contract = "select jsonb_agg(jsonb_build_object('metadata',to_jsonb(p)-'prosrc','definition',pg_get_functiondef(p.oid)) order by p.proname)::text from pg_proc p where oid in (" + profile_oids + ");"
+                profile_before = query(profile_contract)
+                for signature in profile_signatures:
+                    routine_name = signature.split('.')[1].split('(')[0]
+                    drifts = {
+                        'body': f"do $drift$ declare d text; begin d=pg_get_functiondef('{signature}'::regprocedure); execute replace(d,E'\\ndeclare',E'\\n-- deliberate drift\\ndeclare'); end $drift$;",
+                        'config': f'alter function {signature} set search_path=public;',
+                        'owner': f'alter function {signature} owner to service_role;',
+                        'acl': f'grant execute on function {signature} to anon;',
+                        'security': f'alter function {signature} security invoker;',
+                        'signature': f'create function public.{routine_name}(text) returns void language plpgsql as $extra$ begin return; end $extra$;',
+                    }
+                    for label, drift in drifts.items():
+                        try:
+                            query('BEGIN;\n' + drift + '\n' + path.read_text() + '\nCOMMIT;')
+                        except RuntimeError as error:
+                            if 'Unexpected profile conflict' not in str(error):
+                                raise RuntimeError(f'Unexpected profile {routine_name} {label} guard failure: {error}') from error
+                        else:
+                            raise RuntimeError(f'Profile conflict forward accepted {routine_name} {label} drift')
+                        if query(profile_contract) != profile_before:
+                            raise RuntimeError(f'Profile conflict {routine_name} {label} drift left partial changes')
+                        overloads = query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='" + routine_name + "';")
+                        if overloads.splitlines()[2].strip() != '1':
+                            raise RuntimeError('Profile conflict signature drift left an overload')
+                print('PASS all three profile conflict routines reject body/config/owner/ACL/security/signature drift atomically')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'profile_nonretryable_conflicts' in path.name:
+                expected_contract = profile_before.replace("errcode='40001'", "errcode='PT409'")
+                if query(profile_contract) != expected_contract:
+                    raise RuntimeError('Profile conflict forward changed more than the deterministic error codes')
+                print('PASS profile conflict forward changes only deterministic error codes and preserves complete metadata')
             if 'review_questionnaire_facts_immutable' in path.name and query(contract) != before_metadata:
                 raise RuntimeError('Review facts forward changed metadata/ACL/signature')
             if 'acceptance_strict_rls_advisors' in path.name and query(invariant) != before_contract:

@@ -4,9 +4,16 @@ create function pg_temp.profile_assert(ok boolean, label text) returns void lang
 begin if ok is distinct from true then raise exception 'PROFILE REGRESSION: %',label; end if; end $$;
 create function pg_temp.profile_deny(sql text) returns void language plpgsql as $$
 begin
- begin execute sql; exception when insufficient_privilege or check_violation or foreign_key_violation or unique_violation or serialization_failure then return; end;
+ begin execute sql; exception when insufficient_privilege or check_violation or foreign_key_violation or unique_violation or sqlstate 'PT409' then return; end;
  raise exception 'PROFILE REGRESSION: operation unexpectedly accepted';
 end $$;
+-- Application conflicts must be non-retryable across the PostgREST boundary.
+create function pg_temp.profile_conflict(sql text) returns void language plpgsql as $$
+begin
+ begin execute sql; exception when sqlstate 'PT409' then return; end;
+ raise exception 'Expected non-retryable PT409 profile conflict';
+end $$;
+
 insert into auth.users(id) values('00000000-0000-0000-0000-000000000101'),('00000000-0000-0000-0000-000000000102'),('00000000-0000-0000-0000-000000000103');
 update user_profiles set informal_name='Synthetic',pronouns='elle',birth_date='1990-01-01',reason_for_consulting='Synthetic profile regression' where user_id::text like '%00000000010_';
 insert into consents(user_id,consent_version,server_recorded,payload_json) select user_id,'technical-draft-2026-10-11',true,'{"birthDate":"1990-01-01"}' from user_profiles where user_id::text like '%00000000010_' and user_id<>'00000000-0000-0000-0000-000000000103';
@@ -72,7 +79,7 @@ do $$ declare j profile_extraction_jobs%rowtype; o jsonb; tok uuid; begin
  perform pg_temp.profile_assert((select count(*) from claim_profile_jobs(j.user_id,10))=0,'one active per user');
  perform pg_temp.profile_deny(format('select finish_profile_job(%L,%L,%L,%L)',j.id,j.token,'[]','synthetic'));
  perform pg_temp.profile_assert(start_profile_job(j.id,j.token),'start owned claim');
- perform pg_temp.profile_deny(format('select start_profile_job(%L,%L)',j.id,j.token));
+ perform pg_temp.profile_conflict(format('select start_profile_job(%L,%L)',j.id,j.token));
  perform update_profile_job(j.id,j.token,'enqueued','synthetic-run');
  perform pg_temp.profile_assert((select status='running' and lease_until=j.lease_until from profile_extraction_jobs where id=j.id),'late enqueue does not regress or extend lease');
  o='[{"category":"context","quote":"Vivo en Sevilla.","time_scope":"current","supersedes_id":null},{"category":"goal","quote":"inventado","time_scope":"current","supersedes_id":null}]';
@@ -89,16 +96,16 @@ do $$ declare j profile_extraction_jobs%rowtype; o jsonb; tok uuid; begin
  perform pg_temp.profile_assert(not start_profile_job(j.id,j.token),'completed replay false');
  perform update_profile_job(j.id,j.token,'enqueued','synthetic-run');
  perform pg_temp.profile_assert((select count(*) from profile_observations where job_id=j.id)=1,'replay without duplication');
- perform pg_temp.profile_deny(format('select update_profile_job(%L,%L,%L)',j.id,j.token,'failed'));
+ perform pg_temp.profile_conflict(format('select update_profile_job(%L,%L,%L)',j.id,j.token,'failed'));
  perform pg_temp.profile_deny(format('select finish_profile_job(%L,%L,%L,%L)',j.id,gen_random_uuid(),o,'synthetic'));
 end $$;
 set local role authenticated;
 do $$ declare o profile_observations%rowtype; begin
  select * into o from profile_observations;
  perform pg_temp.profile_deny(format('update profile_observations set status=%L where id=%L','confirmed',o.id));
- perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',o.id,'confirm',o.updated_at-interval '1 second'));
+ perform pg_temp.profile_conflict(format('select review_profile_observation(%L,%L,%L)',o.id,'confirm',o.updated_at-interval '1 second'));
  perform review_profile_observation(o.id,'confirm',o.updated_at);
- perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',o.id,'confirm',o.updated_at));
+ perform pg_temp.profile_conflict(format('select review_profile_observation(%L,%L,%L)',o.id,'confirm',o.updated_at));
  perform pg_temp.profile_assert((get_profile_memory()->'observations'->0->>'session_id')='20000000-0000-0000-0000-000000000101','DTO source session');
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000102',true);
@@ -132,7 +139,7 @@ update profile_observations set status='superseded' where quote='Vivo en Sevilla
 set local role authenticated;
 do $$ declare b profile_observations%rowtype; begin
  select * into b from profile_observations where quote='Ahora vivo en Cádiz.';
- perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',b.id,'confirm',b.updated_at));
+ perform pg_temp.profile_conflict(format('select review_profile_observation(%L,%L,%L)',b.id,'confirm',b.updated_at));
  perform pg_temp.profile_assert((select status='pending' and updated_at=b.updated_at from profile_observations where id=b.id),'superseded target rejects confirmation without changing correction');
  perform pg_temp.profile_assert((select status='superseded' from profile_observations where id=b.supersedes_id),'superseded target is never restored');
 end $$;
@@ -170,7 +177,7 @@ do $$ declare o profile_observations%rowtype; begin
  perform review_profile_observation(o.id,'confirm',o.updated_at);
  perform pg_temp.profile_assert((select status from profile_observations where quote='Vivo en Sevilla.')='superseded','confirmation supersedes old');
  select * into o from profile_observations where quote='Vivo en Sevilla.';
- perform pg_temp.profile_deny(format('select review_profile_observation(%L,%L,%L)',o.id,'confirm',o.updated_at));
+ perform pg_temp.profile_conflict(format('select review_profile_observation(%L,%L,%L)',o.id,'confirm',o.updated_at));
  select * into o from profile_observations where quote='Ahora vivo en Málaga.';
  perform review_profile_observation(o.id,'reject',o.updated_at);
  perform pg_temp.profile_assert((select status from profile_observations where quote='Vivo en Sevilla.')='superseded','reject does not resurrect old');
