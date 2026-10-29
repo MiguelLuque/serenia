@@ -67,7 +67,7 @@ export function ProfileMemoryView({ memory, replacementSources = {} }: {
           {result ? result.ok ? <p role="status">Cambio guardado.</p> : (
             <div className="space-y-2">
               <p role="alert">{result.error}</p>
-              {result.conflict ? <Button variant="outline" onClick={() => router.refresh()}>Recargar perfil</Button> : null}
+              {result.conflict ? <Button variant="outline" onClick={() => { setResult(null); router.refresh() }}>Recargar perfil</Button> : null}
             </div>
           ) : null}
           {memory.pending_jobs > 0 ? <p>Hay mensajes pendientes de procesar. Las citas aparecerán cuando puedan incorporarse; puedes seguir conversando y recargar el perfil más tarde.</p> : null}
