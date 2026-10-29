@@ -56,15 +56,15 @@ Files: app/app/perfil/{page.tsx,actions.ts}; components/profile/profile-memory.t
 
 Interfaces: página lee get_profile_memory; acciones auth getUser+onboarding ready+flag y RPC owner-only set_profile_enabled/review_profile_observation con expected_updated_at. No service-role en acciones UI. Datos citados y estado no son validación clínica. Enlace patient only y sólo si flag.
 
-- [ ] RED ownership,auth,flagoff,consentdisable,stale review,error guardado; no confirmar éxito antes de RPC. RED UI activación,datos vacíos,cita/fecha/estado,disputa,Confirmar/Descartar,errores y explicación de corrección vía chat.
-- [ ] Implementar ruta,acciones,UI simple y navegación condicional sin interrumpir chat; copy humano explica qué se recuerda, cómo corregirlo y qué hace desactivar. No prometer borrar conversaciones ni aprobación de Pablo.
-- [ ] Ejecutar tests, React checklist, lint/typecheck GREEN; commit y revisión del task.
+- [x] RED ownership,auth,flagoff,consentdisable,stale review,error guardado; no confirmar éxito antes de RPC. RED UI activación,datos vacíos,cita/fecha/estado,disputa,Confirmar/Descartar,errores y explicación de corrección vía chat.
+- [x] Implementar ruta,acciones,UI simple y navegación condicional sin interrumpir chat; copy humano explica qué se recuerda, cómo corregirlo y qué hace desactivar. No prometer borrar conversaciones ni aprobación de Pablo.
+- [x] Ejecutar tests, React checklist, lint/typecheck GREEN; commit y revisión del task.
 
 ### Task 4: Aceptación de integración y entrega
 
 Root ejecuta verificación; cambios de aceptación en scripts temporales o tooling acotado, no nuevas features.
 
-- [ ] Real Auth/JWT/Data API local: activar por usuario, crear mensaje y job, negar otro owner, desactivar mientras pending y comprobar fencing/epoch, no backfill al reactivar.
-- [ ] Construir snapshot local aceptado con flag sólo de prueba y proveedor sintético. Workflow HTTP generado procesa job, sin quotes en run/step I/O; nueva fuente→pending→confirm→corrección disputada→confirm/reject con UI visible, contexto corregido y sin duplicados.
+- [x] Real Auth/JWT/Data API local: activar por usuario, crear mensaje y job, negar otro owner, desactivar mientras pending y comprobar fencing/epoch, no backfill al reactivar.
+- [x] Construir snapshot local aceptado con flag sólo de prueba y proveedor sintético. Workflow HTTP generado procesa job, sin quotes en run/step I/O; nueva fuente→pending→confirm→corrección disputada→confirm/reject con UI visible, contexto corregido y sin duplicados.
 - [ ] Revisión wholebranch con foco Spec, resolver hallazgos materiales en un pase RED→GREEN; no usar la suite en lugar de revisión de permisos/concurrencia.
 - [ ] Commit fuente limpio; ejecutar npm run verify (siete) y db:verify; recibo con SHA/logs/limitaciones y casos Pablo. Mantener sin publicar y flagoff por defecto. Objetivo completo sólo al terminar lo anterior.

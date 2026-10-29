@@ -1,6 +1,6 @@
 # Perfil progresivo: casos ficticios para revisión
 
-Preparación28octubre2026. Feature en desarrollo; este documento no acredita implementación terminada ni validación del modelo. Los criterios siguientes son propuestas técnicas para revisar con Pablo. No usar datos reales.
+Preparación28octubre2026; actualización29octubre. Implementación y pruebas técnicas locales descritas en [el recibo de aceptación](../../audits/2026-10-28-progressive-profile-acceptance.md). Estos casos semánticos aún no se han validado con el modelo real ni con Pablo. Los criterios siguientes son propuestas para su revisión. No usar datos reales.
 
 ## Qué queremos observar
 
