@@ -1,0 +1,644 @@
+{
+  "tables": [
+    {
+      "acl": "{postgres=arwdDxtm/postgres,service_role=r/postgres}",
+      "rls": true,
+      "name": "profile_extraction_jobs",
+      "owner": "postgres",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "notnull": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "source_message_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "session_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "conversation_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "source_created_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "consent_epoch",
+          "type": "bigint",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'pending'::text",
+          "notnull": true
+        },
+        {
+          "name": "token",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "notnull": true
+        },
+        {
+          "name": "lease_until",
+          "type": "timestamp with time zone",
+          "default": null,
+          "notnull": false
+        },
+        {
+          "name": "attempts",
+          "type": "integer",
+          "default": "0",
+          "notnull": true
+        },
+        {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "default": "clock_timestamp()",
+          "notnull": true
+        },
+        {
+          "name": "run_id",
+          "type": "text",
+          "default": null,
+          "notnull": false
+        },
+        {
+          "name": "error_code",
+          "type": "text",
+          "default": null,
+          "notnull": false
+        },
+        {
+          "name": "extractor_version",
+          "type": "text",
+          "default": "'profile-v1'::text",
+          "notnull": true
+        },
+        {
+          "name": "model_id",
+          "type": "text",
+          "default": null,
+          "notnull": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "clock_timestamp()",
+          "notnull": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "clock_timestamp()",
+          "notnull": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "profile_extraction_jobs_pkey",
+          "definition": "CREATE UNIQUE INDEX profile_extraction_jobs_pkey ON public.profile_extraction_jobs USING btree (id)"
+        },
+        {
+          "name": "profile_extraction_jobs_source_message_id_key",
+          "definition": "CREATE UNIQUE INDEX profile_extraction_jobs_source_message_id_key ON public.profile_extraction_jobs USING btree (source_message_id)"
+        },
+        {
+          "name": "profile_job_conversation_owner_index",
+          "definition": "CREATE INDEX profile_job_conversation_owner_index ON public.profile_extraction_jobs USING btree (conversation_id, user_id)"
+        },
+        {
+          "name": "profile_job_observation_source",
+          "definition": "CREATE UNIQUE INDEX profile_job_observation_source ON public.profile_extraction_jobs USING btree (id, user_id, source_message_id, source_created_at)"
+        },
+        {
+          "name": "profile_job_one_active_user",
+          "definition": "CREATE UNIQUE INDEX profile_job_one_active_user ON public.profile_extraction_jobs USING btree (user_id) WHERE (status = ANY (ARRAY['enqueued'::text, 'running'::text]))"
+        },
+        {
+          "name": "profile_job_pending_order",
+          "definition": "CREATE INDEX profile_job_pending_order ON public.profile_extraction_jobs USING btree (user_id, source_created_at, id) WHERE (status = ANY (ARRAY['pending'::text, 'enqueued'::text, 'running'::text]))"
+        },
+        {
+          "name": "profile_job_session_owner_index",
+          "definition": "CREATE INDEX profile_job_session_owner_index ON public.profile_extraction_jobs USING btree (session_id, user_id)"
+        }
+      ],
+      "policies": null,
+      "triggers": [
+        {
+          "name": "validate_profile_source",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER validate_profile_source BEFORE INSERT OR UPDATE ON public.profile_extraction_jobs FOR EACH ROW EXECUTE FUNCTION validate_profile_source()"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "profile_extraction_jobs_attempts_check",
+          "definition": "CHECK (((attempts >= 0) AND (attempts <= 3)))"
+        },
+        {
+          "name": "profile_extraction_jobs_consent_epoch_check",
+          "definition": "CHECK ((consent_epoch >= 0))"
+        },
+        {
+          "name": "profile_extraction_jobs_error_code_check",
+          "definition": "CHECK ((error_code = ANY (ARRAY['processing_failed'::text, 'claims_exhausted'::text, 'consent_withdrawn'::text])))"
+        },
+        {
+          "name": "profile_extraction_jobs_extractor_version_check",
+          "definition": "CHECK ((extractor_version = 'profile-v1'::text))"
+        },
+        {
+          "name": "profile_extraction_jobs_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "profile_extraction_jobs_source_message_id_key",
+          "definition": "UNIQUE (source_message_id)"
+        },
+        {
+          "name": "profile_extraction_jobs_status_check",
+          "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'enqueued'::text, 'running'::text, 'completed'::text, 'cancelled'::text, 'exhausted'::text])))"
+        },
+        {
+          "name": "profile_extraction_jobs_user_id_fkey",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        },
+        {
+          "name": "profile_job_active_lease",
+          "definition": "CHECK (((status = ANY (ARRAY['enqueued'::text, 'running'::text])) = (lease_until IS NOT NULL)))"
+        },
+        {
+          "name": "profile_job_conversation_owner",
+          "definition": "FOREIGN KEY (conversation_id, user_id) REFERENCES conversations(id, user_id) ON DELETE CASCADE"
+        },
+        {
+          "name": "profile_job_observation_source",
+          "definition": "UNIQUE (id, user_id, source_message_id, source_created_at)"
+        },
+        {
+          "name": "profile_job_session_owner",
+          "definition": "FOREIGN KEY (session_id, user_id) REFERENCES clinical_sessions(id, user_id) ON DELETE CASCADE"
+        },
+        {
+          "name": "profile_job_source",
+          "definition": "FOREIGN KEY (source_message_id, session_id, conversation_id, source_created_at) REFERENCES messages(id, session_id, conversation_id, created_at) ON DELETE CASCADE"
+        }
+      ]
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres,service_role=r/postgres}",
+      "rls": true,
+      "name": "profile_observations",
+      "owner": "postgres",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "notnull": true
+        },
+        {
+          "name": "job_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "source_message_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "source_created_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "quote",
+          "type": "text",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "time_scope",
+          "type": "text",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'pending'::text",
+          "notnull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "clock_timestamp()",
+          "notnull": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "clock_timestamp()",
+          "notnull": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "profile_observation_owner_recent",
+          "definition": "CREATE INDEX profile_observation_owner_recent ON public.profile_observations USING btree (user_id, source_created_at DESC, id DESC)"
+        },
+        {
+          "name": "profile_observation_source_message",
+          "definition": "CREATE INDEX profile_observation_source_message ON public.profile_observations USING btree (source_message_id)"
+        },
+        {
+          "name": "profile_observation_target_index",
+          "definition": "CREATE INDEX profile_observation_target_index ON public.profile_observations USING btree (supersedes_id, user_id)"
+        },
+        {
+          "name": "profile_observations_id_user_id_key",
+          "definition": "CREATE UNIQUE INDEX profile_observations_id_user_id_key ON public.profile_observations USING btree (id, user_id)"
+        },
+        {
+          "name": "profile_observations_job_id_category_quote_key",
+          "definition": "CREATE UNIQUE INDEX profile_observations_job_id_category_quote_key ON public.profile_observations USING btree (job_id, category, quote)"
+        },
+        {
+          "name": "profile_observations_pkey",
+          "definition": "CREATE UNIQUE INDEX profile_observations_pkey ON public.profile_observations USING btree (id)"
+        }
+      ],
+      "policies": [
+        {
+          "cmd": "SELECT",
+          "qual": "(user_id = ( SELECT auth.uid() AS uid))",
+          "roles": [
+            "authenticated"
+          ],
+          "tablename": "profile_observations",
+          "permissive": "PERMISSIVE",
+          "policyname": "profile_observations_owner",
+          "schemaname": "public",
+          "with_check": null
+        }
+      ],
+      "triggers": [
+        {
+          "name": "validate_profile_observation",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER validate_profile_observation BEFORE INSERT OR UPDATE ON public.profile_observations FOR EACH ROW EXECUTE FUNCTION validate_profile_observation()"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "profile_observation_source",
+          "definition": "FOREIGN KEY (job_id, user_id, source_message_id, source_created_at) REFERENCES profile_extraction_jobs(id, user_id, source_message_id, source_created_at) ON DELETE CASCADE"
+        },
+        {
+          "name": "profile_observation_target",
+          "definition": "FOREIGN KEY (supersedes_id, user_id) REFERENCES profile_observations(id, user_id) ON DELETE SET NULL (supersedes_id)"
+        },
+        {
+          "name": "profile_observations_category_check",
+          "definition": "CHECK ((category = ANY (ARRAY['concern'::text, 'goal'::text, 'context'::text, 'functioning'::text, 'resource'::text, 'preference'::text, 'history'::text, 'agreement'::text])))"
+        },
+        {
+          "name": "profile_observations_check",
+          "definition": "CHECK ((supersedes_id IS DISTINCT FROM id))"
+        },
+        {
+          "name": "profile_observations_id_user_id_key",
+          "definition": "UNIQUE (id, user_id)"
+        },
+        {
+          "name": "profile_observations_job_id_category_quote_key",
+          "definition": "UNIQUE (job_id, category, quote)"
+        },
+        {
+          "name": "profile_observations_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "profile_observations_quote_check",
+          "definition": "CHECK (((char_length(quote) >= 1) AND (char_length(quote) <= 400)))"
+        },
+        {
+          "name": "profile_observations_status_check",
+          "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'rejected'::text, 'superseded'::text])))"
+        },
+        {
+          "name": "profile_observations_time_scope_check",
+          "definition": "CHECK ((time_scope = ANY (ARRAY['current'::text, 'historical'::text, 'unspecified'::text])))"
+        },
+        {
+          "name": "profile_observations_user_id_fkey",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        }
+      ]
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres,service_role=r/postgres}",
+      "rls": true,
+      "name": "profile_settings",
+      "owner": "postgres",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "default": null,
+          "notnull": true
+        },
+        {
+          "name": "enabled",
+          "type": "boolean",
+          "default": "false",
+          "notnull": true
+        },
+        {
+          "name": "consent_epoch",
+          "type": "bigint",
+          "default": "0",
+          "notnull": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "clock_timestamp()",
+          "notnull": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "profile_settings_pkey",
+          "definition": "CREATE UNIQUE INDEX profile_settings_pkey ON public.profile_settings USING btree (user_id)"
+        }
+      ],
+      "policies": [
+        {
+          "cmd": "SELECT",
+          "qual": "(user_id = ( SELECT auth.uid() AS uid))",
+          "roles": [
+            "authenticated"
+          ],
+          "tablename": "profile_settings",
+          "permissive": "PERMISSIVE",
+          "policyname": "profile_settings_owner",
+          "schemaname": "public",
+          "with_check": null
+        }
+      ],
+      "triggers": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "profile_settings_consent_epoch_check",
+          "definition": "CHECK ((consent_epoch >= 0))"
+        },
+        {
+          "name": "profile_settings_pkey",
+          "definition": "PRIMARY KEY (user_id)"
+        },
+        {
+          "name": "profile_settings_user_id_fkey",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        }
+      ]
+    }
+  ],
+  "routines": [
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.claim_profile_jobs(p_user_id uuid, p_limit integer)",
+      "volatility": "v",
+      "definition_md5": "db4d962564a1ed85819239267dd5f750",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.enqueue_profile_source()",
+      "volatility": "v",
+      "definition_md5": "a7bdc37c46632461fbb32d18de3e4823",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.finish_profile_job(p_job_id uuid, p_token uuid, p_observations jsonb, p_model_id text)",
+      "volatility": "v",
+      "definition_md5": "9dfa09d048f12b2a1dc964c8be2e5137",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.get_profile_memory()",
+      "volatility": "s",
+      "definition_md5": "854438778e2e5511ed6964c9641d0294",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.get_profile_memory_page(p_before_created_at timestamp with time zone, p_before_id uuid)",
+      "volatility": "s",
+      "definition_md5": "708dfd82f3972cb9a3cd444c2b3ee380",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.lock_profile_job(p_job_id uuid, p_token uuid)",
+      "volatility": "v",
+      "definition_md5": "103269a7ec1d43167b105af42c4cf255",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "sql",
+      "signature": "public.profile_message_text(p_parts jsonb)",
+      "volatility": "i",
+      "definition_md5": "cbabedd72d7ea461b9f528f939ac5627",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.profile_source_immutable()",
+      "volatility": "v",
+      "definition_md5": "b2321f476ae1f3323859fb69b5aa0caa",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.review_profile_observation(p_observation_id uuid, p_action text, p_expected_updated_at timestamp with time zone)",
+      "volatility": "v",
+      "definition_md5": "93f0b7d6025000bfd7bbcfacc724c6eb",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.set_profile_enabled(p_enabled boolean)",
+      "volatility": "v",
+      "definition_md5": "f8aea071c04f8da3739393f641e838a1",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.start_profile_job(p_job_id uuid, p_token uuid)",
+      "volatility": "v",
+      "definition_md5": "f92b49a7134bfb815a6c202ad28f785a",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.update_profile_job(p_job_id uuid, p_token uuid, p_action text, p_run_id text)",
+      "volatility": "v",
+      "definition_md5": "d885f6fb32ba616ba2d9cc5f2766fef5",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.validate_profile_observation()",
+      "volatility": "v",
+      "definition_md5": "1afb4f0210ae9ba618b51f7710059df7",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "language": "plpgsql",
+      "signature": "public.validate_profile_source()",
+      "volatility": "v",
+      "definition_md5": "2c1827ef1f280864650323947939b7c0",
+      "security_definer": false
+    }
+  ],
+  "messageIndex": "CREATE UNIQUE INDEX profile_source_identity ON public.messages USING btree (id, session_id, conversation_id, created_at)",
+  "messageTriggers": [
+    {
+      "name": "enqueue_profile_source",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER enqueue_profile_source AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION enqueue_profile_source()"
+    },
+    {
+      "name": "profile_source_immutable",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER profile_source_immutable BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION profile_source_immutable()"
+    }
+  ],
+  "messageConstraint": {
+    "deferred": false,
+    "validated": true,
+    "deferrable": false,
+    "definition": "UNIQUE (id, session_id, conversation_id, created_at)"
+  }
+}

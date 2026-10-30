@@ -1,0 +1,487 @@
+{
+  "projectId": "brpozobkoatabctjjadc",
+  "organizationId": "jhmhzzaqbzvvppwtwfhz",
+  "region": "eu-west-1",
+  "plan": "Free",
+  "sourceBase": "93fc4ef",
+  "canonicalName": "serenia_progressive_profile_review",
+  "postgresMajor": 17,
+  "mechanism": "official MCP apply_migration single atomic Management query; server version mapped only after success",
+  "status": "PREPARED_NOT_APPLIED",
+  "baselinePath": "supabase/hosted/profile-baseline-20261030.json",
+  "baselineSha256": "e9672c963f6c342d8166c57fa6c7fdce5a6ba0b6c3fe40c56859a44a50d085c6",
+  "baselineQuerySha256": "ca0b41ba361b81484f618f92e441857c6b4cd1f25014857c86aff7706725a9b6",
+  "newObjectsPath": "supabase/hosted/profile-new-objects.json",
+  "newObjectsSha256": "10a27539883c60c3b888c678a5053ac67636693aa24f180c359dda45c1108204",
+  "newObjectsQuerySha256": "ed366bda1cc54fb19ed7f7d2f0718d2e54fcd81f9afee8f5cd8f7c0a62f4baa6",
+  "newObjectsProvenance": "PostgreSQL 17.6 isolated metadata of the four exact source sections; no clinical rows or expected metadata substitution for new objects",
+  "history": [
+    {
+      "name": "enums",
+      "version": "20260419000001",
+      "statements_md5": "cb2bebd88815d1b2d463885187ac616a"
+    },
+    {
+      "name": "user_tables",
+      "version": "20260419000002",
+      "statements_md5": "d7f8066fc618d14ae6e6769fb0471fc7"
+    },
+    {
+      "name": "conversation_tables",
+      "version": "20260419000003",
+      "statements_md5": "a5a5e2c6fb76bb126fec6813cd4e4025"
+    },
+    {
+      "name": "questionnaire_tables",
+      "version": "20260419000004",
+      "statements_md5": "6d55ea9c49907da3e47aedc9365bfa0b"
+    },
+    {
+      "name": "clinical_tables",
+      "version": "20260419000005",
+      "statements_md5": "89c8d164afdf4a71b99af46cbebceb6a"
+    },
+    {
+      "name": "v15_stubs",
+      "version": "20260419000006",
+      "statements_md5": "6503b34ed866a718118c15daef564d03"
+    },
+    {
+      "name": "updated_at_trigger",
+      "version": "20260419000007",
+      "statements_md5": "f5d1db6e3e0de7581a6e0df81b13be4a"
+    },
+    {
+      "name": "rls_owner_only",
+      "version": "20260419000008",
+      "statements_md5": "0e72c7f78981e5aa1a7214536a588597"
+    },
+    {
+      "name": "rls_public_and_restricted",
+      "version": "20260419000009",
+      "statements_md5": "7f011544a8a2424f74f22c3bfa6b2172"
+    },
+    {
+      "name": "gdpr_erase",
+      "version": "20260419000010",
+      "statements_md5": "eaedd14e1cf6d6460219704176c5d1ce"
+    },
+    {
+      "name": "user_profiles_extend",
+      "version": "20260420000001",
+      "statements_md5": "d151e3e1efd9b79ac46d108c735cee8e"
+    },
+    {
+      "name": "user_profile_trigger",
+      "version": "20260420000002",
+      "statements_md5": "7376e06e064b1321df55ea57134f6fd9"
+    },
+    {
+      "name": "rls_clinician_read",
+      "version": "20260420000003",
+      "statements_md5": "1f83ca4931b8ba435d3ccef89e2d0695"
+    },
+    {
+      "name": "clinical_sessions_extend",
+      "version": "20260421000001",
+      "statements_md5": "26f4d9226f56d43eadb69325960a20df"
+    },
+    {
+      "name": "close_stale_sessions",
+      "version": "20260421000002",
+      "statements_md5": "630e87d8e8369173075458391de5b1ee"
+    },
+    {
+      "name": "messages_insert_own",
+      "version": "20260421000003",
+      "statements_md5": "d152d59d113d753b61565fbeb3e83532"
+    },
+    {
+      "name": "clinical_sessions_single_open",
+      "version": "20260421000004",
+      "statements_md5": "50bd572bd0083a8ac18ae6948dd79e7e"
+    },
+    {
+      "name": "seed_questionnaires",
+      "version": "20260422000001",
+      "statements_md5": "7b04599461bbda09f47576c493be159a"
+    },
+    {
+      "name": "questionnaire_answers_insert",
+      "version": "20260422000002",
+      "statements_md5": "2121c5a43fc69b15792702f3adb07afd"
+    },
+    {
+      "name": "questionnaire_results_risk_events_insert",
+      "version": "20260422000003",
+      "statements_md5": "1c2fa8a0a0f515d7fd654d1559b7512c"
+    },
+    {
+      "name": "assessments_insert_own",
+      "version": "20260422000004",
+      "statements_md5": "4cb081ddfbb35e67c3bbbf12f6c5dda1"
+    },
+    {
+      "name": "rls_clinician_write",
+      "version": "20260423000001",
+      "statements_md5": "95ebe3b75d52aee128dd9721aab92c59"
+    },
+    {
+      "name": "assessments_rejection_reason",
+      "version": "20260423000002",
+      "statements_md5": "5362406f7ad5fbafe0408cdc7e6dc698"
+    },
+    {
+      "name": "assessments_reviewed_by_auth_users",
+      "version": "20260423000003",
+      "statements_md5": "ff0d520cdbb48cefa6353a6bee8f0338"
+    },
+    {
+      "name": "patient_tasks",
+      "version": "20260424000001",
+      "statements_md5": "e08daddb87ee9cd70fb7ce405261d0d7"
+    },
+    {
+      "name": "indexes_patient_context",
+      "version": "20260424000002",
+      "statements_md5": "86108a034bc5d17e828d7153aed17b5e"
+    },
+    {
+      "name": "patient_context_injections",
+      "version": "20260424000003",
+      "statements_md5": "2d5400dcd953e73f3ba0702e9905d1ad"
+    },
+    {
+      "name": "assessment_requires_manual_review",
+      "version": "20260424000004",
+      "statements_md5": "c24ec99b57d19021d4b13647fa8aac35"
+    },
+    {
+      "name": "assessments_clinical_notes",
+      "version": "20260426000001",
+      "statements_md5": "5830622b76bfbf46c201e5aea42a469b"
+    },
+    {
+      "name": "questionnaires_clinician_rated",
+      "version": "20260502000001",
+      "statements_md5": "a55d3dc87de61c12bbf418b29fcd1eca"
+    },
+    {
+      "name": "clinical_sessions_protocol_phase",
+      "version": "20260502000002",
+      "statements_md5": "eb33b2fb5c756eb832b9e02d273be41f"
+    },
+    {
+      "name": "user_profiles_intake_clinico",
+      "version": "20260502000003",
+      "statements_md5": "d63bf0d56fd656202e87c09df5cc2ee3"
+    },
+    {
+      "name": "wipe_legacy_test_data",
+      "version": "20260502000004",
+      "statements_md5": "d3f66adf379a4279447a6627efe19d0a"
+    },
+    {
+      "name": "restore_preserved_profiles",
+      "version": "20260502000005",
+      "statements_md5": "e75d54df0dd6466be8191ded3039d44e"
+    },
+    {
+      "name": "close_session_rpc",
+      "version": "20260502000006",
+      "statements_md5": "3ff563f335d9387dfe72ef8d60cfd0d5"
+    },
+    {
+      "name": "hot_path_indices",
+      "version": "20260502000007",
+      "statements_md5": "3ce4080bd2fd6e9bc12c8a9adcbf4bef"
+    },
+    {
+      "name": "seed_bdi2",
+      "version": "20260503204403",
+      "statements_md5": "38f5f5e0382955de0fc941aa3dc722df"
+    },
+    {
+      "name": "seed_bai",
+      "version": "20260516175534",
+      "statements_md5": "34143b4c825ba4775e7424179dc481d8"
+    },
+    {
+      "name": "seed_cssrs",
+      "version": "20260517151619",
+      "statements_md5": "4f2fc5d05b4702b4fcc888704ca56256"
+    },
+    {
+      "name": "drop_asq",
+      "version": "20260517153400",
+      "statements_md5": "f94f1328d4925f77e77be9893de1c514"
+    },
+    {
+      "name": "serenia_robust_mvp_hosted_atomic",
+      "version": "20261024092459",
+      "statements_md5": "952ebca2d68a0d53dbf19b22ce9a094e"
+    },
+    {
+      "name": "serenia_final_inbox_pending_review",
+      "version": "20261024092547",
+      "statements_md5": "1664276978cd2f2d5f5174ae7f8095cb"
+    },
+    {
+      "name": "serenia_review_questionnaire_facts_immutable",
+      "version": "20261024203657",
+      "statements_md5": "1e0166c24c07a91a872e3f42ecd4426c"
+    }
+  ],
+  "catalog": [
+    {
+      "code": "BAI",
+      "items": 21,
+      "items_sha256": "910666dd581db8a7b92bf4694c54c47045b039328792f5390d06381bc497a1a6",
+      "definition_sha256": "bd76a03f6132e819a8a0fc35f769fc694ae3c1b68a1ed427ee05a3e9bd13c8ca"
+    },
+    {
+      "code": "BDI2",
+      "items": 21,
+      "items_sha256": "47b02e0550f8e2f4322c9326f22a69e8df54718b1b8d4fde598e4b27cf94ebde",
+      "definition_sha256": "ba5c841ecda95dcd3cc34b944f6989a79a05e6689e461bc8748233f6f156de02"
+    },
+    {
+      "code": "CSSRS",
+      "items": 7,
+      "items_sha256": "238a8604a0fdeab09913ce3c230c7723948ff95b4b39292ef775d55b47b3f238",
+      "definition_sha256": "017eb76248c16cbb8729dd417d033efb670987a42d2608c39ef0c0897a2ea9ef"
+    },
+    {
+      "code": "GAD7",
+      "items": 7,
+      "items_sha256": "8ea077be305a2a046ec9f131344bc6585161fdf9cfa5a04d31785ff57f3d9933",
+      "definition_sha256": "a38c258a1aa0bf85d62cbc573caa8ff48ec168e0238e3b9194309d7e652786c7"
+    },
+    {
+      "code": "PHQ9",
+      "items": 9,
+      "items_sha256": "248aca918cdc8298fab08cbb1866b1380268af87c7b1130253cb43f38c2490f9",
+      "definition_sha256": "a2e8acf28de4a85dea7192af3720316dc2127efdb9abd550ddc6105a36a13d21"
+    }
+  ],
+  "platform": {
+    "authOwner": "supabase_auth_admin",
+    "rlsRoutine": {
+      "acl": "{postgres=X/postgres,service_role=X/postgres,supabase_admin=X/postgres,supabase_auth_admin=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "language": "plpgsql",
+      "signature": "public.rls_auto_enable()",
+      "volatility": "v",
+      "definition_md5": "6998ea6b4c2480f5d2e34b5dcf3f8d36",
+      "security_definer": true
+    },
+    "authTriggers": [
+      {
+        "name": "on_auth_user_created",
+        "enabled": "O",
+        "definition": "CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_auth_user()"
+      }
+    ],
+    "eventTriggers": [
+      {
+        "name": "ensure_rls",
+        "tags": [
+          "CREATE TABLE",
+          "CREATE TABLE AS",
+          "SELECT INTO"
+        ],
+        "event": "ddl_command_end",
+        "owner": "postgres",
+        "enabled": "O",
+        "function": "rls_auto_enable()"
+      },
+      {
+        "name": "issue_graphql_placeholder",
+        "tags": [
+          "DROP EXTENSION"
+        ],
+        "event": "sql_drop",
+        "owner": "supabase_admin",
+        "enabled": "O",
+        "function": "set_graphql_placeholder()"
+      },
+      {
+        "name": "issue_pg_cron_access",
+        "tags": [
+          "CREATE EXTENSION"
+        ],
+        "event": "ddl_command_end",
+        "owner": "supabase_admin",
+        "enabled": "O",
+        "function": "grant_pg_cron_access()"
+      },
+      {
+        "name": "issue_pg_graphql_access",
+        "tags": [
+          "CREATE FUNCTION"
+        ],
+        "event": "ddl_command_end",
+        "owner": "supabase_admin",
+        "enabled": "O",
+        "function": "grant_pg_graphql_access()"
+      },
+      {
+        "name": "issue_pg_net_access",
+        "tags": [
+          "CREATE EXTENSION"
+        ],
+        "event": "ddl_command_end",
+        "owner": "supabase_admin",
+        "enabled": "O",
+        "function": "grant_pg_net_access()"
+      },
+      {
+        "name": "pgrst_ddl_watch",
+        "tags": null,
+        "event": "ddl_command_end",
+        "owner": "supabase_admin",
+        "enabled": "O",
+        "function": "pgrst_ddl_watch()"
+      },
+      {
+        "name": "pgrst_drop_watch",
+        "tags": null,
+        "event": "sql_drop",
+        "owner": "supabase_admin",
+        "enabled": "O",
+        "function": "pgrst_drop_watch()"
+      }
+    ]
+  },
+  "historySha256": "d5591084271136f1a3d13b8603020d86f6e9f9b2780dc3f025cfef1c9ed4a2ef",
+  "catalogSha256": "22a0a201f6f235bc003bfc43f7eb2faa2928c5b0f1d3b8d03a774ac4393dcd81",
+  "platformSha256": "f26d673cae7844972e2f3eef2e05766a14381d4d98f99dd9b15f72a1046220f6",
+  "tableNames": [
+    "assessment_jobs",
+    "assessments",
+    "audit_log",
+    "care_plans",
+    "chat_turns",
+    "clinical_sessions",
+    "clinician_reviews",
+    "clinicians",
+    "consents",
+    "conversations",
+    "messages",
+    "patient_context_injections",
+    "patient_tasks",
+    "questionnaire_answers",
+    "questionnaire_definitions",
+    "questionnaire_instances",
+    "questionnaire_items",
+    "questionnaire_results",
+    "risk_events",
+    "session_close_proposals",
+    "session_summaries",
+    "user_clinician_assignments",
+    "user_profiles"
+  ],
+  "tableFingerprint": "5bb2da4e3fde2707e166f92a819702c0",
+  "routineSignatures": [
+    "public.assessment_summary_valid_for_risk(doc jsonb)",
+    "public.begin_chat_turn(p_session_id uuid, p_user_id uuid, p_request_id text, p_text text, p_crisis boolean, p_urgent boolean)",
+    "public.begin_chat_turn_after_onboarding(p_session_id uuid, p_user_id uuid, p_request_id text, p_text text, p_crisis boolean, p_urgent boolean)",
+    "public.claim_assessment_jobs(p_limit integer, p_session_id uuid)",
+    "public.close_chat_turn(p_session_id uuid, p_request_id text, p_token uuid, p_reason text)",
+    "public.close_session_atomic(p_session_id uuid, p_user_id uuid, p_reason text)",
+    "public.close_stale_sessions(threshold_minutes integer)",
+    "public.complete_patient_onboarding(p_informal_name text, p_pronouns text, p_birth_date date, p_reason text, p_version text, p_accepted boolean)",
+    "public.create_questionnaire_atomic(p_session_id uuid, p_user_id uuid, p_conversation_id uuid, p_code text, p_reason text, p_request_id text, p_token uuid)",
+    "public.create_session_after_onboarding(p_user_id uuid)",
+    "public.create_session_atomic(p_user_id uuid)",
+    "public.derive_patient_risk_state_sql(p_reviewed_at timestamp with time zone, p_suicidality text, p_critical boolean, p_latest_open timestamp with time zone, p_latest_high timestamp with time zone, p_previous_at timestamp with time zone, p_previous_reason text, p_now timestamp with time zone)",
+    "public.fail_chat_turn(p_session_id uuid, p_request_id text, p_token uuid, p_error text)",
+    "public.finish_assessment_job(p_session_id uuid, p_token uuid, p_status text, p_summary jsonb)",
+    "public.finish_chat_turn(p_session_id uuid, p_request_id text, p_token uuid, p_parts jsonb, p_chunks jsonb, p_proposal text, p_close_reason text)",
+    "public.gdpr_erase_user(target_user_id uuid)",
+    "public.get_chat_turn_recovery(p_session_id uuid)",
+    "public.get_clinician_inbox_page(p_offset integer, p_limit integer, p_pending_only boolean)",
+    "public.get_onboarding_ready()",
+    "public.get_patient_session_reports(p_session_ids uuid[])",
+    "public.handle_new_auth_user()",
+    "public.is_clinician()",
+    "public.patient_onboarding_ready(p_user_id uuid)",
+    "public.recover_assessment_jobs(p_limit integer)",
+    "public.regenerate_assessment_atomic(p_assessment_id uuid, p_expected_status text, p_restore boolean)",
+    "public.require_open_message_session()",
+    "public.review_assessment_atomic(p_session_id uuid, p_assessment_id uuid, p_action text, p_summary jsonb, p_notes text, p_inherited_updates jsonb, p_reason text)",
+    "public.rls_auto_enable()",
+    "public.set_updated_at()",
+    "public.start_questionnaire_atomic(p_instance_id uuid, p_user_id uuid)",
+    "public.submit_questionnaire_atomic(p_instance_id uuid, p_user_id uuid, p_answers jsonb, p_result jsonb, p_risk_severity text)",
+    "public.touch_session_atomic(p_session_id uuid)",
+    "public.update_assessment_job(p_session_id uuid, p_token uuid, p_action text, p_run_id text)",
+    "public.validate_answer_parent()"
+  ],
+  "routineFingerprint": "dc3fe3cfc12a9d1c52bdbd9f56de27d9",
+  "counts": {
+    "auth": 3,
+    "items": 65,
+    "profiles": 3,
+    "definitions": 5
+  },
+  "clinicalCounts": {
+    "consents": 0,
+    "messages": 0,
+    "audit_log": 0,
+    "care_plans": 0,
+    "clinicians": 0,
+    "assessments": 0,
+    "risk_events": 0,
+    "conversations": 0,
+    "patient_tasks": 0,
+    "clinical_sessions": 0,
+    "clinician_reviews": 0,
+    "session_summaries": 0,
+    "questionnaire_answers": 0,
+    "questionnaire_results": 0,
+    "questionnaire_instances": 0,
+    "patient_context_injections": 0,
+    "user_clinician_assignments": 0
+  },
+  "sections": [
+    {
+      "filename": "20261028081958_progressive_profile.sql",
+      "sha256": "1d57bcd44f9f37de88a68b46a75e1271b86f36acacfde228178dbd3d27545205",
+      "localVersion": "20261028081958",
+      "position": 1,
+      "offset": 41055,
+      "bytes": 23032
+    },
+    {
+      "filename": "20261028180058_profile_review_rejected_target.sql",
+      "sha256": "01a00ea14358c9d70b99a74bd0569660d9689ca157aaa1dbb37c35fde3687a06",
+      "localVersion": "20261028180058",
+      "position": 2,
+      "offset": 64278,
+      "bytes": 4154
+    },
+    {
+      "filename": "20261028185351_profile_nonretryable_conflicts.sql",
+      "sha256": "9fbff95d4afaa1c4076fca09674a0c601db86af9b69b4ff3e35a7acfdf342827",
+      "localVersion": "20261028185351",
+      "position": 3,
+      "offset": 68634,
+      "bytes": 3071
+    },
+    {
+      "filename": "20261030152754_profile_memory_history_page.sql",
+      "sha256": "c9cc722dd713d6ee209f65b77b3ef912e2ae732443c8bdad424b2fa7c9293c6d",
+      "localVersion": "20261030152754",
+      "position": 4,
+      "offset": 71904,
+      "bytes": 2770
+    }
+  ],
+  "packetBytes": 81456,
+  "packetSha256": "2133299d405d8ea5a04fdc88b4faeaee0cf78a5f4866050a211992a0c677882f",
+  "noHistoricalReplay": true
+}
