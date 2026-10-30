@@ -13,6 +13,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { logoutAction } from '@/app/(auth)/actions'
 
@@ -44,6 +45,7 @@ function isNavItemActive(href: string, pathname: string): boolean {
 
 export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: AppSidebarProps) {
   const pathname = usePathname()
+  const { isMobile, setOpenMobile } = useSidebar()
   const items = role === 'clinician' ? clinicianNav : profileMemoryEnabled
     ? [...patientNav, { href: '/app/perfil', label: 'Lo que recuerda Serenia', icon: Brain }]
     : patientNav
@@ -69,7 +71,7 @@ export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: 
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
-                      render={<Link href={item.href} />}
+                      render={<Link href={item.href} onClick={() => { if (isMobile) setOpenMobile(false) }} />}
                       isActive={isActive}
                       tooltip={item.label}
                     >

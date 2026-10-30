@@ -865,6 +865,9 @@ isOneToOne: false
 "get_profile_memory":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"get_profile_memory_page":
+{ Args: { "p_before_created_at"?: string,"p_before_id"?: string }; Returns: Json
+                           },
 "is_clinician":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },

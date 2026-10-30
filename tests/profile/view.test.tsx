@@ -2,25 +2,27 @@
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { ProfileMemory } from '@/lib/shared/profile/schema'
+import type { ProfileMemory, ProfileMemoryPage } from '@/lib/shared/profile/schema'
 const mocks = vi.hoisted(() => ({ setEnabled: vi.fn(), review: vi.fn(), refresh: vi.fn() }))
 vi.mock('@/app/app/perfil/actions', () => ({ setProfileEnabledAction: mocks.setEnabled, reviewProfileObservationAction: mocks.review }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }), usePathname: () => '/app/perfil' }))
 import { ProfileMemoryView } from '@/components/profile/profile-memory'
 import { AppSidebar } from '@/components/app/app-sidebar'
-import { SidebarProvider } from '@/components/ui/sidebar'
+import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
 const oldId = '10000000-0000-4000-8000-000000000001'
 const newId = '10000000-0000-4000-8000-000000000002'
 const old = { id: oldId, category: 'concern', quote: 'Antes dormía mal.', time_scope: 'historical', status: 'confirmed', supersedes_id: null, source_message_id: oldId, session_id: oldId, source_created_at: '2026-10-27T12:00:00+00:00', updated_at: '2026-10-27T12:01:00.123456+00:00', disputed: true } satisfies ProfileMemory['observations'][number]
 const correction = { ...old, id: newId, quote: 'Ahora duermo bien.', status: 'pending', supersedes_id: oldId, disputed: false } satisfies ProfileMemory['observations'][number]
-const empty: ProfileMemory = { enabled: false, pending_jobs: 0, failed_jobs: 0, observations: [] }
+const empty: ProfileMemoryPage = { enabled: false, pending_jobs: 0, failed_jobs: 0, observations: [], next_cursor: null }
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.setEnabled.mockResolvedValue({ ok: true })
   mocks.review.mockResolvedValue({ ok: true })
+  document.addEventListener('click', preventDocumentNavigation, { once: false })
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })
 })
-afterEach(cleanup)
+function preventDocumentNavigation(event: MouseEvent) { if ((event.target as Element).closest('a')) event.preventDefault() }
+afterEach(() => { cleanup(); document.removeEventListener('click', preventDocumentNavigation) })
 it('explains explicit activation, future sources, correction, clinical limits and disabling', () => {
   render(<ProfileMemoryView memory={empty} />)
   expect(screen.getByRole('heading', { name: 'Lo que recuerda Serenia' })).toBeTruthy()
@@ -130,4 +132,72 @@ it('keeps rejected and superseded history readable without review controls', () 
 it.each([['patient', false, false], ['patient', true, true], ['clinician', true, false]] as const)('patient-only navigation %s flag %s', (role, enabled, visible) => {
   render(<SidebarProvider><AppSidebar displayName="Caso ficticio" role={role} profileMemoryEnabled={enabled} /></SidebarProvider>)
   expect(screen.queryByRole('link', { name: 'Lo que recuerda Serenia' }) !== null).toBe(visible)
+})
+
+it('links to a bounded older page with precise timestamp and returns to recent', () => {
+  const cursor = { source_created_at: '2026-10-27T12:00:00.123456+00:00', id: oldId }
+  render(<ProfileMemoryView memory={{ ...empty, next_cursor: cursor }} isOlderPage />)
+  const url = new URL(screen.getByRole('link', { name: 'Ver citas anteriores' }).getAttribute('href')!, 'http://localhost')
+  expect(url.searchParams.get('before_created_at')).toBe(cursor.source_created_at)
+  expect(url.searchParams.get('before_id')).toBe(oldId)
+  expect(screen.getByRole('link', { name: 'Volver a citas recientes' }).getAttribute('href')).toBe('/app/perfil')
+})
+it('has no older link at the end and still provides recent recovery for an empty older page', () => {
+  render(<ProfileMemoryView memory={{ ...empty, next_cursor: null }} isOlderPage />)
+  expect(screen.queryByRole('link', { name: 'Ver citas anteriores' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Volver a citas recientes' })).toBeTruthy()
+})
+
+function SidebarProbe() {
+  const { open, openMobile, toggleSidebar } = useSidebar()
+  return <><button onClick={toggleSidebar}>Toggle test sidebar</button><output data-testid="sidebar-state">{String(open)}:{String(openMobile)}</output></>
+}
+it.each([
+  ['patient', 'Inicio'], ['patient', 'Sesiones'], ['patient', 'Lo que recuerda Serenia'],
+  ['clinician', 'Bandeja'], ['clinician', 'Pacientes'],
+] as const)('closes mobile %s navigation %s and preserves desktop state', async (role, label) => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+  render(<SidebarProvider defaultOpen={false}><AppSidebar displayName="Synthetic" role={role} profileMemoryEnabled /><SidebarProbe /></SidebarProvider>)
+  fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
+  expect(screen.getByTestId('sidebar-state').textContent).toBe('false:true')
+  const link = await screen.findByRole('link', { name: label })
+  expect(link.getAttribute('href')).toMatch(/^\/app/)
+  fireEvent.click(link)
+  await waitFor(() => expect(screen.getByTestId('sidebar-state').textContent).toBe('false:false'))
+})
+it('preserves desktop keyboard toggle and open state when selecting a shared link', () => {
+  render(<SidebarProvider defaultOpen={false}><AppSidebar displayName="Synthetic" role="patient" profileMemoryEnabled /><SidebarProbe /></SidebarProvider>)
+  fireEvent.keyDown(window, { key: 'b', metaKey: true })
+  expect(screen.getByTestId('sidebar-state').textContent).toBe('true:false')
+  fireEvent.click(screen.getByRole('link', { name: 'Lo que recuerda Serenia' }))
+  expect(screen.getByTestId('sidebar-state').textContent).toBe('true:false')
+  fireEvent.keyDown(window, { key: 'b', metaKey: true })
+  expect(screen.getByTestId('sidebar-state').textContent).toBe('false:false')
+})
+
+it('leaves an old page conflict behind and submits the exact version of a different page', async () => {
+  mocks.review.mockResolvedValueOnce({ ok: false, conflict: true, error: 'Old page conflict' }).mockResolvedValueOnce({ ok: true })
+  const { rerender } = render(<ProfileMemoryView key="recent" memory={{ ...empty, observations: [correction] }} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('Old page conflict')
+  const older = { ...old, disputed: false, status: 'pending' as const, updated_at: '2026-10-27T11:01:00.654321+00:00' }
+  rerender(<ProfileMemoryView key="older-precise-cursor" memory={{ ...empty, observations: [older] }} isOlderPage />)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('status')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+  await waitFor(() => expect(mocks.review).toHaveBeenLastCalledWith({ observationId: oldId, action: 'confirm', expectedUpdatedAt: older.updated_at }))
+})
+
+it('does not let a late action result from an unmounted page mask the destination', async () => {
+  let finish!: (result: unknown) => void
+  mocks.review.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const { rerender } = render(<ProfileMemoryView key="recent" memory={{ ...empty, observations: [correction] }} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+  await waitFor(() => expect(mocks.review).toHaveBeenCalledTimes(1))
+  rerender(<ProfileMemoryView key="older" memory={{ ...empty, observations: [old] }} isOlderPage />)
+  finish({ ok: false, conflict: true, error: 'Late old page conflict' })
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Descartar' }) as HTMLButtonElement).disabled).toBe(false))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.getByText('Confirmado por ti')).toBeTruthy()
 })

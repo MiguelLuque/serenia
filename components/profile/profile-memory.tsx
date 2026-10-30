@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { setProfileEnabledAction, reviewProfileObservationAction, type ProfileActionResult } from '@/app/app/perfil/actions'
-import type { ProfileMemory } from '@/lib/shared/profile/schema'
+import type { ProfileMemoryPage } from '@/lib/shared/profile/schema'
 
-type Observation = ProfileMemory['observations'][number]
+type Observation = ProfileMemoryPage['observations'][number]
 type Source = { quote: string; source_created_at: string }
 const categories: Record<Observation['category'], string> = {
   concern: 'Preocupación', goal: 'Objetivo', context: 'Contexto', functioning: 'Vida cotidiana',
@@ -24,8 +24,9 @@ function SourceDate({ value }: { value: string }) {
   return <time dateTime={value}>{dateFormat.format(new Date(value))}</time>
 }
 
-export function ProfileMemoryView({ memory, replacementSources = {} }: {
-  memory: ProfileMemory | null
+export function ProfileMemoryView({ memory, replacementSources = {}, isOlderPage = false }: {
+  memory: ProfileMemoryPage | null
+  isOlderPage?: boolean
   replacementSources?: Record<string, Source>
 }) {
   const router = useRouter()
@@ -51,6 +52,7 @@ export function ProfileMemoryView({ memory, replacementSources = {} }: {
         <p>Para corregir un dato, cuéntalo en la conversación. Se conservará como una nueva cita para revisar, sin editar tus palabras anteriores.</p>
         <p>Desactivar detiene nuevas extracciones y el uso de estas citas como contexto. Conserva las citas para que puedas revisarlas o descartarlas y no borra tus conversaciones, escalas ni informes. No puede deshacer una petición al modelo que ya haya comenzado.</p>
       </div>
+      {isOlderPage ? <Link href="/app/perfil" className="text-sm underline underline-offset-4">Volver a citas recientes</Link> : null}
       {memory === null ? (
         <div className="space-y-3">
           <p role="alert">No se pudo cargar la memoria. Puedes seguir conversando o volver a intentarlo.</p>
@@ -97,6 +99,9 @@ export function ProfileMemoryView({ memory, replacementSources = {} }: {
               )
             })}
           </section>
+          {memory.next_cursor ? (
+            <Link href={`/app/perfil?${new URLSearchParams({ before_created_at: memory.next_cursor.source_created_at, before_id: memory.next_cursor.id })}`} className="inline-block text-sm underline underline-offset-4">Ver citas anteriores</Link>
+          ) : null}
         </>
       )}
     </div>

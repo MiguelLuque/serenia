@@ -8,17 +8,28 @@ vi.mock('@/lib/shared/llm/models', () => ({ llm: { structured: () => 'synthetic/
 import { extractProfileStep, extractProfileWorkflow } from '@/lib/server/workflows/extract-profile'
 const job = { id: 'job', token: 'claim', user_id: 'owner', source_message_id: 'message', session_id: 'session', conversation_id: 'conversation', source_created_at: '2026-10-28T12:00:00Z' }
 const observation = { category: 'concern', quote: 'Me cuesta\ndormir', time_scope: 'current', supersedes_id: null }
-let source: any, loadedJob: any, targets: any[], rpc: ReturnType<typeof vi.fn>, queries: Array<{ table: string; operations: any[] }>
+let source: any, loadedJob: any, targets: any[], useStoredTargets: boolean, rpc: ReturnType<typeof vi.fn>, queries: Array<{ table: string; operations: any[] }>
 beforeEach(() => {
   vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
   loadedJob = job; source = { role: 'user', parts: [{ type: 'text', text: 'Me cuesta' }, { type: 'text', text: 'dormir' }] }; targets = []
-  queries = []
+  queries = []; useStoredTargets = false
   rpc = vi.fn(async (name: string) => ({ error: null, data: name === 'start_profile_job' ? true : null }))
   const from = (table: string) => {
     const operations: any[] = []; queries.push({ table, operations })
     const chain: any = {}
     for (const method of ['select', 'eq', 'lt', 'order', 'limit', 'maybeSingle']) chain[method] = (...args: any[]) => { operations.push([method, ...args]); return chain }
-    chain.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'profile_extraction_jobs' ? loadedJob : table === 'messages' ? source : targets, error: null }).then(resolve, reject)
+    chain.then = (resolve: any, reject: any) => {
+      let rows = targets
+      if (useStoredTargets && table === 'profile_observations') {
+        rows = [...targets]
+        for (const [method, key, value] of operations) {
+          if (method === 'eq') rows = rows.filter(row => row[key] === value)
+          if (method === 'lt') rows = rows.filter(row => row[key] < value)
+          if (method === 'limit') rows = rows.slice(0, key)
+        }
+      }
+      return Promise.resolve({ data: table === 'profile_extraction_jobs' ? loadedJob : table === 'messages' ? source : rows, error: null }).then(resolve, reject)
+    }
     return chain
   }
   createServiceRoleClient.mockReset().mockReturnValue({ from, rpc })
@@ -78,4 +89,18 @@ describe('single-step private profile Workflow', () => {
     enqueueProfileExtraction.mockRejectedValue(new Error('PRIVATE'))
     expect(await extractProfileStep({ jobId: 'job', token: 'claim' })).toEqual({ jobId: 'job', status: 'failed', count: 0 })
   })
+})
+
+it('keeps old confirmed history eligible across newer nonconfirmed rows and removes discarded targets from subsequent extraction', async () => {
+  useStoredTargets = true
+  const old = { id: '10000000-0000-4000-8000-000000000001', user_id: 'owner', category: 'context', quote: 'Old retained quote', time_scope: 'current', status: 'confirmed', source_created_at: '2026-10-01T00:00:00Z' }
+  targets = [
+    ...Array.from({ length: 105 }, (_, i) => ({ ...old, id: `new-${i}`, status: i % 2 ? 'rejected' : 'pending', source_created_at: '2026-10-27T00:00:00Z' })),
+    { ...old, id: 'foreign', user_id: 'other' }, old,
+  ]
+  await extractProfileStep({ jobId: 'job', token: 'claim' })
+  expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [old])
+  old.status = 'rejected'
+  await extractProfileStep({ jobId: 'job', token: 'claim' })
+  expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [])
 })

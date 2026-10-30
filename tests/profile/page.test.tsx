@@ -11,7 +11,7 @@ import { AppSidebar } from '@/components/app/app-sidebar'
 const id = '10000000-0000-4000-8000-000000000001'
 const targetId = '10000000-0000-4000-8000-000000000002'
 const observation = { id, category: 'concern', quote: 'Ahora duermo bien.', time_scope: 'current', status: 'pending', supersedes_id: targetId, source_message_id: id, session_id: id, source_created_at: '2026-10-28T12:00:00+00:00', updated_at: '2026-10-28T12:01:00.123456+00:00', disputed: false }
-const memory = { enabled: false, pending_jobs: 0, failed_jobs: 0, observations: [] as typeof observation[] }
+const memory = { enabled: false, pending_jobs: 0, failed_jobs: 0, observations: [] as typeof observation[], next_cursor: null }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
@@ -46,7 +46,7 @@ it('requires adult onboarding before memory GET', async () => {
 })
 it('reads a validated owner projection without resolving or closing active sessions', async () => {
   expect(viewProps(await Page()).memory).toEqual(memory)
-  expect(mocks.rpc.mock.calls).toEqual([['get_onboarding_ready'], ['get_profile_memory']])
+  expect(mocks.rpc.mock.calls).toEqual([['get_onboarding_ready'], ['get_profile_memory_page', {}]])
   expect(mocks.from).not.toHaveBeenCalled()
 })
 it.each(['rpc-error', 'throw', 'invalid-shape'])('contains %s without exposing private text', async mode => {
@@ -83,4 +83,43 @@ it.each(['on', 'off'])('passes only the server flag %s to patient navigation', a
   const layout = await AppLayout({ children: null })
   const sidebar = React.Children.toArray(layout.props.children).find(child => React.isValidElement(child) && child.type === AppSidebar)
   expect(React.isValidElement(sidebar) && (sidebar.props as { profileMemoryEnabled: boolean }).profileMemoryEnabled).toBe(flag === 'on')
+})
+
+it('forwards the complete precise cursor without Date normalization and remounts page state', async () => {
+  const cursor = { before_created_at: '2026-10-28T12:00:00.123456+00:00', before_id: id }
+  const recent = await Page()
+  const older = await Page({ searchParams: Promise.resolve(cursor) })
+  expect(mocks.rpc).toHaveBeenLastCalledWith('get_profile_memory_page', { p_before_created_at: cursor.before_created_at, p_before_id: id })
+  expect(older.key).not.toBe(recent.key)
+  expect(viewProps(older).isOlderPage).toBe(true)
+})
+it.each([
+  { before_id: id }, { before_created_at: '2026-10-28T12:00:00Z' },
+  { before_id: 'invalid', before_created_at: '2026-10-28T12:00:00Z' },
+  { before_id: id, before_created_at: '2026-02-30T12:00:00Z' },
+  { before_id: [id, id], before_created_at: '2026-10-28T12:00:00Z' },
+  { user_id: id }, { before_id: id, before_created_at: 'infinity' },
+  { before_id: id, before_created_at: '2026-10-28T12:00:00.1234567Z' },
+  { before_id: id, before_created_at: ['2026-10-28T12:00:00Z'] },
+  { before_id: id, before_created_at: '2026-10-28T12:00:00Z', user_id: id },
+])('recovers invalid or extra search parameters %j through recent without querying history', async query => {
+  await expect(Page({ searchParams: Promise.resolve(query) })).rejects.toThrow('REDIRECT:/app/perfil')
+  expect(mocks.rpc.mock.calls.map(call => call[0])).not.toContain('get_profile_memory_page')
+})
+
+it('keeps flag and auth guards before malformed cursor recovery', async () => {
+  const query = { searchParams: Promise.resolve({ before_id: 'invalid' }) }
+  vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'off')
+  await expect(Page(query)).rejects.toThrow('NOT_FOUND')
+  expect(mocks.client).not.toHaveBeenCalled()
+  vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
+  mocks.getUser.mockResolvedValue({ data: { user: null }, error: null })
+  await expect(Page(query)).rejects.toThrow('REDIRECT:/login')
+  expect(mocks.rpc).not.toHaveBeenCalled()
+})
+it('does not retain the older page action identity when returning to recent', async () => {
+  const first = await Page({ searchParams: Promise.resolve({ before_created_at: '2026-10-28T12:00:00.123456Z', before_id: id }) })
+  const second = await Page({ searchParams: Promise.resolve({ before_created_at: '2026-10-28T12:00:00.123455Z', before_id: id }) })
+  const recent = await Page()
+  expect(new Set([first.key, second.key, recent.key]).size).toBe(3)
 })

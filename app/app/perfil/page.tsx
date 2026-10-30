@@ -3,13 +3,20 @@ import { z } from 'zod'
 import { ProfileMemoryView } from '@/components/profile/profile-memory'
 import { progressiveProfileEnabled } from '@/lib/server/profile/config'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
-import { ProfileMemorySchema, type ProfileMemory } from '@/lib/shared/profile/schema'
+import { ProfileMemorySchema, ProfileMemoryCursorSchema, ProfileMemoryPageSchema, type ProfileMemoryPage } from '@/lib/shared/profile/schema'
 
 const sourceSchema = ProfileMemorySchema.shape.observations.element.pick({
   id: true, quote: true, source_created_at: true,
 })
 
-export default async function Page() {
+const searchSchema = z.union([
+  z.strictObject({}),
+  z.strictObject({ before_created_at: ProfileMemoryCursorSchema.shape.source_created_at, before_id: ProfileMemoryCursorSchema.shape.id }),
+])
+
+export default async function Page({ searchParams }: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+} = {}) {
   if (!progressiveProfileEnabled()) notFound()
   let client
   try { client = await createAuthenticatedClient() } catch { return <ProfileMemoryView memory={null} /> }
@@ -20,13 +27,17 @@ export default async function Page() {
   if (readinessError) return <ProfileMemoryView memory={null} />
   if (ready !== true) redirect('/onboarding')
 
-  let memory: ProfileMemory | null = null
+  const search = searchSchema.safeParse(await searchParams ?? {})
+  if (!search.success) redirect('/app/perfil')
+  const cursor = 'before_id' in search.data ? search.data : null
+  const pageKey = cursor ? `${cursor.before_created_at}:${cursor.before_id}` : 'recent'
+  let memory: ProfileMemoryPage | null = null
   try {
-    const { data, error } = await client.rpc('get_profile_memory')
-    const parsed = ProfileMemorySchema.safeParse(data)
+    const { data, error } = await client.rpc('get_profile_memory_page', cursor ? { p_before_created_at: cursor.before_created_at, p_before_id: cursor.before_id } : {})
+    const parsed = ProfileMemoryPageSchema.safeParse(data)
     if (!error && parsed.success) memory = parsed.data
   } catch { /* Keep profile loading failures separate from the conversation. */ }
-  if (!memory) return <ProfileMemoryView memory={null} />
+  if (!memory) return <ProfileMemoryView key={pageKey} memory={null} isOlderPage={cursor !== null} />
   const presentIds = new Set(memory.observations.map(observation => observation.id))
   const missingIds = [...new Set(memory.observations
     .filter(observation => observation.status === 'pending' && observation.supersedes_id && !presentIds.has(observation.supersedes_id))
@@ -47,5 +58,5 @@ export default async function Page() {
       }
     } catch { /* The view explicitly explains an unavailable earlier quote. */ }
   }
-  return <ProfileMemoryView memory={memory} replacementSources={replacementSources} />
+  return <ProfileMemoryView key={pageKey} memory={memory} replacementSources={replacementSources} isOlderPage={cursor !== null} />
 }

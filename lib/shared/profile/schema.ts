@@ -30,6 +30,12 @@ export const ProfileMemorySchema = z.strictObject({
     disputed: z.boolean(),
   })).max(100),
 })
+export const ProfileMemoryCursorSchema = z.strictObject({
+  source_created_at: z.iso.datetime({ offset: true }).regex(/\.\d{1,6}(?:Z|[+-]\d{2}:\d{2})$|T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/),
+  id: z.uuid(),
+})
+export const ProfileMemoryPageSchema = ProfileMemorySchema.extend({ next_cursor: ProfileMemoryCursorSchema.nullable() })
+export type ProfileMemoryPage = z.infer<typeof ProfileMemoryPageSchema>
 export type ProfileMemory = z.infer<typeof ProfileMemorySchema>
 export type ProfileExtraction = z.infer<typeof ProfileExtractionSchema>
 export type KnownProfileTarget = Pick<Database['public']['Tables']['profile_observations']['Row'], 'id' | 'category' | 'quote' | 'time_scope' | 'status' | 'source_created_at'>

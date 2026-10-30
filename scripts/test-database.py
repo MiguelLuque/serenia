@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--baseline-security', action='store_true', help='Historical baseline without the two nonportable data operations or hardening migration')
 parser.add_argument('--baseline-chat', action='store_true', help='Task 1 schema with Task 2 regressions and no Task 2 migration')
 parser.add_argument('--baseline-flows', action='store_true', help='Task 2 schema with Task 3 functional regressions')
+parser.add_argument('--profile-history', action='store_true', help='Focused profile history regression on the full migrated ephemeral schema')
 args = parser.parse_args()
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 
@@ -150,6 +151,10 @@ try:
     query((ROOT / 'supabase/seed.sql').read_text())
     query("do $$ begin if exists(select 1 from questionnaire_definitions where code='ASQ') or (select count(*) from questionnaire_definitions where code in ('PHQ9','GAD7','BDI2','BAI','CSSRS'))<>5 or exists(select 1 from auth.users) then raise exception 'Seed lost instruments, reenabled ASQ or created accounts'; end if; end $$;")
     print('PASS seed from empty, repeatable and without ASQ/accounts')
+    if args.profile_history:
+        query((ROOT / 'supabase/tests/profile-memory-page.sql').read_text())
+        print('PASS profile history pagination, precision, ownership, disputes and stale review')
+        raise SystemExit(0)
     # Keep the temporary must_deny helper and fixtures on one SQL connection.
     query((ROOT / 'supabase/tests/authorization-review.sql').read_text() + '\n' +
           (ROOT / 'supabase/tests/relationships.sql').read_text() + '\n' +
@@ -301,6 +306,8 @@ try:
     print('PASS concurrent touch/inactivity lock revalidation preserves active session without outbox')
     query((ROOT / 'supabase/tests/progressive-profile.sql').read_text())
     print('PASS progressive profile grants, sources, consent, fencing, ordering, corrections and cascades')
+    query((ROOT / 'supabase/tests/profile-memory-page.sql').read_text())
+    print('PASS profile history pagination, precision, ownership, disputes and stale review')
     # Profile queue/review races use independent connections and observed lock barriers.
     def profile_value(sql):
         result = docker('exec', '-i', name, 'psql', '-X', '-At', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=False)
