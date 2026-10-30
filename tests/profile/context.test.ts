@@ -75,3 +75,15 @@ describe('bounded owner memory context', () => {
     expect(ProfileMemorySchema.safeParse(memory(Array(101).fill(row))).success).toBe(false)
   })
 })
+
+it('cuts hosted context RPCs for absent or nonallowlisted Auth identity', async () => {
+  vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
+  vi.stubEnv('VERCEL', '1')
+  vi.stubEnv('PROFILE_REVIEW_USER_IDS', id)
+  const rpc = vi.fn().mockResolvedValue({ data: memory(), error: null })
+  const client = { rpc } as unknown as SupabaseClient<Database>
+  expect(await loadProfileContext(client, 'dormir')).toBe('')
+  expect(await loadProfileContext(client, 'dormir', '22222222-2222-4222-8222-222222222222')).toBe('')
+  expect(rpc).not.toHaveBeenCalled()
+  expect(await loadProfileContext(client, 'dormir', id)).toContain('Me cuesta dormir')
+})

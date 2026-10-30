@@ -83,3 +83,15 @@ describe('bounded authorized closure and recovery sweep',()=>{
     expect(await response.text()).not.toContain('PRIVATE')
   })
 })
+
+it('skips hosted profile recovery with missing allowlist while preserving assessment cron', async () => {
+  vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on'); vi.stubEnv('VERCEL', '1'); vi.stubEnv('PROFILE_REVIEW_USER_IDS', '')
+  expect((await POST(request())).status).toBe(200)
+  expect(enqueueProfileExtraction).not.toHaveBeenCalled()
+  expect(rpc).toHaveBeenCalledWith('claim_assessment_jobs', { p_limit: 10 })
+})
+it('delegates the hosted bounded profile sweep only with valid review owners', async () => {
+  vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on'); vi.stubEnv('VERCEL', '1'); vi.stubEnv('PROFILE_REVIEW_USER_IDS', '11111111-1111-4111-8111-111111111111')
+  expect((await POST(request())).status).toBe(200)
+  expect(enqueueProfileExtraction).toHaveBeenCalledWith(undefined, 10)
+})

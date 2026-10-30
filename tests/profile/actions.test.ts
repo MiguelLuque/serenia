@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ client: vi.fn(), revalidate: vi.fn(), rpc: vi.fn(), getUser: vi.fn() }))
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: mocks.client }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
@@ -11,6 +11,7 @@ beforeEach(() => {
   mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'get_onboarding_ready' ? true : null, error: null }))
   mocks.client.mockResolvedValue({ auth: { getUser: mocks.getUser }, rpc: mocks.rpc })
 })
+afterEach(() => vi.unstubAllEnvs())
 describe('patient profile actions', () => {
   it('disables consent through the authenticated owner RPC before success', async () => {
     expect(await setProfileEnabledAction(false)).toEqual({ ok: true })
@@ -82,4 +83,24 @@ describe('patient profile actions', () => {
     expect(result).toMatchObject({ ok: false })
     expect(JSON.stringify(result)).not.toContain('PRIVATE')
   })
+})
+
+it('denies nonallowlisted authenticated callers before profile queries despite editable metadata', async () => {
+  vi.stubEnv('VERCEL', '1')
+  vi.stubEnv('PROFILE_REVIEW_USER_IDS', '11111111-1111-4111-8111-111111111111')
+  mocks.getUser.mockResolvedValue({ data: { user: { id: '22222222-2222-4222-8222-222222222222', user_metadata: { user_id: '11111111-1111-4111-8111-111111111111' } } }, error: null })
+  expect(await setProfileEnabledAction(true)).toMatchObject({ ok: false })
+  expect(await reviewProfileObservationAction(review)).toMatchObject({ ok: false })
+  expect(mocks.revalidate).not.toHaveBeenCalled()
+  expect(mocks.rpc).not.toHaveBeenCalled()
+  vi.unstubAllEnvs()
+})
+
+it('allows the verified listed owner without using input identity', async () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  vi.stubEnv('VERCEL', '1'); vi.stubEnv('PROFILE_REVIEW_USER_IDS', id)
+  mocks.getUser.mockResolvedValue({ data: { user: { id } }, error: null })
+  expect(await setProfileEnabledAction(true)).toEqual({ ok: true })
+  expect(await reviewProfileObservationAction(review)).toEqual({ ok: true })
+  expect(mocks.rpc).toHaveBeenCalledWith('set_profile_enabled', { p_enabled: true })
 })

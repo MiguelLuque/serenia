@@ -73,7 +73,7 @@ export async function POST(req: Request) {
   }
   const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
-  if (progressiveProfileEnabled()) {
+  if (progressiveProfileEnabled(process.env, user.id)) {
     after(async () => {
       try { await enqueueProfileExtraction(user.id, 1) } catch { /* Admission already persisted; the durable queue remains recoverable. */ }
     })
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
       }
     }
     const timeNotice = buildSessionTimeNotice(session.opened_at)
-    const profileContextBlock = await loadProfileContext(supabase, lastUserText)
+    const profileContextBlock = await loadProfileContext(supabase, lastUserText, user.id)
     const promptPieces = { basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock }
     let systemPrompt = buildChatSystemPrompt({ ...promptPieces, profileContextBlock })
     try { checkContextBudget([systemPrompt, ...messages]) }

@@ -39,8 +39,8 @@ export function renderProfileContext(memory: ProfileMemory, currentText: string)
   return count ? block + FOOTER : ''
 }
 
-export async function loadProfileContext(client: SupabaseClient<Database>, currentText: string): Promise<string> {
-  if (!progressiveProfileEnabled()) return ''
+export async function loadProfileContext(client: SupabaseClient<Database>, currentText: string, userId?: string): Promise<string> {
+  if (!progressiveProfileEnabled(process.env, userId)) return ''
   try {
     const { data, error } = await client.rpc('get_profile_memory')
     if (error) return ''

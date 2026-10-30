@@ -1,6 +1,6 @@
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import { llm } from '@/lib/shared/llm/models'
-import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { progressiveProfileAvailable, progressiveProfileEnabled } from '@/lib/server/profile/config'
 import { canonicalProfileSource, extractProfileObservations, validateProfileExtraction } from '@/lib/server/profile/extractor'
 import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 import type { Database } from '@/lib/shared/supabase/types'
@@ -14,7 +14,7 @@ export async function extractProfileStep(input: ExtractProfileInput): Promise<{ 
   'use step'
 
   const { jobId, token } = input
-  if (!progressiveProfileEnabled()) return { jobId, status: 'skipped', count: 0 }
+  if (!progressiveProfileAvailable()) return { jobId, status: 'skipped', count: 0 }
   let service: ReturnType<typeof createServiceRoleClient> | undefined
   let job: Database['public']['Tables']['profile_extraction_jobs']['Row'] | null = null
   let started = false
@@ -22,6 +22,7 @@ export async function extractProfileStep(input: ExtractProfileInput): Promise<{ 
     service = createServiceRoleClient()
     const { data, error: jobError } = await service.from('profile_extraction_jobs').select('*').eq('id', jobId).eq('token', token).maybeSingle()
     if (jobError || !data) return { jobId, status: 'skipped', count: 0 }
+    if (!progressiveProfileEnabled(process.env, data.user_id)) return { jobId, status: 'skipped', count: 0 }
     job = data
     const { data: canStart, error: startError } = await service.rpc('start_profile_job', { p_job_id: jobId, p_token: token })
     // Completed replay, stale claims, withdrawn consent and duplicate starts

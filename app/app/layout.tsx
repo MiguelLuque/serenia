@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppSidebar
         displayName={patientDisplayName(profile) ?? ''}
         role={(profile?.role as 'patient' | 'clinician') ?? 'patient'}
-        profileMemoryEnabled={progressiveProfileEnabled()}
+        profileMemoryEnabled={progressiveProfileEnabled(process.env, user.id)}
       />
       <SidebarInset>
         <header className="flex h-12 items-center gap-2 border-b px-3 md:hidden">

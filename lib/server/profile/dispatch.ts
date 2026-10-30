@@ -3,12 +3,12 @@ import { start } from 'workflow/api'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import type { Database } from '@/lib/shared/supabase/types'
 import { extractProfileWorkflow } from '@/lib/server/workflows/extract-profile'
-import { progressiveProfileEnabled } from './config'
+import { progressiveProfileAvailable, progressiveProfileEnabled, progressiveProfileReviewUserIds } from './config'
 
-export type ClaimedProfileJob = Pick<Database['public']['Functions']['claim_profile_jobs']['Returns'][number], 'id' | 'token'>
+export type ClaimedProfileJob = Pick<Database['public']['Functions']['claim_profile_jobs']['Returns'][number], 'id' | 'token' | 'user_id'>
 
 export async function dispatchProfileJob(job: ClaimedProfileJob): Promise<{ runId: string } | null> {
-  if (!progressiveProfileEnabled()) return null
+  if (!progressiveProfileEnabled(process.env, job.user_id)) return null
   if (!job.id || !job.token) throw new Error('profile_dispatch_invalid')
   const service = createServiceRoleClient()
   let runId: string
@@ -33,13 +33,21 @@ export async function dispatchProfileJob(job: ClaimedProfileJob): Promise<{ runI
 }
 
 export async function enqueueProfileExtraction(userId?: string, limit = 1): Promise<{ enqueued: number; failed: number }> {
-  if (!progressiveProfileEnabled()) return { enqueued: 0, failed: 0 }
+  if (!progressiveProfileAvailable() || (userId !== undefined && !progressiveProfileEnabled(process.env, userId))) return { enqueued: 0, failed: 0 }
   if (!Number.isInteger(limit) || limit < 1 || limit > 10) throw new Error('profile_dispatch_invalid')
-  let jobs: ClaimedProfileJob[]
+  const allowedOwners = progressiveProfileReviewUserIds()
+  // Never issue an unscoped hosted claim. Local cron retains its original sweep.
+  const owners = userId !== undefined ? [userId] : allowedOwners ?? [undefined]
+  const jobs: ClaimedProfileJob[] = []
   try {
-    const { data, error } = await createServiceRoleClient().rpc('claim_profile_jobs', { ...(userId ? { p_user_id: userId } : {}), p_limit: limit })
-    if (error) throw new Error('profile_claim_failed')
-    jobs = data ?? []
+    const service = createServiceRoleClient()
+    for (const owner of owners) {
+      const remaining = limit - jobs.length
+      if (remaining <= 0) break
+      const { data, error } = await service.rpc('claim_profile_jobs', { ...(owner ? { p_user_id: owner } : {}), p_limit: remaining })
+      if (error) throw new Error('profile_claim_failed')
+      jobs.push(...(data ?? []).slice(0, remaining))
+    }
   } catch {
     throw new Error('profile_claim_failed')
   }

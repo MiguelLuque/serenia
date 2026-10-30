@@ -104,3 +104,16 @@ it('keeps old confirmed history eligible across newer nonconfirmed rows and remo
   await extractProfileStep({ jobId: 'job', token: 'claim' })
   expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [])
 })
+
+it('revalidates the stored owner before start/source/model even with a forged workflow identity', async () => {
+  vi.stubEnv('VERCEL', '1')
+  vi.stubEnv('PROFILE_REVIEW_USER_IDS', '11111111-1111-4111-8111-111111111111')
+  const input = { jobId: 'job', token: 'claim', userId: '11111111-1111-4111-8111-111111111111' }
+  expect(await extractProfileStep(input)).toEqual({ jobId: 'job', status: 'skipped', count: 0 })
+  expect(queries.map(query => query.table)).toEqual(['profile_extraction_jobs'])
+  expect(rpc).not.toHaveBeenCalled()
+  expect(extractProfileObservations).not.toHaveBeenCalled()
+  expect(enqueueProfileExtraction).not.toHaveBeenCalled()
+  loadedJob = { ...job, user_id: input.userId }
+  expect(await extractProfileStep(input)).toMatchObject({ status: 'completed' })
+})

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
-import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { progressiveProfileAvailable, progressiveProfileEnabled } from '@/lib/server/profile/config'
 
 export type ProfileActionResult = { ok: true } | { ok: false; error: string; conflict?: true }
 const reviewSchema = z.strictObject({
@@ -16,13 +16,13 @@ const unavailable = { ok: false, error: 'No se pudo guardar el cambio. Inténtal
 async function ownerClient() {
   const client = await createAuthenticatedClient()
   const { data: { user }, error } = await client.auth.getUser()
-  if (error || !user) return null
+  if (error || !user || !progressiveProfileEnabled(process.env, user.id)) return null
   const { data: ready, error: readinessError } = await client.rpc('get_onboarding_ready')
   return !readinessError && ready === true ? client : null
 }
 
 export async function setProfileEnabledAction(input: unknown): Promise<ProfileActionResult> {
-  if (!progressiveProfileEnabled()) return unavailable
+  if (!progressiveProfileAvailable()) return unavailable
   if (typeof input !== 'boolean') return unavailable
   try {
     const client = await ownerClient()
@@ -35,7 +35,7 @@ export async function setProfileEnabledAction(input: unknown): Promise<ProfileAc
 }
 
 export async function reviewProfileObservationAction(input: unknown): Promise<ProfileActionResult> {
-  if (!progressiveProfileEnabled()) return unavailable
+  if (!progressiveProfileAvailable()) return unavailable
   const parsed = reviewSchema.safeParse(input)
   if (!parsed.success) return unavailable
   try {

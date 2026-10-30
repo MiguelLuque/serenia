@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import { dispatchAssessmentJob } from '@/lib/server/workflows'
 import { SESSION_INACTIVITY_MS } from '@/lib/server/sessions/service'
-import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { progressiveProfileAvailable } from '@/lib/server/profile/config'
 import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 
 export const runtime = 'nodejs'
@@ -36,7 +36,7 @@ async function handle(request: Request): Promise<Response> {
       else failed++
     }
   }
-  if (progressiveProfileEnabled()) {
+  if (progressiveProfileAvailable()) {
     try {
       const profile = await enqueueProfileExtraction(undefined, 10)
       return Response.json({ ok: true, closed, enqueued, failed, profile })

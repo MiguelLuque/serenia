@@ -4,7 +4,7 @@ vi.mock('workflow/api', () => ({ start }))
 vi.mock('@/lib/server/supabase/server', () => ({ createServiceRoleClient }))
 vi.mock('@/lib/server/workflows/extract-profile', () => ({ extractProfileWorkflow: vi.fn() }))
 import { dispatchProfileJob, enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
-const job = { id: 'job-1', token: 'token-1' }
+const job = { id: 'job-1', token: 'token-1', user_id: 'owner' }
 let rpc: ReturnType<typeof vi.fn>
 beforeEach(() => {
   vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
@@ -61,4 +61,25 @@ describe('durable profile dispatch boundary', () => {
     expect(rpc).toHaveBeenCalledWith('claim_profile_jobs', { p_limit: 10 })
     expect(maximum).toBe(2)
   })
+})
+
+it('rejects hosted nonallowlisted enqueue and dispatch before claim or workflow start', async () => {
+  vi.stubEnv('VERCEL', '1')
+  vi.stubEnv('PROFILE_REVIEW_USER_IDS', '11111111-1111-4111-8111-111111111111')
+  expect(await enqueueProfileExtraction('owner')).toEqual({ enqueued: 0, failed: 0 })
+  expect(await dispatchProfileJob(job)).toBeNull()
+  expect(createServiceRoleClient).not.toHaveBeenCalled()
+  expect(start).not.toHaveBeenCalled()
+})
+it('hosted cron claims only individual listed owners within ten total jobs and two starts', async () => {
+  const owners = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333']
+  vi.stubEnv('VERCEL', '1'); vi.stubEnv('PROFILE_REVIEW_USER_IDS', owners.join(','))
+  rpc.mockImplementation(async (name: string, args: { p_user_id?: string; p_limit?: number }) => ({ data: name === 'claim_profile_jobs' ? Array.from({ length: Math.min(6, args.p_limit!) }, (_, i) => ({ id: `job-${args.p_user_id}-${i}`, token: 'claim', user_id: args.p_user_id })) : null, error: null }))
+  let active = 0, maximum = 0
+  start.mockImplementation(async () => { active++; maximum = Math.max(maximum, active); await new Promise(resolve => setTimeout(resolve, 1)); active--; return { runId: 'run' } })
+  expect(await enqueueProfileExtraction(undefined, 10)).toEqual({ enqueued: 10, failed: 0 })
+  expect(rpc.mock.calls.filter(([name]) => name === 'claim_profile_jobs')).toEqual([
+    ['claim_profile_jobs', { p_user_id: owners[0], p_limit: 10 }], ['claim_profile_jobs', { p_user_id: owners[1], p_limit: 4 }],
+  ])
+  expect(maximum).toBe(2)
 })

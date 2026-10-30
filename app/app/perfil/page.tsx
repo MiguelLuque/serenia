@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { z } from 'zod'
 import { ProfileMemoryView } from '@/components/profile/profile-memory'
-import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { progressiveProfileAvailable, progressiveProfileEnabled } from '@/lib/server/profile/config'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { ProfileMemorySchema, ProfileMemoryCursorSchema, ProfileMemoryPageSchema, type ProfileMemoryPage } from '@/lib/shared/profile/schema'
 
@@ -17,11 +17,12 @@ const searchSchema = z.union([
 export default async function Page({ searchParams }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>
 } = {}) {
-  if (!progressiveProfileEnabled()) notFound()
+  if (!progressiveProfileAvailable()) notFound()
   let client
   try { client = await createAuthenticatedClient() } catch { return <ProfileMemoryView memory={null} /> }
   const auth = await client.auth.getUser().catch(() => null)
   if (!auth || auth.error || !auth.data.user) redirect('/login')
+  if (!progressiveProfileEnabled(process.env, auth.data.user.id)) notFound()
   const { data: ready, error: readinessError } = await client.rpc('get_onboarding_ready')
     .then(result => result, () => ({ data: null, error: true }))
   if (readinessError) return <ProfileMemoryView memory={null} />
