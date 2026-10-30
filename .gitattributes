@@ -1,0 +1,2 @@
+# Preserve generated PDF byte offsets and avoid treating them as text diffs.
+*.pdf binary

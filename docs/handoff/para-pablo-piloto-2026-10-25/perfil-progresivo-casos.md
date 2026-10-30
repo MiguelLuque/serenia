@@ -1,6 +1,6 @@
 # Perfil progresivo: casos ficticios para revisión
 
-Preparación28octubre2026; actualización29octubre. Implementación y pruebas técnicas locales descritas en [el recibo de aceptación](../../audits/2026-10-28-progressive-profile-acceptance.md). Estos casos semánticos aún no se han validado con el modelo real ni con Pablo. Los criterios siguientes son propuestas para su revisión. No usar datos reales.
+Preparación28octubre2026; actualización30octubre. Implementación y pruebas técnicas locales descritas en [el recibo de aceptación](../../audits/2026-10-28-progressive-profile-acceptance.md). El perfil sigue local, no incluido en el piloto0.2 enviado a Pablo. Estos casos semánticos aún no se han validado con el modelo real ni con Pablo. Los criterios siguientes son propuestas para su revisión. No usar datos reales.
 
 ## Qué queremos observar
 
@@ -33,6 +33,7 @@ Que Serenia recuerde información pertinente sin convertir la charla en un formu
 3. Confirmar una cita correcta o descartar una mal atribuida. Corregir un hecho en la conversación; comprobar que deja de imponerse la versión vieja.
 4. Desactivar durante un trabajo pendiente: no debe aparecer después una observación de ese trabajo. Reactivar no recupera retrospectivamente conversaciones anteriores.
 5. Cerrar una sesión breve o interrumpida sin informe y comprobar continuidad de las observaciones que sí se guardaron; no depender sólo del resumen final.
+6. Con un historial ficticio preparado de más de100 citas, usar «Ver citas anteriores» y «Volver a citas recientes». Revisar y descartar una cita antigua; comprobar que el siguiente contexto no la impone. Si otro dispositivo la ha modificado, debe aparecer un conflicto recargable sin sobrescribirlo ni quedar en «Guardando». Esta mecánica tiene aceptación sintética local; su naturalidad y adecuación semántica siguen pendientes de Pablo.
 
 ## Cómo anotar el resultado
 
