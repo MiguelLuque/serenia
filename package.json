@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "ai:evaluate:offline": "node scripts/evaluate-ai-launcher.mjs",
+    "ai:costs": "node --import tsx scripts/model-costs.ts",
     "verify": "node scripts/verify.mjs",
     "build:isolated": "node scripts/build-isolated.mjs",
     "hosted:packet": "node scripts/hosted-packet.mjs",
