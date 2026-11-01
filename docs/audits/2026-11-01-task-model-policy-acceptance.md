@@ -24,7 +24,7 @@ El [estudio actual](../research/2026-11-01-model-cost-selection.md) verifica498m
 
 Misma carga sintética de20turnos+20extracciones+1informe:0,37725USD todoGPT5.4mini frente a0,10100USD Luna/Luna/Sol (73,23%menos en ese supuesto). El escenario de4extracciones es distinto, no cambio de cadencia. Ninguna cifra es consumo medido ni evidencia de equivalencia de calidad.
 
-El [manifiesto](../research/2026-11-01-model-evaluation-manifest.md) prepara fase1de74llamadas ficticias sin continuaciones, estimación máxima baseStandard2,4694USD bajo sus caps. Fase2deejecución de herramientas/continuación queda aparte, NOT_PLANNED/NOT_RUN, con nuevos casos/caps/autorización. Ambas conservan revisión clínica pendiente. No hubo inferencias de pago; la aprobación solicitada de hasta5USD de créditos existentes no incluye compras/recargas ni promoción de modelos.
+El [manifiesto](../research/2026-11-01-model-evaluation-manifest.md) prepara una fase 1 de 74 llamadas ficticias sin continuaciones, estimación máxima base Standard de 2,4694 USD bajo sus caps. La autorización posterior de hasta 5 USD de créditos existentes cubre sólo los 37 casos OpenAI; no incluye la comparación Anthropic, compras, recargas ni promoción de modelos. Dos comprobaciones técnicas de acceso a Luna y Sol recibieron 403 `no_providers_available` por la restricción del nivel gratuito: [recibo de acceso](2026-11-01-model-access-check.md). No se enviaron casos del manifiesto ni se obtuvo una generación; facturación de los rechazos desconocida. Fase 2 de ejecución de herramientas/continuación queda aparte, NOT_PLANNED/NOT_RUN, con nuevos casos/caps/autorización. Ambas conservan revisión clínica pendiente.
 
 ## Decisiones y límites
 

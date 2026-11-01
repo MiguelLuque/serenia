@@ -1,6 +1,8 @@
 # Fictitious model evaluation manifest — plan only
 
-Status on 2026-11-01: **ONLINE_NOT_RUN**. No provider access, transport compatibility, clinical quality, latency, token usage, or actual cost was measured. These are proposed human review prompts, not clinical gold labels. This manifest does not authorize paid calls or production model changes.
+Benchmark status on 2026-11-01: **ONLINE_NOT_RUN / BLOCKED_ACCESS**. Two separate technical access probes received HTTP 403; no benchmark case was sent. Successful provider access, generation compatibility, clinical quality, inference latency, token usage, and actual cost remain unmeasured. These are proposed human review prompts, not clinical gold labels. This manifest does not authorize paid calls or production model changes.
+
+The user subsequently authorized up to USD 5 of **existing** AI Gateway credits for Luna conversation/profile and Sol reports, with fictitious cases. Only the OpenAI subset (37 cases) is covered; Anthropic comparisons, credit purchases, and production model changes are not authorized. The [access receipt](../audits/2026-11-01-model-access-check.md) records both rejections and the separate billing decision needed to resume. The proposed full 74-call matrix below remains a plan, not an executed or fully authorized run.
 
 ## Fixed input and provenance
 
