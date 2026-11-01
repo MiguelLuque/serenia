@@ -1,5 +1,5 @@
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
 import { progressiveProfileAvailable, progressiveProfileEnabled } from '@/lib/server/profile/config'
 import { canonicalProfileSource, extractProfileObservations, validateProfileExtraction } from '@/lib/server/profile/extractor'
 import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
@@ -41,12 +41,13 @@ export async function extractProfileStep(input: ExtractProfileInput): Promise<{ 
     if (targetsError) throw new Error('profile_targets_unavailable')
     const sourceText = canonicalProfileSource(source.parts)
     const knownTargets = targets ?? []
-    const output = await extractProfileObservations(sourceText, knownTargets)
+    const policy = resolveTaskPolicy('profileExtraction')
+    const output = await extractProfileObservations(sourceText, knownTargets, policy)
     const validated = validateProfileExtraction(output, sourceText, knownTargets)
     // Ownership, source, epoch, lease and token are revalidated atomically in
     // SQL; no model-provided identity participates in persistence.
     const { error: finishError } = await service.rpc('finish_profile_job', {
-      p_job_id: jobId, p_token: token, p_observations: validated.observations, p_model_id: llm.structured(),
+      p_job_id: jobId, p_token: token, p_observations: validated.observations, p_model_id: policy.modelId,
     })
     if (finishError) throw new Error('profile_finish_failed')
     return { jobId, status: 'completed', count: validated.observations.length }

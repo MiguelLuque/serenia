@@ -2,7 +2,7 @@ import { generateObject } from 'ai'
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
 import { getClinicalReportPrompt } from '@/lib/server/llm/prompts'
 import { loadQuestionnaireFacts } from './questionnaire-facts'
 import { formatRiskEventForAssessment } from './risk-observation'
@@ -183,16 +183,25 @@ export async function generateAssessment(
 
   const systemPrompt = getClinicalReportPrompt(session.user_id)
 
+  const policy = resolveTaskPolicy('closureReport')
   const { object: summary, usage } = await generateObject({
-    model: llm.structured(),
+    model: policy.modelId,
+    maxRetries: policy.maxRetries,
+    maxOutputTokens: policy.maxOutputTokens,
+    abortSignal: AbortSignal.timeout(policy.timeoutMs),
     schema: AssessmentGenerationSchema,
     system: systemPrompt,
     prompt: userPrompt,
+  }).catch(() => {
+    // SDK errors can include transcript/output and nested causes. Only this
+    // safe failure crosses logging, persistence and durable retry boundaries.
+    throw new Error('assessment_generation_failed')
   })
 
   console.info('[assessment] generated', {
     sessionId,
     usage,
+    requestedModel: policy.modelId,
   })
 
   const { data: inserted, error: insertError } = await supabase

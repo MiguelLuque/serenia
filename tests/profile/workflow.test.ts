@@ -4,12 +4,15 @@ const { createServiceRoleClient, extractProfileObservations, enqueueProfileExtra
 vi.mock('@/lib/server/supabase/server', () => ({ createServiceRoleClient }))
 vi.mock('@/lib/server/profile/extractor', async original => ({ ...await original<typeof import('@/lib/server/profile/extractor')>(), extractProfileObservations }))
 vi.mock('@/lib/server/profile/dispatch', () => ({ enqueueProfileExtraction }))
-vi.mock('@/lib/shared/llm/models', () => ({ llm: { structured: () => 'synthetic/structured' } }))
 import { extractProfileStep, extractProfileWorkflow } from '@/lib/server/workflows/extract-profile'
 const job = { id: 'job', token: 'claim', user_id: 'owner', source_message_id: 'message', session_id: 'session', conversation_id: 'conversation', source_created_at: '2026-10-28T12:00:00Z' }
 const observation = { category: 'concern', quote: 'Me cuesta\ndormir', time_scope: 'current', supersedes_id: null }
 let source: any, loadedJob: any, targets: any[], useStoredTargets: boolean, rpc: ReturnType<typeof vi.fn>, queries: Array<{ table: string; operations: any[] }>
 beforeEach(() => {
+  vi.stubEnv('LLM_STRUCTURED_PROVIDER', 'synthetic')
+  vi.stubEnv('LLM_STRUCTURED_MODEL', 'structured')
+  vi.stubEnv('LLM_PROFILE_EXTRACTION_PROVIDER', '')
+  vi.stubEnv('LLM_PROFILE_EXTRACTION_MODEL', '')
   vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
   loadedJob = job; source = { role: 'user', parts: [{ type: 'text', text: 'Me cuesta' }, { type: 'text', text: 'dormir' }] }; targets = []
   queries = []; useStoredTargets = false
@@ -42,8 +45,19 @@ describe('single-step private profile Workflow', () => {
     expect(await extractProfileWorkflow({ jobId: 'job', token: 'claim' })).toEqual({ jobId: 'job', status: 'completed', count: 1 })
     expect(extractProfileStep.maxRetries).toBe(0)
     expect(rpc).toHaveBeenCalledWith('finish_profile_job', { p_job_id: 'job', p_token: 'claim', p_observations: [observation], p_model_id: 'synthetic/structured' })
-    expect(extractProfileObservations).toHaveBeenCalledWith('Me cuesta\ndormir', [])
+    expect(extractProfileObservations).toHaveBeenCalledWith('Me cuesta\ndormir', [], { task: 'profileExtraction', modelId: 'synthetic/structured', timeoutMs: 20_000, maxOutputTokens: 1500, maxRetries: 0 })
     expect(enqueueProfileExtraction).toHaveBeenCalledWith('owner', 1)
+  })
+  it('persists the captured model even when environment changes during extraction', async () => {
+    vi.stubEnv('LLM_PROFILE_EXTRACTION_PROVIDER', 'openai')
+    vi.stubEnv('LLM_PROFILE_EXTRACTION_MODEL', 'profile-first')
+    extractProfileObservations.mockImplementationOnce(async (_source, _targets, policy) => {
+      expect(policy?.modelId ?? 'openai/profile-first').toBe('openai/profile-first')
+      vi.stubEnv('LLM_PROFILE_EXTRACTION_MODEL', 'profile-changed')
+      return { observations: [observation] }
+    })
+    expect(await extractProfileStep({ jobId: 'job', token: 'claim' })).toEqual({ jobId: 'job', status: 'completed', count: 1 })
+    expect(rpc).toHaveBeenCalledWith('finish_profile_job', { p_job_id: 'job', p_token: 'claim', p_observations: [observation], p_model_id: 'openai/profile-first' })
   })
   it('queries exact source identity and confirmed correction targets owned by job owner, older than source, bounded to twenty', async () => {
     await extractProfileStep({ jobId: 'job', token: 'claim' })
@@ -99,10 +113,10 @@ it('keeps old confirmed history eligible across newer nonconfirmed rows and remo
     { ...old, id: 'foreign', user_id: 'other' }, old,
   ]
   await extractProfileStep({ jobId: 'job', token: 'claim' })
-  expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [old])
+  expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [old], expect.objectContaining({ task: 'profileExtraction', modelId: 'synthetic/structured' }))
   old.status = 'rejected'
   await extractProfileStep({ jobId: 'job', token: 'claim' })
-  expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [])
+  expect(extractProfileObservations).toHaveBeenLastCalledWith('Me cuesta\ndormir', [], expect.objectContaining({ task: 'profileExtraction', modelId: 'synthetic/structured' }))
 })
 
 it('revalidates the stored owner before start/source/model even with a forged workflow identity', async () => {

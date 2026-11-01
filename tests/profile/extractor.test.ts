@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { generateText } = vi.hoisted(() => ({ generateText: vi.fn() }))
 vi.mock('ai', async original => ({ ...await original<typeof import('ai')>(), generateText }))
-vi.mock('@/lib/shared/llm/models', () => ({ llm: { structured: () => 'synthetic/structured' } }))
 import { ProfileExtractionSchema } from '@/lib/shared/profile/schema'
 import { canonicalProfileSource, extractProfileObservations, validateProfileExtraction } from '@/lib/server/profile/extractor'
 const id = '11111111-1111-4111-8111-111111111111'
 const observation = { category: 'concern', quote: 'Me cuesta dormir', time_scope: 'current', supersedes_id: null }
 const target = { id, category: 'concern', quote: 'Dormía bien', time_scope: 'current', status: 'confirmed', source_created_at: '2026-10-01T12:00:00Z' }
-beforeEach(() => { generateText.mockReset().mockResolvedValue({ output: { observations: [observation] } }) })
-afterEach(() => vi.restoreAllMocks())
+beforeEach(() => {
+  vi.stubEnv('LLM_STRUCTURED_PROVIDER', 'synthetic')
+  vi.stubEnv('LLM_STRUCTURED_MODEL', 'structured')
+  vi.stubEnv('LLM_PROFILE_EXTRACTION_PROVIDER', '')
+  vi.stubEnv('LLM_PROFILE_EXTRACTION_MODEL', '')
+  generateText.mockReset().mockResolvedValue({ output: { observations: [observation] } }) })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 describe('literal bounded profile extraction', () => {
   it('preserves text-part order and LF exactly, without normalization or assistant content', () => {
     expect(canonicalProfileSource([{ type: 'text', text: 'Á' }, { type: 'tool', text: 'omitido' }, { type: 'text', text: '🙂' }])).toBe('Á\n🙂')
@@ -54,6 +58,12 @@ describe('literal bounded profile extraction', () => {
     expect(options.abortSignal).toBeInstanceOf(AbortSignal)
     expect(timeout).toHaveBeenCalledWith(20_000)
     expect(JSON.parse(options.prompt)).toEqual({ sourceText: 'Me cuesta dormir', knownTargets: [target] })
+  })
+  it('honors a captured profile policy instead of resolving the changed environment again', async () => {
+    vi.stubEnv('LLM_PROFILE_EXTRACTION_PROVIDER', 'openai')
+    vi.stubEnv('LLM_PROFILE_EXTRACTION_MODEL', 'changed-after-capture')
+    await extractProfileObservations('Me cuesta dormir', [], { task: 'profileExtraction', modelId: 'synthetic/captured', timeoutMs: 20_000, maxOutputTokens: 1500, maxRetries: 0 })
+    expect(generateText.mock.calls[0][0].model).toBe('synthetic/captured')
   })
   it('does not send oversize input or excess correction references to the provider', async () => {
     await expect(extractProfileObservations('x'.repeat(8001), [])).rejects.toThrow('profile_source_invalid')

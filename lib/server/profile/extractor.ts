@@ -1,6 +1,6 @@
 import 'server-only'
 import { generateText, Output } from 'ai'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy, type TaskPolicy } from '@/lib/shared/llm/task-policy'
 import { ProfileExtractionSchema, type KnownProfileTarget, type ProfileExtraction } from '@/lib/shared/profile/schema'
 
 const EXTRACTION_PROMPT = `[profile-v1]
@@ -41,18 +41,19 @@ export function validateProfileExtraction(output: unknown, sourceText: string, k
   return parsed.data
 }
 
-export async function extractProfileObservations(sourceText: string, knownTargets: KnownProfileTarget[]): Promise<ProfileExtraction> {
+export async function extractProfileObservations(sourceText: string, knownTargets: KnownProfileTarget[], policy?: TaskPolicy<'profileExtraction'>): Promise<ProfileExtraction> {
   validateSource(sourceText)
   if (knownTargets.length > 20) throw new Error('profile_targets_invalid')
   try {
+    const resolvedPolicy = policy ?? resolveTaskPolicy('profileExtraction')
     const { output } = await generateText({
-      model: llm.structured(),
+      model: resolvedPolicy.modelId,
       output: Output.object({ schema: ProfileExtractionSchema, name: 'ProfileExtraction' }),
       system: EXTRACTION_PROMPT,
       prompt: JSON.stringify({ sourceText, knownTargets }),
-      maxOutputTokens: 1500,
-      maxRetries: 0,
-      abortSignal: AbortSignal.timeout(20_000),
+      maxOutputTokens: resolvedPolicy.maxOutputTokens,
+      maxRetries: resolvedPolicy.maxRetries,
+      abortSignal: AbortSignal.timeout(resolvedPolicy.timeoutMs),
     })
     return validateProfileExtraction(output, sourceText, knownTargets)
   } catch {

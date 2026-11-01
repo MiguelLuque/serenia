@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { after } from 'next/server'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
 import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
 import { getOrResolveActiveSession, isSessionExpired } from '@/lib/server/sessions/service'
 import { isSessionInactive } from '@/lib/shared/chat/session-time'
@@ -32,7 +32,6 @@ import { loadProfileContext } from '@/lib/server/profile/context'
 import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 
 export const maxDuration = 60
-const MAX_OUTPUT_TOKENS = 2500
 
 function replay(chunks: UIMessageChunk[]) {
   return createUIMessageStreamResponse({ stream: new ReadableStream({ start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } }), headers: { 'Cache-Control': 'no-store' } })
@@ -200,11 +199,12 @@ export async function POST(req: Request) {
       closeReason = reason
       return { closed: true, reason }
     }
+    const policy = resolveTaskPolicy('conversation')
     awaitingGeneration = true
     const result = streamText({
-      model: llm.conversational(), system: systemPrompt,
+      model: policy.modelId, system: systemPrompt,
       messages: await convertToModelMessages(messages),
-      maxOutputTokens: MAX_OUTPUT_TOKENS, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
+      maxOutputTokens: policy.maxOutputTokens, maxRetries: policy.maxRetries, abortSignal: AbortSignal.timeout(policy.timeoutMs),
       stopWhen: stepCountIs(pilot ? 2 : 1),
       prepareStep: ({ stepNumber, messages: stepMessages, steps }) => {
         if (isSessionExpired(session)) { generationTimeExpired = true; throw new Error('session_time_limit') }
@@ -214,7 +214,7 @@ export async function POST(req: Request) {
         modelStep = stepNumber
         checkContextBudget([systemPrompt, ...stepMessages])
         if (stepNumber > 0) {
-          let remaining = MAX_OUTPUT_TOKENS
+          let remaining = policy.maxOutputTokens
           for (const step of steps) {
             const used = step.usage.outputTokens
             if (typeof used !== 'number' || !Number.isSafeInteger(used) || used < 0) throw new Error('response_limit')

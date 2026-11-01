@@ -65,7 +65,10 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
   const authClient = { rpc: vi.fn(async (name: string): Promise<{ data: unknown; error: unknown }> => { if (name === 'close_session_atomic') { state.session.status = 'closed'; return { data: null, error: null } }; return { data: state.onboardingReady, error: null } }), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
   vi.doMock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => authClient, createServiceRoleClient: () => service }))
   vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
-  vi.doMock('@/lib/shared/llm/models', () => ({ llm: { conversational: () => configuration.model ?? 'synthetic-model' } }))
+  vi.doMock('@/lib/shared/llm/task-policy', async importOriginal => {
+    const actual = await importOriginal<typeof import('@/lib/shared/llm/task-policy')>()
+    return { ...actual, resolveTaskPolicy: () => actual.resolveTaskPolicy('conversation', { LLM_CONVERSATIONAL_PROVIDER: 'synthetic', LLM_CONVERSATIONAL_MODEL: 'conversation' }) }
+  })
   vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async (_client: any, _session: string, _openedAt: string, options?: { strict?: boolean }) => { state.safetyOptions.push(options); await state.contextHook(); if (state.safetyFailure) throw new Error('safety unavailable'); return state.safety } }))
   vi.doMock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn(async () => ({ runId: 'synthetic-run' })) }))
   const enqueueProfileExtraction = vi.fn<(userId?: string, limit?: number) => Promise<{ enqueued: number; failed: number }>>().mockResolvedValue({ enqueued: 0, failed: 0 })
@@ -77,7 +80,7 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     const actual = await importOriginal<typeof import('ai')>()
     return { ...actual, streamText: (options: any) => {
       state.captured.push(options)
-      if (configuration.model) return actual.streamText(options)
+      if (configuration.model) return actual.streamText({ ...options, model: configuration.model })
       return { toUIMessageStream: ({ onFinish }: any) => new ReadableStream({ async start(controller) {
         await state.hook(options)
         if (state.generationFailure) { controller.enqueue({ type: 'error', errorText: 'synthetic failure' }); controller.close(); return }
