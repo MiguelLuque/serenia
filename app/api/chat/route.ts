@@ -4,6 +4,7 @@ import { after } from 'next/server'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
 import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
+import { resolveTaskModel } from '@/lib/server/llm/model-resolver'
 import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
 import { getOrResolveActiveSession, isSessionExpired } from '@/lib/server/sessions/service'
 import { isSessionInactive } from '@/lib/shared/chat/session-time'
@@ -202,7 +203,7 @@ export async function POST(req: Request) {
     const policy = resolveTaskPolicy('conversation')
     awaitingGeneration = true
     const result = streamText({
-      model: policy.modelId, system: systemPrompt,
+      model: resolveTaskModel(policy), system: systemPrompt,
       messages: await convertToModelMessages(messages),
       maxOutputTokens: policy.maxOutputTokens, maxRetries: policy.maxRetries, abortSignal: AbortSignal.timeout(policy.timeoutMs),
       stopWhen: stepCountIs(pilot ? 2 : 1),

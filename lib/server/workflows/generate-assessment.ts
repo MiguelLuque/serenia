@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
+import { resolveTaskModel } from '@/lib/server/llm/model-resolver'
 import { getClinicalReportPrompt } from '@/lib/server/llm/prompts'
 import { formatRiskEventForAssessment } from '@/lib/server/assessments/risk-observation'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
@@ -312,7 +313,7 @@ export async function generateAssessmentStep(
 
   const policy = resolveTaskPolicy('closureReport')
   const { object: summary, usage } = await generateObject({
-    model: policy.modelId,
+    model: resolveTaskModel(policy),
     maxRetries: policy.maxRetries,
     schema: AssessmentGenerationSchema,
     abortSignal: AbortSignal.timeout(policy.timeoutMs),

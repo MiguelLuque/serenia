@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import type { SafetyState } from '@/lib/shared/chat/safety-state'
 import type { LanguageModel } from 'ai'
 export const SESSION_ID = '11111111-1111-4111-8111-111111111111'
-export async function chatHarness(configuration: { model?: LanguageModel } = {}) {
+export async function chatHarness(configuration: { model?: LanguageModel; directOpenAI?: boolean } = {}) {
   vi.resetModules()
   const state = {
     session: { id: SESSION_ID, user_id: 'user-1', conversation_id: 'conv-1', status: 'open', opened_at: new Date().toISOString(), last_activity_at: new Date().toISOString(), protocol_phase: 1 },
@@ -67,7 +67,7 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
   vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
   vi.doMock('@/lib/shared/llm/task-policy', async importOriginal => {
     const actual = await importOriginal<typeof import('@/lib/shared/llm/task-policy')>()
-    return { ...actual, resolveTaskPolicy: () => actual.resolveTaskPolicy('conversation', { LLM_CONVERSATIONAL_PROVIDER: 'synthetic', LLM_CONVERSATIONAL_MODEL: 'conversation' }) }
+    return { ...actual, resolveTaskPolicy: () => actual.resolveTaskPolicy('conversation', configuration.directOpenAI ? { LLM_CONVERSATIONAL_PROVIDER: 'openai', LLM_CONVERSATIONAL_MODEL: 'gpt-6-luna' } : { LLM_CONVERSATIONAL_PROVIDER: 'synthetic', LLM_CONVERSATIONAL_MODEL: 'conversation' }) }
   })
   vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async (_client: any, _session: string, _openedAt: string, options?: { strict?: boolean }) => { state.safetyOptions.push(options); await state.contextHook(); if (state.safetyFailure) throw new Error('safety unavailable'); return state.safety } }))
   vi.doMock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn(async () => ({ runId: 'synthetic-run' })) }))
@@ -81,6 +81,7 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     return { ...actual, streamText: (options: any) => {
       state.captured.push(options)
       if (configuration.model) return actual.streamText({ ...options, model: configuration.model })
+      if (configuration.directOpenAI) return actual.streamText(options)
       return { toUIMessageStream: ({ onFinish }: any) => new ReadableStream({ async start(controller) {
         await state.hook(options)
         if (state.generationFailure) { controller.enqueue({ type: 'error', errorText: 'synthetic failure' }); controller.close(); return }

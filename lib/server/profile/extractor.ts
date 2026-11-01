@@ -1,6 +1,7 @@
 import 'server-only'
 import { generateText, Output } from 'ai'
 import { resolveTaskPolicy, type TaskPolicy } from '@/lib/shared/llm/task-policy'
+import { resolveTaskModel } from '@/lib/server/llm/model-resolver'
 import { ProfileExtractionSchema, type KnownProfileTarget, type ProfileExtraction } from '@/lib/shared/profile/schema'
 
 const EXTRACTION_PROMPT = `[profile-v1]
@@ -47,7 +48,7 @@ export async function extractProfileObservations(sourceText: string, knownTarget
   try {
     const resolvedPolicy = policy ?? resolveTaskPolicy('profileExtraction')
     const { output } = await generateText({
-      model: resolvedPolicy.modelId,
+      model: resolveTaskModel(resolvedPolicy),
       output: Output.object({ schema: ProfileExtractionSchema, name: 'ProfileExtraction' }),
       system: EXTRACTION_PROMPT,
       prompt: JSON.stringify({ sourceText, knownTargets }),
