@@ -15,6 +15,7 @@ describe('target-bound profile packet', () => {
     const first = makeProfilePacket(root), second = makeProfilePacket(root)
     expect(first).toEqual(second)
     expect(first.manifest.status).toBe('PREPARED_NOT_APPLIED')
+    expect(first.manifest.baselinePath).toBe('supabase/hosted/profile-baseline-20261101.json')
     expect(first.manifest.sourceBase).toBe('93fc4ef')
     expect(first.manifest.projectId).toBe('brpozobkoatabctjjadc')
     expect(first.manifest.canonicalName).toBe('serenia_progressive_profile_review')
@@ -44,13 +45,23 @@ describe('target-bound profile packet', () => {
         expect(() => makeProfilePacket(fixture)).toThrow(/source identity/)
         writeFileSync(path, bytes)
       }
-      for (const filename of ['profile-baseline-20261030.json', 'profile-baseline-query.sql', 'profile-new-objects.json']) {
+      for (const filename of ['profile-baseline-20261101.json', 'profile-baseline-query.sql', 'profile-new-objects.json']) {
         const path = resolve(fixture, 'supabase/hosted', filename), bytes = readFileSync(path)
         writeFileSync(path, Buffer.concat([bytes, Buffer.from(' ')]))
         expect(() => makeProfilePacket(fixture)).toThrow(/baseline identity/)
         writeFileSync(path, bytes)
       }
     } finally { rmSync(fixture, { recursive: true, force: true }) }
+  })
+  it('retains the rejected-attempt baseline and changes only capture time and qualified event function identities', () => {
+    const originalBytes = readFileSync(resolve(root, 'supabase/hosted/profile-baseline-20261030.json'))
+    expect(hash(originalBytes)).toBe('e9672c963f6c342d8166c57fa6c7fdce5a6ba0b6c3fe40c56859a44a50d085c6')
+    const original = JSON.parse(originalBytes.toString()), revised = JSON.parse(readFileSync(resolve(root, 'supabase/hosted/profile-baseline-20261101.json'), 'utf8'))
+    expect({ ...revised, capturedAt: original.capturedAt, platform: original.platform }).toEqual(original)
+    expect({ ...revised.platform, eventTriggers: original.platform.eventTriggers }).toEqual(original.platform)
+    expect(revised.platform.eventTriggers).toEqual(original.platform.eventTriggers.map((event: { name: string; function: string }) => ({
+      ...event, function: (event.name === 'ensure_rls' ? 'public.' : 'extensions.') + event.function,
+    })))
   })
   it('rejects CLI target overrides before writing output', () => {
     const result = spawnSync(process.execPath, ['scripts/profile-hosted-packet.mjs', '--target=elsewhere'], { cwd: root, encoding: 'utf8' })

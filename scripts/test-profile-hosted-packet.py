@@ -13,7 +13,7 @@ import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 NAME = 'serenia-profile-packet-' + uuid.uuid4().hex[:12]
-BASELINE = json.loads((ROOT / 'supabase/hosted/profile-baseline-20261030.json').read_text())
+BASELINE = json.loads((ROOT / 'supabase/hosted/profile-baseline-20261101.json').read_text())
 SNAPSHOT = (ROOT / 'supabase/hosted/profile-baseline-query.sql').read_text()
 PACKET = (ROOT / 'supabase/hosted/profile-atomic.sql').read_text()
 
@@ -29,8 +29,8 @@ def query(sql, check=True):
     return docker('exec', '-i', NAME, 'psql', '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=check)
 
 
-def snapshot():
-    return json.loads(query(SNAPSHOT).stdout)
+def snapshot(search_path='public,extensions'):
+    return json.loads(query('set search_path=' + search_path + ';\n' + SNAPSHOT).stdout)
 
 
 def rejected(label, sql, message):
@@ -51,7 +51,7 @@ try:
         raise RuntimeError('PG17 did not start')
     query((ROOT / 'supabase/tests/bootstrap.sql').read_text())
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
-        if path.name.startswith('202610'):
+        if path.name[:6] >= '202610':
             continue
         query('begin;\n' + path.read_text() + '\ncommit;')
     query((ROOT / 'supabase/tests/hosted-platform.sql').read_text())
@@ -59,18 +59,38 @@ try:
         if path.name[:8] >= '20261028':
             continue
         query('begin;\n' + path.read_text() + '\ncommit;')
+    # Reproduce hosted extension event bindings; no extension implementation or
+    # platform DDL is copied to production. The public-only fixture hid this bug.
+    query('create schema extensions;')
+    for event in BASELINE['platform']['eventTriggers']:
+        if event['name'] == 'ensure_rls':
+            continue
+        function_name = event['function'].split('.')[-1].removesuffix('()')
+        tags = '' if event['tags'] is None else ' when tag in (' + ','.join("'" + tag + "'" for tag in event['tags']) + ')'
+        query('create function extensions.' + function_name + '() returns event_trigger language plpgsql as $$begin return; end$$; '
+              'alter function extensions.' + function_name + '() owner to supabase_admin; '
+              'create event trigger ' + event['name'] + ' on ' + event['event'] + tags + ' execute function extensions.' + function_name + '(); '
+              'alter event trigger ' + event['name'] + ' owner to supabase_admin;')
     # Known fictitious Auth-only values, never actual hosted users or secrets.
     query("alter table auth.users add column fixture_label text; set role supabase_auth_admin; insert into auth.users(id,fixture_label) values ('00000000-0000-0000-0000-000000000101','fixture-one'),('00000000-0000-0000-0000-000000000102','fixture-two'),('00000000-0000-0000-0000-000000000103','fixture-three'); reset role;")
     query('create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text,name text,statements text[]);')
     for entry in BASELINE['history']:
         query("insert into supabase_migrations.schema_migrations values ('" + entry['version'] + "','" + entry['name'] + "',array['known synthetic fixture']);")
     fixture = snapshot()
+    legacy_events = "select jsonb_agg(e.evtfoid::regprocedure::text order by e.evtname) from pg_event_trigger e;"
+    legacy_default = json.loads(query('set search_path=public,extensions;' + legacy_events).stdout)
+    legacy_packet = json.loads(query('set search_path=public,pg_temp;' + legacy_events).stdout)
+    assert sum(a != b for a, b in zip(legacy_default, legacy_packet)) == 6, 'Legacy context bug not reproduced for six extension bindings'
+    print('PASS legacy regprocedure representation changes for six extension bindings between capture/packet contexts')
+    assert fixture == snapshot('public,pg_temp'), 'Snapshot must be invariant between capture and packet search_path'
+    assert fixture['platform']['eventTriggers'] == BASELINE['platform']['eventTriggers'], 'Fixture event metadata must equal all seven official bindings'
+    print('PASS complete canonical baseline invariant between capture and exact packet search_path')
     assert fixture['catalog'] == BASELINE['catalog'], 'Actual catalog semantic hashes differ'
     assert fixture['counts'] == BASELINE['counts']
     assert fixture['clinicalCounts'] == BASELINE['clinicalCounts']
     assert fixture['tableNames'] == BASELINE['tableNames']
     assert fixture['routineSignatures'] == BASELINE['routineSignatures']
-    # ONLY expected metadata changes: bootstrap has one event trigger, auth shim,
+    # ONLY expected metadata changes: seven fixture event bindings, auth shim,
     # synthetic history SQL and different historical sources. No guard/DDL rewrite.
     measured = {**BASELINE, **fixture}
     expected_json = json.dumps(BASELINE, separators=(',', ':'), ensure_ascii=False)
@@ -79,9 +99,12 @@ try:
     packet = PACKET.replace(expected_json, fixture_json)
     assert packet.count(fixture_json) == 1
     print('PASS fixture catalog semantics/counts/table and routine identities equal official baseline; expected metadata substituted only')
-    query('begin;\n' + packet + '\nrollback;')
+    query('begin; set local search_path=public,extensions;\n' + packet + '\nrollback;')
     assert snapshot() == fixture
     print('PASS full exact-source packet normal rehearsal and rollback')
+    query('begin; set local search_path=public,pg_temp;\n' + packet + '\nrollback;')
+    assert snapshot() == fixture
+    print('PASS full exact-source packet from both capture and exact packet search_path contexts')
 
     before_probes = [
         ('foreign table', 'create table public.foreign_profile_drift(id integer);', 'Profile old table baseline changed'),
@@ -94,6 +117,9 @@ try:
         ('event tags', "drop event trigger ensure_rls; create event trigger ensure_rls on ddl_command_end when tag in ('CREATE TABLE','CREATE TABLE AS') execute function public.rls_auto_enable();", 'Profile platform baseline changed'),
         ('event disabled', 'alter event trigger ensure_rls disable;', 'Profile platform baseline changed'),
         ('event function', 'create function public.fixture_event() returns event_trigger language plpgsql as $$begin return; end$$; drop event trigger ensure_rls; create event trigger ensure_rls on ddl_command_end execute function public.fixture_event();', 'Profile platform baseline changed'),
+        ('extension event binding', 'create function extensions.fixture_wrong_binding() returns event_trigger language plpgsql as $$begin return; end$$; drop event trigger issue_pg_graphql_access; create event trigger issue_pg_graphql_access on ddl_command_end when tag in (\'CREATE FUNCTION\') execute function extensions.fixture_wrong_binding(); alter event trigger issue_pg_graphql_access owner to supabase_admin;', 'Profile platform baseline changed'),
+        ('same-name extension event namespace', 'create schema extensions_shadow; create function extensions_shadow.grant_pg_graphql_access() returns event_trigger language plpgsql as $$begin return; end$$; drop event trigger issue_pg_graphql_access; create event trigger issue_pg_graphql_access on ddl_command_end when tag in (\'CREATE FUNCTION\') execute function extensions_shadow.grant_pg_graphql_access(); alter event trigger issue_pg_graphql_access owner to supabase_admin;', 'Profile platform baseline changed'),
+        ('extension event enable', 'alter event trigger issue_pg_graphql_access disable;', 'Profile platform baseline changed'),
         ('platform routine source', 'create or replace function public.rls_auto_enable() returns event_trigger language plpgsql security definer set search_path=pg_catalog as $$begin return; end$$;', 'Profile platform baseline changed'),
         ('Auth trigger disabled', 'alter table auth.users disable trigger on_auth_user_created;', 'Profile platform baseline changed'),
         ('old column', 'alter table public.user_profiles add column unexpected text;', 'Profile old table baseline changed'),

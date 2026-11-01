@@ -8,9 +8,9 @@
   "postgresMajor": 17,
   "mechanism": "official MCP apply_migration single atomic Management query; server version mapped only after success",
   "status": "PREPARED_NOT_APPLIED",
-  "baselinePath": "supabase/hosted/profile-baseline-20261030.json",
-  "baselineSha256": "e9672c963f6c342d8166c57fa6c7fdce5a6ba0b6c3fe40c56859a44a50d085c6",
-  "baselineQuerySha256": "ca0b41ba361b81484f618f92e441857c6b4cd1f25014857c86aff7706725a9b6",
+  "baselinePath": "supabase/hosted/profile-baseline-20261101.json",
+  "baselineSha256": "a93732427101c87e737a2c48a1c553941c2f19c3c300e209434c084e49553dda",
+  "baselineQuerySha256": "0739e19c1a35629c3573c7671b5cc727ff7bf3d593e759f1922f039e7d3efd06",
   "newObjectsPath": "supabase/hosted/profile-new-objects.json",
   "newObjectsSha256": "10a27539883c60c3b888c678a5053ac67636693aa24f180c359dda45c1108204",
   "newObjectsQuerySha256": "ed366bda1cc54fb19ed7f7d2f0718d2e54fcd81f9afee8f5cd8f7c0a62f4baa6",
@@ -296,7 +296,7 @@
         "event": "ddl_command_end",
         "owner": "postgres",
         "enabled": "O",
-        "function": "rls_auto_enable()"
+        "function": "public.rls_auto_enable()"
       },
       {
         "name": "issue_graphql_placeholder",
@@ -306,7 +306,7 @@
         "event": "sql_drop",
         "owner": "supabase_admin",
         "enabled": "O",
-        "function": "set_graphql_placeholder()"
+        "function": "extensions.set_graphql_placeholder()"
       },
       {
         "name": "issue_pg_cron_access",
@@ -316,7 +316,7 @@
         "event": "ddl_command_end",
         "owner": "supabase_admin",
         "enabled": "O",
-        "function": "grant_pg_cron_access()"
+        "function": "extensions.grant_pg_cron_access()"
       },
       {
         "name": "issue_pg_graphql_access",
@@ -326,7 +326,7 @@
         "event": "ddl_command_end",
         "owner": "supabase_admin",
         "enabled": "O",
-        "function": "grant_pg_graphql_access()"
+        "function": "extensions.grant_pg_graphql_access()"
       },
       {
         "name": "issue_pg_net_access",
@@ -336,7 +336,7 @@
         "event": "ddl_command_end",
         "owner": "supabase_admin",
         "enabled": "O",
-        "function": "grant_pg_net_access()"
+        "function": "extensions.grant_pg_net_access()"
       },
       {
         "name": "pgrst_ddl_watch",
@@ -344,7 +344,7 @@
         "event": "ddl_command_end",
         "owner": "supabase_admin",
         "enabled": "O",
-        "function": "pgrst_ddl_watch()"
+        "function": "extensions.pgrst_ddl_watch()"
       },
       {
         "name": "pgrst_drop_watch",
@@ -352,13 +352,13 @@
         "event": "sql_drop",
         "owner": "supabase_admin",
         "enabled": "O",
-        "function": "pgrst_drop_watch()"
+        "function": "extensions.pgrst_drop_watch()"
       }
     ]
   },
   "historySha256": "d5591084271136f1a3d13b8603020d86f6e9f9b2780dc3f025cfef1c9ed4a2ef",
   "catalogSha256": "22a0a201f6f235bc003bfc43f7eb2faa2928c5b0f1d3b8d03a774ac4393dcd81",
-  "platformSha256": "f26d673cae7844972e2f3eef2e05766a14381d4d98f99dd9b15f72a1046220f6",
+  "platformSha256": "38faa9b39c4732ab31bc3adc8c9e9f4db5ee122cf0d4692af1ebc77373b20e26",
   "tableNames": [
     "assessment_jobs",
     "assessments",
@@ -453,7 +453,7 @@
       "sha256": "1d57bcd44f9f37de88a68b46a75e1271b86f36acacfde228178dbd3d27545205",
       "localVersion": "20261028081958",
       "position": 1,
-      "offset": 41055,
+      "offset": 41292,
       "bytes": 23032
     },
     {
@@ -461,7 +461,7 @@
       "sha256": "01a00ea14358c9d70b99a74bd0569660d9689ca157aaa1dbb37c35fde3687a06",
       "localVersion": "20261028180058",
       "position": 2,
-      "offset": 64278,
+      "offset": 64515,
       "bytes": 4154
     },
     {
@@ -469,7 +469,7 @@
       "sha256": "9fbff95d4afaa1c4076fca09674a0c601db86af9b69b4ff3e35a7acfdf342827",
       "localVersion": "20261028185351",
       "position": 3,
-      "offset": 68634,
+      "offset": 68871,
       "bytes": 3071
     },
     {
@@ -477,11 +477,11 @@
       "sha256": "c9cc722dd713d6ee209f65b77b3ef912e2ae732443c8bdad424b2fa7c9293c6d",
       "localVersion": "20261030152754",
       "position": 4,
-      "offset": 71904,
+      "offset": 72141,
       "bytes": 2770
     }
   ],
-  "packetBytes": 81456,
-  "packetSha256": "2133299d405d8ea5a04fdc88b4faeaee0cf78a5f4866050a211992a0c677882f",
+  "packetBytes": 81693,
+  "packetSha256": "313b31b1c06bbe461313a81af9ff0f18fe0cd0a1882ee66ac8013c2ffc05e04a",
   "noHistoricalReplay": true
 }

@@ -4,8 +4,8 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
-const baselineIdentity = 'e9672c963f6c342d8166c57fa6c7fdce5a6ba0b6c3fe40c56859a44a50d085c6'
-const queryIdentity = 'ca0b41ba361b81484f618f92e441857c6b4cd1f25014857c86aff7706725a9b6'
+const baselineIdentity = 'a93732427101c87e737a2c48a1c553941c2f19c3c300e209434c084e49553dda'
+const queryIdentity = '0739e19c1a35629c3573c7671b5cc727ff7bf3d593e759f1922f039e7d3efd06'
 const newObjectsIdentity = '10a27539883c60c3b888c678a5053ac67636693aa24f180c359dda45c1108204'
 export const profileSources = Object.freeze([
   { filename: '20261028081958_progressive_profile.sql', sha256: '1d57bcd44f9f37de88a68b46a75e1271b86f36acacfde228178dbd3d27545205' },
@@ -16,7 +16,7 @@ export const profileSources = Object.freeze([
 
 export function makeProfilePacket(root = resolve('.')) {
   const read = path => readFileSync(resolve(root, path))
-  const baselineBytes = read('supabase/hosted/profile-baseline-20261030.json')
+  const baselineBytes = read('supabase/hosted/profile-baseline-20261101.json')
   const queryBytes = read('supabase/hosted/profile-baseline-query.sql')
   if (sha256(baselineBytes) !== baselineIdentity || sha256(queryBytes) !== queryIdentity) throw new Error('Profile hosted baseline identity changed')
   const baseline = JSON.parse(baselineBytes)
@@ -49,7 +49,7 @@ export function makeProfilePacket(root = resolve('.')) {
     ...baseline.target, sourceBase: '93fc4ef', canonicalName: 'serenia_progressive_profile_review',
     postgresMajor: 17,
     mechanism: 'official MCP apply_migration single atomic Management query; server version mapped only after success',
-    status: 'PREPARED_NOT_APPLIED', baselinePath: 'supabase/hosted/profile-baseline-20261030.json',
+    status: 'PREPARED_NOT_APPLIED', baselinePath: 'supabase/hosted/profile-baseline-20261101.json',
     baselineSha256: baselineIdentity, baselineQuerySha256: queryIdentity,
     newObjectsPath: 'supabase/hosted/profile-new-objects.json', newObjectsSha256: newObjectsIdentity,
     newObjectsQuerySha256: sha256(newObjectsQuery),
