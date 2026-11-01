@@ -273,3 +273,40 @@ it('retains text typed while the final admitted answer arrives with a persisted 
  expect(draft.value).toBe('Borrador nuevo aún no enviado')
  expect(fixture.refresh).not.toHaveBeenCalled()
 })
+
+
+it.each(['', 'Una idea posterior', 'Mi texto original'])('separates sent A from draft B through failure and retry (B=%j)', async nextDraft => {
+ fixture.failed = false
+ let fail!: () => void
+ const fetch = vi.fn().mockImplementationOnce((_url, init) => {
+  const body = JSON.parse(init.body)
+  fixture.requestId = body.requestId; fixture.messageId = body.requestId; fixture.text = 'Mi texto original'
+  return new Promise<Response>(resolve => { fail = () => resolve(new Response('temporarily unavailable', { status: 503 })) })
+ }).mockImplementation(async () => reply())
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ const input = screen.getByRole('textbox') as HTMLTextAreaElement
+ fireEvent.change(input, { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText(/Esperando respuesta/)
+ expect(input.value).toBe('')
+ fireEvent.change(input, { target: { value: nextDraft } })
+ fixture.failed = true
+ await act(async () => { fail() })
+ await screen.findByRole('button', { name: 'Reintentar el mismo mensaje' })
+ expect(input.value).toBe(nextDraft)
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull())
+ expect(input.value).toBe(nextDraft)
+ expect(screen.getAllByText('Mi texto original', { selector: 'span' })).toHaveLength(1)
+ expect(JSON.parse(fetch.mock.calls[1][1].body).requestId).toBe(JSON.parse(fetch.mock.calls[0][1].body).requestId)
+ expect((screen.getByRole('button', { name: 'Enviar' }) as HTMLButtonElement).disabled).toBe(!nextDraft)
+ if (nextDraft) {
+  fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
+  const next = JSON.parse(fetch.mock.calls[2][1].body)
+  expect(next.requestId).not.toBe(JSON.parse(fetch.mock.calls[0][1].body).requestId)
+  expect(next.messages[0].parts[0].text).toBe(nextDraft)
+ }
+})

@@ -31,6 +31,7 @@ interface ChatViewProps {
   serverNow?: Date
   activeQuestionnaire?: ActiveQuestionnaire | null
   initialRecovery?: ChatRecovery | null
+  initialClosed?: boolean
 }
 
 function minutesRemaining(expiresAt: Date, now = Date.now()): number {
@@ -76,6 +77,7 @@ export function ChatView({
   serverNow,
   activeQuestionnaire,
   initialRecovery = null,
+  initialClosed = false,
 }: ChatViewProps) {
   const router = useRouter()
   const [clock, setClock] = useState(() => ({ serverNow: serverNow?.getTime() ?? Date.now(), expiresAt: expiresAt.getTime(), monotonic: performance.now() }))
@@ -91,7 +93,7 @@ export function ChatView({
 
   const [recovery, setRecovery] = useState(initialRecovery)
   const [recoveryError, setRecoveryError] = useState(false)
-  const [externallyClosed, setExternallyClosed] = useState(false)
+  const [externallyClosed, setExternallyClosed] = useState(initialClosed)
   const [urgentMode, setUrgentMode] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const failedRef = useRef(false)
@@ -252,7 +254,9 @@ export function ChatView({
     await sendMessage({ id: requestId, role: 'user', parts: [{ type: 'text', text }] })
     const completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(requestId)
     if (completed) { transitionRef.current += 1; setRecovery(null); setUrgentMode(false) }
-    return completed
+    // Once dispatched, the transcript/retry owns the submitted text even
+    // when transport fails. The composer belongs to the next draft.
+    return true
   }
 
   useEffect(() => {
@@ -283,14 +287,14 @@ export function ChatView({
   // end-of-session banner below has a link to /app when the patient is
   // ready.
   useEffect(() => {
-    if (closeSignal !== 'crisis' || draft.trim()) return
+    if (initialClosed || closeSignal !== 'crisis' || draft.trim()) return
     if (crisisRedirectRef.current) return
     crisisRedirectRef.current = true
     const timer = setTimeout(() => {
       router.push('/app')
     }, 1800)
     return () => clearTimeout(timer)
-  }, [closeSignal, router, draft])
+  }, [closeSignal, router, draft, initialClosed])
 
   useEffect(() => {
     if (isClosed) return
