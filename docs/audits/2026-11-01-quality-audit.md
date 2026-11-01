@@ -60,3 +60,9 @@ Ruling: revise only prepared-never-applied packet to compare schema-qualified ev
 ## Revisión final y estado de publicación
 
 [Revisión final](2026-11-01-quality-final-review.md): C0/I0/M0 para la rama preparada; publicaciónBLOQUEADA por el gate estricto de dependencias. No se ha aplicado remediación de paquetes incompatible ni waiver. El paquete SQL corregido tiene preflight oficial exacto, pero la confirmación de su apply volvió a caducar; consulta posterior43versiones/mappingfalse/perfilausente. No se han cambiado main, flags ni despliegue. Los informes antiguos describen hitos previos; este estado prevalece.
+
+## Verificación del árbol limpio y borrador
+
+HEAD915c8e2 construido y verificado en serenia-verify-lsp47v:6/7gatesPASS (1114tests, lint, tipos, wire,SQL y buildaislado). Sólo auditstrictFAIL; no se presenta verifyglobalcomoPASS. LockSHA256cb963dbb3901c1f91e74c86c979e68062a823c464383250f72f95f7d26c9a425. db:verify local53versionesPASS mantiene evidencia separada.
+
+Rama subida y PRborrador[1](https://github.com/MiguelLuque/serenia/pull/1), sin merge/main/producción. Usuario amplió revisión a arquitectura/modelos; plan task-model-policy implementa despacho seguro, separación de tareas y proyecciónoffline. Se preservan los bloqueos de publicación y evaluación clínica.
