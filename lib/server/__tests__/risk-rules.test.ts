@@ -10,7 +10,7 @@ describe('derivePatientRiskState', () => {
   it('rule 1: critical event → acute even if assessment says none', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(1), suicidality: 'none' },
+        lastValidatedAssessment: { observedAt: ago(1), suicidality: 'none' },
         openRiskEvents: [{ severity: 'critical', createdAt: ago(2) }],
         previousSession: null,
         now,
@@ -21,7 +21,7 @@ describe('derivePatientRiskState', () => {
   it('rule 2: assessment suicidality=acute → acute', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(1), suicidality: 'acute' },
+        lastValidatedAssessment: { observedAt: ago(1), suicidality: 'acute' },
         openRiskEvents: [],
         previousSession: null,
         now,
@@ -32,7 +32,7 @@ describe('derivePatientRiskState', () => {
   it('rule 3: assessment suicidality=active → active', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(1), suicidality: 'active' },
+        lastValidatedAssessment: { observedAt: ago(1), suicidality: 'active' },
         openRiskEvents: [],
         previousSession: null,
         now,
@@ -40,10 +40,10 @@ describe('derivePatientRiskState', () => {
     ).toBe('active')
   })
 
-  it('rule 4: recovery — suicidality=none, reviewedAt after all events AND after crisis-closure → none', () => {
+  it('rule 4: recovery — suicidality=none, observedAt after all events AND after crisis-closure → none', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(1), suicidality: 'none' },
+        lastValidatedAssessment: { observedAt: ago(1), suicidality: 'none' },
         openRiskEvents: [{ severity: 'high', createdAt: ago(5) }],
         previousSession: { closedAt: ago(3), closureReason: 'crisis_detected' },
         now,
@@ -54,7 +54,7 @@ describe('derivePatientRiskState', () => {
   it('rule 4 NOT triggered: event more recent than assessment → falls through to watch (rule 6)', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(5), suicidality: 'none' },
+        lastValidatedAssessment: { observedAt: ago(5), suicidality: 'none' },
         openRiskEvents: [{ severity: 'high', createdAt: ago(2) }],
         previousSession: null,
         now,
@@ -65,7 +65,7 @@ describe('derivePatientRiskState', () => {
   it('rule 5: suicidality=passive within 21 days → watch', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(10), suicidality: 'passive' },
+        lastValidatedAssessment: { observedAt: ago(10), suicidality: 'passive' },
         openRiskEvents: [],
         previousSession: null,
         now,
@@ -76,7 +76,7 @@ describe('derivePatientRiskState', () => {
   it('rule 5 decayed: suicidality=passive older than 21 days → none', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(22), suicidality: 'passive' },
+        lastValidatedAssessment: { observedAt: ago(22), suicidality: 'passive' },
         openRiskEvents: [],
         previousSession: null,
         now,
@@ -120,7 +120,7 @@ describe('derivePatientRiskState', () => {
   it('rule 4 caps rule 7: crisis-closure within 21 days WITH recovery → none', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(1), suicidality: 'none' },
+        lastValidatedAssessment: { observedAt: ago(1), suicidality: 'none' },
         openRiskEvents: [],
         previousSession: { closedAt: ago(5), closureReason: 'crisis_detected' },
         now,
@@ -156,7 +156,7 @@ describe('derivePatientRiskState', () => {
   it('bonus: critical event trumps assessment=none recovery → acute', () => {
     expect(
       derivePatientRiskState({
-        lastValidatedAssessment: { reviewedAt: ago(1), suicidality: 'none' },
+        lastValidatedAssessment: { observedAt: ago(1), suicidality: 'none' },
         openRiskEvents: [{ severity: 'critical', createdAt: ago(5) }],
         previousSession: null,
         now,

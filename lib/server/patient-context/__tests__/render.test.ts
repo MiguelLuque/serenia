@@ -32,6 +32,7 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     validated: {
       id: 'assessment-tierA-fixture',
       reviewedAt: daysAgo(10),
+      observedAt: daysAgo(10),
       summary: {
         chief_complaint: 'Ansiedad persistente con pensamientos intrusivos.',
         presenting_issues: ['insomnio', 'dificultad de concentración'],
@@ -90,6 +91,7 @@ function makeHistoricCtx(overrides: Partial<PatientContext> = {}): PatientContex
     validated: {
       id: 'assessment-historic-fixture',
       reviewedAt: daysAgo(120),
+      observedAt: daysAgo(120),
       summary: {
         chief_complaint: 'Depresión recurrente.',
         presenting_issues: ['ánimo bajo', 'aislamiento social'],
@@ -145,7 +147,7 @@ describe('renderPatientContextBlock — Tier A', () => {
     expect(block).toContain('Ana López')
     expect(block).toContain('Sesión nº 3')
     expect(block).toContain('han pasado 7 días desde la anterior')
-    expect(block).toContain('última revisión clínica de hace 10 días')
+    expect(block).toContain('material de sesión de hace 10 días')
     expect(block).toContain('Riesgo clínico registrado')
     expect(block).toContain('---')
   })
@@ -312,6 +314,7 @@ describe('renderPatientContextBlock — historic tier', () => {
       validated: {
         id: 'assessment-historic-all-predate',
         reviewedAt,
+        observedAt: reviewedAt,
         summary: {
           chief_complaint: 'Depresión recurrente.',
           presenting_issues: ['ánimo bajo'],
@@ -337,6 +340,7 @@ describe('renderPatientContextBlock — historic tier', () => {
       validated: {
         id: 'assessment-historic-mixed',
         reviewedAt,
+        observedAt: reviewedAt,
         summary: {
           chief_complaint: 'Depresión recurrente.',
           presenting_issues: ['ánimo bajo'],
@@ -456,6 +460,7 @@ describe('renderPatientContextBlock — truncation', () => {
       validated: {
         id: 'assessment-truncation',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,
@@ -635,6 +640,7 @@ describe('renderPatientContextBlock — additional edge cases', () => {
       validated: {
         id: 'assessment-risk-enums',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: 'Test',
           presenting_issues: [],
@@ -662,6 +668,7 @@ describe('renderPatientContextBlock — additional edge cases', () => {
       validated: {
         id: 'assessment-cc-cap',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: longCc,
           presenting_issues: [],
@@ -684,6 +691,7 @@ describe('renderPatientContextBlock — additional edge cases', () => {
       validated: {
         id: 'assessment-pi-cap',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: 'Test',
           presenting_issues: items,
@@ -730,6 +738,7 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
       validated: {
         id: 'trunc-step1',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: 'Motivo breve para que solo areas inflen el bloque.',
           presenting_issues: ['uno'],
@@ -772,6 +781,7 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
       validated: {
         id: 'trunc-step12',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,
@@ -822,6 +832,7 @@ describe('renderPatientContextBlockWithMeta — truncatedSections', () => {
       validated: {
         id: 'trunc-step3',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,
@@ -882,6 +893,7 @@ describe('renderPatientContextBlockWithMeta — retakeHint option', () => {
       validated: {
         id: 'historic-fix',
         reviewedAt: daysAgo(120),
+        observedAt: daysAgo(120),
         summary: {
           chief_complaint: 'Motivo histórico.',
           presenting_issues: ['a'],
@@ -1042,5 +1054,55 @@ describe('renderProtocolPhaseSection', () => {
     expect(out).toContain('NO reinicies el protocolo')
     // The phase-8 block should NOT appear in the maintenance output
     expect(out).not.toContain('[PROTOCOLO Y FASE ACTUAL — Sesión 8')
+  })
+})
+
+
+describe('reviewed risk uncertainty survives continuity', () => {
+  it('preserves no-evaluation notes and the other risk domains', () => {
+    const ctx = makeTierACtx()
+    ctx.validated!.summary.risk_assessment = {
+      suicidality: 'none', self_harm: 'none', heteroaggression: 'plan', substance_use_acute: 'confirmed',
+      notes: 'Ideación y autolesión no exploradas. La amenaza referida corresponde al paciente hoy.',
+    }
+    const block = renderPatientContextBlock(ctx)
+    expect(block).toContain('Ideación y autolesión no exploradas')
+    expect(block).toContain('La amenaza referida corresponde al paciente hoy')
+    expect(block).toContain('Heteroagresión: plan')
+    expect(block).toContain('Sustancias: confirmed')
+  })
+  it('reserves reviewed risk notes even when agreements and other context exhaust the budget', () => {
+    const ctx = makeTierACtx()
+    ctx.validated!.summary.risk_assessment.notes = 'No se exploró ideación; none no acredita negación.'
+    ctx.pendingTasks = Array.from({ length: 5 }, (_, i) => ({ id: String(i), descripcion: 'T'.repeat(500), estado: 'pendiente', acordadaEn: daysAgo(3) }))
+    ctx.validated!.summary.chief_complaint = 'C'.repeat(1000)
+    const block = renderPatientContextBlock(ctx)
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(block).toContain('No se exploró ideación; none no acredita negación.')
+  })
+})
+
+
+describe('observation provenance under the context budget', () => {
+  it('keeps post-observation agreements when an old report is signed later', () => {
+    const ctx = makeHistoricCtx()
+    ctx.validated!.reviewedAt = daysAgo(0)
+    ctx.pendingTasks = [{ id: 'after-observation', descripcion: 'Acuerdo posterior al material observado', estado: 'pendiente', acordadaEn: daysAgo(30) }]
+    const block = renderPatientContextBlock(ctx)
+    expect(block).toContain('material de sesión de hace 120 días')
+    expect(block).toContain('Acuerdo posterior al material observado')
+  })
+  it('marks truncated source notes and preserves uncertainty and all domains within 2500 characters', () => {
+    const ctx = makeTierACtx()
+    ctx.patient.displayName = 'N'.repeat(100)
+    ctx.validated!.summary.chief_complaint = 'C'.repeat(300)
+    ctx.validated!.summary.risk_assessment = { ...baseRisk, suicidality: 'active', self_harm: 'historic', heteroaggression: 'plan', substance_use_acute: 'suspected', notes: 'No explorado. '.repeat(100) }
+    ctx.pendingTasks = Array.from({ length: 5 }, (_, i) => ({ id: String(i), descripcion: 'T'.repeat(500), estado: 'pendiente', acordadaEn: daysAgo(3) }))
+    const block = renderPatientContextBlock(ctx)
+    expect(block.length).toBeLessThanOrEqual(2500)
+    expect(block).toContain('Notas truncadas; consultar el informe')
+    expect(block).toContain('none no distingue negación de falta de evaluación')
+    expect(block).toContain('Heteroagresión: plan')
+    expect(block).toContain('Sustancias: suspected')
   })
 })

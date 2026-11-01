@@ -3,7 +3,7 @@
   "vectors": [
     {
       "name": "critical even old",
-      "reviewedAt": null,
+      "observedAt": null,
       "suicidality": null,
       "events": [
         {
@@ -16,7 +16,7 @@
     },
     {
       "name": "validated acute",
-      "reviewedAt": "2020-01-01T00:00:00Z",
+      "observedAt": "2020-01-01T00:00:00Z",
       "suicidality": "acute",
       "events": [],
       "previous": null,
@@ -24,7 +24,7 @@
     },
     {
       "name": "validated active",
-      "reviewedAt": "2020-01-01T00:00:00Z",
+      "observedAt": "2020-01-01T00:00:00Z",
       "suicidality": "active",
       "events": [],
       "previous": null,
@@ -32,7 +32,7 @@
     },
     {
       "name": "none clears older high and crisis",
-      "reviewedAt": "2026-10-10T12:00:00Z",
+      "observedAt": "2026-10-10T12:00:00Z",
       "suicidality": "none",
       "events": [
         {
@@ -48,7 +48,7 @@
     },
     {
       "name": "new high after none",
-      "reviewedAt": "2026-10-09T12:00:00Z",
+      "observedAt": "2026-10-09T12:00:00Z",
       "suicidality": "none",
       "events": [
         {
@@ -61,7 +61,7 @@
     },
     {
       "name": "passive recent",
-      "reviewedAt": "2026-09-20T12:00:01Z",
+      "observedAt": "2026-09-20T12:00:01Z",
       "suicidality": "passive",
       "events": [],
       "previous": null,
@@ -69,7 +69,7 @@
     },
     {
       "name": "passive boundary21d",
-      "reviewedAt": "2026-09-20T12:00:00Z",
+      "observedAt": "2026-09-20T12:00:00Z",
       "suicidality": "passive",
       "events": [],
       "previous": null,
@@ -77,7 +77,7 @@
     },
     {
       "name": "high boundary21d",
-      "reviewedAt": null,
+      "observedAt": null,
       "suicidality": null,
       "events": [
         {
@@ -90,7 +90,7 @@
     },
     {
       "name": "recent crisis",
-      "reviewedAt": null,
+      "observedAt": null,
       "suicidality": null,
       "events": [],
       "previous": {
@@ -101,7 +101,7 @@
     },
     {
       "name": "crisis boundary21d",
-      "reviewedAt": null,
+      "observedAt": null,
       "suicidality": null,
       "events": [],
       "previous": {
@@ -112,7 +112,7 @@
     },
     {
       "name": "none equal event cannot clear",
-      "reviewedAt": "2026-10-10T12:00:00Z",
+      "observedAt": "2026-10-10T12:00:00Z",
       "suicidality": "none",
       "events": [
         {
@@ -125,7 +125,7 @@
     },
     {
       "name": "moderate no new cutoff",
-      "reviewedAt": null,
+      "observedAt": null,
       "suicidality": null,
       "events": [
         {

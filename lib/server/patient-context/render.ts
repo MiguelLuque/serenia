@@ -121,9 +121,17 @@ function renderPendingTasksWithinBudget(
 // ── Risk assessment ──────────────────────────────────────────────────────────
 
 function renderRiskAssessment(
-  risk: { suicidality: string; self_harm: string },
+  risk: NonNullable<PatientContext['validated']>['summary']['risk_assessment'],
 ): string {
-  return `Riesgo clínico registrado:\n- Ideación suicida: ${risk.suicidality} — autolesión: ${risk.self_harm}`
+  const notes = truncate(risk.notes, 500)
+  return [
+    'Riesgo clínico registrado (fuente: informe revisado; conservar sus límites):',
+    `- Ideación suicida: ${risk.suicidality} — autolesión: ${risk.self_harm}`,
+    `- Heteroagresión: ${risk.heteroaggression} — Sustancias: ${risk.substance_use_acute ?? 'no evaluadas'}`,
+    '- none no distingue negación de falta de evaluación; no certifica ausencia.',
+    ...(notes ? [`Notas del informe: ${notes}`] : []),
+    ...(notes !== risk.notes ? ['Notas truncadas; consultar el informe antes de concluir.'] : []),
+  ].join('\n')
 }
 
 // ── Tier A / historic instructions ──────────────────────────────────────────
@@ -172,8 +180,8 @@ function assembleTierAOrHistoric(
   let tasksSection = ''
   if (ctx.pendingTasks.length > 0) {
     if (isHistoric) {
-      const reviewedAt = validated.reviewedAt
-      const somePostdate = ctx.pendingTasks.some((t) => t.acordadaEn >= reviewedAt)
+      const observedAt = validated.observedAt
+      const somePostdate = ctx.pendingTasks.some((t) => t.acordadaEn >= observedAt)
       if (somePostdate) {
         tasksSection = renderPendingTasks(ctx.pendingTasks)
       }
@@ -381,13 +389,13 @@ export function renderPatientContextBlockWithMeta(
   switch (ctx.tier) {
     case 'tierA': {
       const ageInDays = ctx.validated!.ageInDays
-      const header = `[CONTEXTO DEL PACIENTE — última revisión clínica de hace ${ageInDays} días]`
+      const header = `[CONTEXTO DEL PACIENTE — material de sesión de hace ${ageInDays} días; revisión ${formatDate(ctx.validated!.reviewedAt)}]`
       return assembleTierAOrHistoric(ctx, header, false, retakeHint)
     }
 
     case 'historic': {
       const ageInDays = ctx.validated!.ageInDays
-      const header = `[CONTEXTO HISTÓRICO DEL PACIENTE — última revisión de hace ${ageInDays} días; puede estar desactualizado]`
+      const header = `[CONTEXTO HISTÓRICO DEL PACIENTE — material de sesión de hace ${ageInDays} días; revisión ${formatDate(ctx.validated!.reviewedAt)}; puede estar desactualizado]`
       return assembleTierAOrHistoric(ctx, header, true, retakeHint)
     }
 

@@ -101,6 +101,35 @@ try:
                     if query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='review_assessment_atomic';").splitlines()[2].strip() != '1':
                         raise RuntimeError('Review signature drift left an overload')
                 print('PASS review forward rejects body/config/owner/ACL/security/signature drift atomically')
+            if 'assessment_observed_chronology' in path.name:
+                chronology_signature = 'public.get_clinician_inbox_page(integer,integer,boolean)'
+                chronology_contract = f"select (to_jsonb(p)-'prosrc')::text from pg_proc p where oid='{chronology_signature}'::regprocedure;"
+                chronology_definition = f"select pg_get_functiondef('{chronology_signature}'::regprocedure);"
+                chronology_before_metadata = query(chronology_contract)
+                chronology_before_definition = query(chronology_definition)
+                drifts = {
+                    'body': f"do $drift$ declare d text; begin d=pg_get_functiondef('{chronology_signature}'::regprocedure); execute replace(d,E'begin\n if auth.uid()',E'begin\n -- deliberate drift\n if auth.uid()'); end $drift$;",
+                    'config': f'alter function {chronology_signature} set search_path=public;',
+                    'owner': f'alter function {chronology_signature} owner to service_role;',
+                    'acl': f'grant execute on function {chronology_signature} to service_role;',
+                    'security': f'alter function {chronology_signature} security invoker;',
+                    'volatility': f'alter function {chronology_signature} volatile;',
+                    'defaults': f"do $drift$ declare d text; begin d=pg_get_functiondef('{chronology_signature}'::regprocedure); execute replace(d,'DEFAULT true','DEFAULT false'); end $drift$;",
+                    'signature': 'create function public.get_clinician_inbox_page(text) returns jsonb language sql as $extra$ select null::jsonb $extra$;',
+                }
+                for label, drift in drifts.items():
+                    try:
+                        query('BEGIN;\n' + drift + '\n' + path.read_text() + '\nCOMMIT;')
+                    except RuntimeError as error:
+                        if 'Unexpected assessment chronology baseline' not in str(error):
+                            raise RuntimeError(f'Unexpected chronology {label} guard failure: {error}') from error
+                    else:
+                        raise RuntimeError(f'Chronology forward accepted {label} drift')
+                    if query(chronology_contract) != chronology_before_metadata or query(chronology_definition) != chronology_before_definition:
+                        raise RuntimeError(f'Chronology {label} guard left partial changes')
+                    if query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='get_clinician_inbox_page';").splitlines()[2].strip() != '1':
+                        raise RuntimeError('Chronology guard left an overload')
+                print('PASS inbox chronology forward rejects body/config/owner/ACL/security/volatility/defaults/signature drift atomically')
             if 'profile_nonretryable_conflicts' in path.name:
                 profile_signatures = [
                     'public.review_profile_observation(uuid,text,timestamptz)',
@@ -135,6 +164,8 @@ try:
                             raise RuntimeError('Profile conflict signature drift left an overload')
                 print('PASS all three profile conflict routines reject body/config/owner/ACL/security/signature drift atomically')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'assessment_observed_chronology' in path.name and query(chronology_contract) != chronology_before_metadata:
+                raise RuntimeError('Chronology forward changed metadata/ACL/signature')
             if 'profile_nonretryable_conflicts' in path.name:
                 expected_contract = profile_before.replace("errcode='40001'", "errcode='PT409'")
                 if query(profile_contract) != expected_contract:
@@ -187,12 +218,14 @@ try:
         latest = max((e['createdAt'] for e in v['events']), default=None)
         high = max((e['createdAt'] for e in v['events'] if e['severity']=='high'), default=None)
         prev = v['previous'] or {}
-        params = [v['reviewedAt'],v['suicidality'],None,latest,high,prev.get('closedAt'),prev.get('closureReason'),parity['now']]
+        params = [v['observedAt'],v['suicidality'],None,latest,high,prev.get('closedAt'),prev.get('closureReason'),parity['now']]
         terms = [literal(x) for x in params]
         terms[2] = 'true' if any(e['severity']=='critical' for e in v['events']) else 'false'
         query("do $$ begin if derive_patient_risk_state_sql(" + ','.join(terms) + ")<>" + literal(v['expected']) + " then raise exception 'SQL risk parity failed: " + v['name'] + "'; end if; end $$;")
     for item in json.loads((ROOT / 'tests/fixtures/assessment-risk-parity.json').read_text()):
         query("do $$ begin if assessment_summary_valid_for_risk(" + literal(json.dumps(item['summary'])) + "::jsonb) is distinct from " + ('true' if item['expected'] else 'false') + " then raise exception 'Full schema parity failed: " + item['name'] + "'; end if; end $$;")
+    query((ROOT / 'supabase/tests/assessment-chronology.sql').read_text())
+    print('PASS late review preserves observed session chronology and later risk events')
     query((ROOT / 'supabase/tests/clinician-inbox-page.sql').read_text())
     print('PASS globally prioritized bounded inbox, old pending pagination, snapshots and 12 SQL/TypeScript parity vectors')
     # Non-binding synthetic acknowledgement for existing Task 2 actor fixtures.

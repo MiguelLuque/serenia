@@ -30,6 +30,7 @@ export type PatientContext = {
   validated: {
     id: string
     reviewedAt: string
+    observedAt: string
     summary: Pick<
       AssessmentSummary,
       'chief_complaint' | 'presenting_issues' | 'areas_for_exploration' | 'risk_assessment' | 'questionnaires'
@@ -151,18 +152,28 @@ export async function buildPatientContext(
     tierBRow,
     questionnaireRows,
     riskRows,
+    criticalRiskRow,
+    highRiskRow,
     prevSessionRow,
     pendingTaskRows,
     sessionCountRow,
     profileRow,
   ] = await Promise.all([
-    // Q1: latest validated assessment
+    // Q1: latest validated closure by session observation, not signature date
     supabase
       .from('assessments')
-      .select('id, reviewed_at, summary_json')
+      .select('id, session_id, reviewed_at, summary_json, observed_session:clinical_sessions!assessments_session_id_fkey!inner(id, user_id, status, closed_at)')
+      .eq('assessment_type', 'closure')
+      .eq('observed_session.user_id', userId)
+      .eq('observed_session.status', 'closed')
+      .not('observed_session.closed_at', 'is', null)
+      .not('reviewed_at', 'is', null)
       .in('status', ['reviewed_confirmed', 'reviewed_modified'])
       .eq('user_id', userId)
+      .order('observed_session(closed_at)', { ascending: false, nullsFirst: false })
+      .order('session_id', { ascending: false })
       .order('reviewed_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(1)
       .maybeSingle(),
 
@@ -170,11 +181,17 @@ export async function buildPatientContext(
     // must not re-enter the conversation as if still awaiting review.
     supabase
       .from('assessments')
-      .select('summary_json, clinical_sessions!assessments_session_id_fkey!inner(closed_at, status)')
+      .select('summary_json, observed_session:clinical_sessions!assessments_session_id_fkey!inner(user_id, closed_at, status)')
+      .eq('assessment_type', 'closure')
+      .eq('observed_session.user_id', userId)
       .eq('status', 'draft_ai')
       .eq('user_id', userId)
-      .eq('clinical_sessions.status', 'closed')
-      .order('closed_at', { referencedTable: 'clinical_sessions', ascending: false })
+      .eq('observed_session.status', 'closed')
+      .not('observed_session.closed_at', 'is', null)
+      .order('observed_session(closed_at)', { ascending: false, nullsFirst: false })
+      .order('session_id', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(1)
       .maybeSingle(),
 
@@ -197,6 +214,15 @@ export async function buildPatientContext(
       .eq('status', 'open')
       .order('created_at', { ascending: false })
       .limit(10),
+
+    // Bounded global probes preserve policy inputs outside the ten details.
+    // Details already include latestOpen; these retain anyCritical/latestHigh.
+    supabase.from('risk_events').select('severity, created_at')
+      .eq('user_id', userId).eq('status', 'open').eq('severity', 'critical')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('risk_events').select('severity, created_at')
+      .eq('user_id', userId).eq('status', 'open').eq('severity', 'high')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
 
     // Q5: previous closed session
     supabase
@@ -236,6 +262,8 @@ export async function buildPatientContext(
   if (tierBRow.error) throw tierBRow.error
   if (questionnaireRows.error) throw questionnaireRows.error
   if (riskRows.error) throw riskRows.error
+  if (criticalRiskRow.error) throw criticalRiskRow.error
+  if (highRiskRow.error) throw highRiskRow.error
   if (prevSessionRow.error) throw prevSessionRow.error
   if (pendingTaskRows.error) throw pendingTaskRows.error
   if (sessionCountRow.error) throw sessionCountRow.error
@@ -269,8 +297,9 @@ export async function buildPatientContext(
   let validated: PatientContext['validated'] = null
 
   const vRow = validatedRow.data
-  if (vRow && vRow.reviewed_at) {
-    const ageInDays = floorDays(nowMs, vRow.reviewed_at)
+  if (vRow?.reviewed_at && vRow.observed_session?.closed_at) {
+    const observedAt = vRow.observed_session.closed_at
+    const ageInDays = floorDays(nowMs, observedAt)
     const parsed = AssessmentSchema.safeParse(vRow.summary_json)
     if (!parsed.success) {
       console.error('[buildPatientContext] AssessmentSchema parse failed for validated assessment', {
@@ -283,6 +312,7 @@ export async function buildPatientContext(
       validated = {
         id: vRow.id,
         reviewedAt: vRow.reviewed_at,
+        observedAt,
         summary: {
           chief_complaint: parsed.data.chief_complaint,
           presenting_issues: parsed.data.presenting_issues,
@@ -303,7 +333,7 @@ export async function buildPatientContext(
   if (tier === 'none') {
     const bRow = tierBRow.data
     if (bRow) {
-      const closedAt = bRow.clinical_sessions?.closed_at ?? null
+      const closedAt = bRow.observed_session?.closed_at ?? null
       if (closedAt) {
         const parsed = AssessmentSchema.safeParse(bRow.summary_json)
         if (!parsed.success) {
@@ -414,13 +444,16 @@ export async function buildPatientContext(
 
   // ── Risk state ───────────────────────────────────────────────────────────
   // Only tier-A validated assessments feed the risk derivation. Historic
-  // assessments are too old to represent current clinician judgment.
+  // observations are too old to represent current patient state.
   const riskState = derivePatientRiskState({
     lastValidatedAssessment:
       tier === 'tierA' && validated
-        ? { reviewedAt: validated.reviewedAt, suicidality: validated.summary.risk_assessment.suicidality }
+        ? { observedAt: validated.observedAt, suicidality: validated.summary.risk_assessment.suicidality }
         : null,
-    openRiskEvents: openRiskEvents.map((e) => ({ severity: e.severity, createdAt: e.createdAt })),
+    openRiskEvents: [
+      ...openRiskEvents.map((e) => ({ severity: e.severity, createdAt: e.createdAt })),
+      ...[criticalRiskRow.data, highRiskRow.data].flatMap(e => e ? [{ severity: e.severity, createdAt: e.created_at }] : []),
+    ],
     previousSession: previousSession
       ? { closedAt: previousSession.closedAt, closureReason: previousSession.closureReason }
       : null,

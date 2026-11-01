@@ -32,10 +32,16 @@ type TableResponse = { data: unknown; error: unknown; count?: number | null }
 type TableFactory = (table: string) => TableResponse
 
 function makeChain(response: TableResponse) {
+  // Older fixtures observed/reviewed the same day; include the actual joined shape.
+  if (response.data && typeof response.data === 'object' && 'reviewed_at' in response.data) {
+    const row = response.data as { reviewed_at: string; observed_session?: unknown }
+    response = { ...response, data: { ...row, observed_session: row.observed_session ?? { status: 'closed', closed_at: row.reviewed_at, user_id: 'user-1' } } }
+  }
   const chain: Record<string, unknown> = {}
   const terminal = () => Promise.resolve(response)
   const self = () => chain
 
+  chain.not = vi.fn(self)
   chain.select = vi.fn(self)
   chain.in = vi.fn(self)
   chain.eq = vi.fn(self)
@@ -72,7 +78,7 @@ describe('buildPatientContext', () => {
     const row = {
       status,
       summary_json: { ...baseSummary, chief_complaint: 'Interpretación que el clínico rechazó' },
-      clinical_sessions: { closed_at: daysAgo(1), status: 'closed' },
+      observed_session: { closed_at: daysAgo(1), status: 'closed' },
     }
     const supabase = { from: vi.fn((table: string) => {
       if (table !== 'assessments') return makeChain(table === 'clinical_sessions'
@@ -126,7 +132,7 @@ describe('buildPatientContext', () => {
     const sessionClosedAt = daysAgo(7)
     const draftAssessmentRow = {
       summary_json: baseSummary,
-      clinical_sessions: { closed_at: sessionClosedAt, status: 'closed' },
+      observed_session: { closed_at: sessionClosedAt, status: 'closed' },
     }
 
     // assessments is queried twice: validated (Q1) returns null, draft (Q2) returns row
@@ -204,7 +210,7 @@ describe('buildPatientContext', () => {
     const validatedRow = { id: 'a-v', reviewed_at: reviewedAt, summary_json: baseSummary }
     const draftRow = {
       summary_json: baseSummary,
-      clinical_sessions: { closed_at: daysAgo(1), status: 'closed' },
+      observed_session: { closed_at: daysAgo(1), status: 'closed' },
     }
 
     let assessmentsCallCount = 0
@@ -332,7 +338,7 @@ describe('buildPatientContext', () => {
     const closedAt = daysAgo(3)
     const draftRow = {
       summary_json: baseSummary,
-      clinical_sessions: { closed_at: closedAt, status: 'closed' },
+      observed_session: { closed_at: closedAt, status: 'closed' },
     }
 
     let assessmentsCallCount = 0

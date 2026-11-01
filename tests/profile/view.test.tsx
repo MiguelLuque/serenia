@@ -43,7 +43,7 @@ it('activates explicitly and never changes consent optimistically', async () => 
   expect(screen.queryByText('Cambio guardado.')).toBeNull()
   finish({ ok: false, error: 'No se pudo guardar el cambio.' })
   expect((await screen.findByRole('alert')).textContent).toContain('No se pudo guardar')
-  expect(screen.getByRole('button', { name: 'Activar memoria' })).toBeTruthy()
+  expect(await screen.findByRole('button', { name: 'Activar memoria' })).toBeTruthy()
 })
 it('disables through a saved action while retaining visible review controls', async () => {
   render(<ProfileMemoryView memory={{ ...empty, enabled: true, observations: [correction] }} />)
