@@ -1,5 +1,7 @@
 # Serenia: versión para que Pablo pruebe evaluación y conversación
 
+Actualización1noviembre2026: la [nota del perfil progresivo](actualizacion-perfil-2026-10-30.md) amplía el material del correo y conserva enlace y credenciales. Consultar el [recibo de calidad y publicación](../../audits/2026-11-01-quality-audit.md) para distinguir lo preparado, lo probado y lo efectivamente desplegado. Mientras no se confirme una generación válida, el acceso al modelo sigue pendiente de la incidencia de AI Gateway descrita allí.
+
 25 de octubre de 2026. Variante `0.1.0-pilot`. Preparada para casos ficticios supervisados; pendiente de valoración de Pablo. Esta entrega trabaja el método y la experiencia de conversación.
 
 Actualización en rama26octubre: variante `0.2.0-pilot`, con [síntesis científica](../../research/2026-10-26-psychological-assessment-evidence.md) y [ocho episodios adicionales](evidencia-casos-2026-10-26.md) de evaluación contextual. Se corrigen procedencia de saltos en el informe y reutilización de informes rechazados. La validación clínica sigue pendiente. El despliegue `a852e9c` conserva0.1 hasta publicar expresamente esta actualización; las pruebas de código no son conversaciones ejecutadas con el proveedor.

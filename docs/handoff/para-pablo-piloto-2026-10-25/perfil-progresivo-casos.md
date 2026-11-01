@@ -1,6 +1,6 @@
 # Perfil progresivo: casos ficticios para revisión
 
-Preparación28octubre2026; actualización30octubre. Implementación y pruebas técnicas locales descritas en [el recibo de aceptación](../../audits/2026-10-28-progressive-profile-acceptance.md). El perfil sigue local, no incluido en el piloto0.2 enviado a Pablo. Estos casos semánticos aún no se han validado con el modelo real ni con Pablo. Los criterios siguientes son propuestas para su revisión. No usar datos reales.
+Preparación28octubre2026; actualización30octubre. Implementación y pruebas técnicas locales descritas en [el recibo de aceptación](../../audits/2026-10-28-progressive-profile-acceptance.md). La publicación alojada se documenta en la [actualización del piloto](actualizacion-perfil-2026-10-30.md) y en su recibo de despliegue. Estos casos semánticos siguen pendientes: la primera llamada real fue rechazada por AI Gateway (HTTP403, modelo excluido del nivel gratuito); no hubo ninguna generación válida ni revisión de Pablo. Los criterios siguientes son propuestas para su revisión. No usar datos reales.
 
 ## Qué queremos observar
 
