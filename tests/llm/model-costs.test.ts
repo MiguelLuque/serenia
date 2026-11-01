@@ -50,4 +50,14 @@ describe('offline model costs', () => {
     expect(() => priceAttempt('unknown/model', usage(1, 0))).toThrow('Unknown model')
     expect(() => estimateProjection([{ modelId: 'openai/gpt-6-luna', calls: -1, usage: usage(1, 0) }])).toThrow('Invalid calls')
   })
+
+  it('rejects a known cache count above input even when its sibling is missing', () => {
+    expect(() => priceAttempt('openai/gpt-6-luna', usage(10, 0, 11, null))).toThrow('Invalid usage')
+    expect(() => priceAttempt('openai/gpt-6-luna', usage(10, 0, null, 11))).toThrow('Invalid usage')
+  })
+
+  it('validates known usage in zero-call groups before returning zero cost', () => {
+    expect(() => estimateProjection([{ modelId: 'openai/gpt-6-luna', calls: 0, usage: usage(-1, 0) }])).toThrow('Invalid usage')
+    expect(() => estimateProjection([{ modelId: 'openai/gpt-6-luna', calls: 0, usage: usage(10, 0, 11, null) }])).toThrow('Invalid usage')
+  })
 })

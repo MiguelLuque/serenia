@@ -25,7 +25,11 @@ function checkedUsage(usage: Usage): void {
   for (const count of Object.values(usage)) {
     if (count !== null && (!Number.isSafeInteger(count) || count < 0)) throw new Error('Invalid usage')
   }
-  if (usage.inputTokens !== null && usage.cacheReadTokens !== null && usage.cacheWriteTokens !== null && usage.cacheReadTokens + usage.cacheWriteTokens > usage.inputTokens) throw new Error('Invalid usage')
+  if (usage.inputTokens !== null) {
+    if (usage.cacheReadTokens !== null && usage.cacheReadTokens > usage.inputTokens) throw new Error('Invalid usage')
+    if (usage.cacheWriteTokens !== null && usage.cacheWriteTokens > usage.inputTokens) throw new Error('Invalid usage')
+    if (usage.cacheReadTokens !== null && usage.cacheWriteTokens !== null && usage.cacheReadTokens + usage.cacheWriteTokens > usage.inputTokens) throw new Error('Invalid usage')
+  }
 }
 
 function selectedRate(pricing: Pricing, rate: Rate, inputTokens: number): number | null {
@@ -63,6 +67,7 @@ export function estimateProjection(groups: readonly CallGroup[]): ProjectionResu
   for (const group of groups) {
     modelPricing(group.modelId)
     if (!Number.isSafeInteger(group.calls) || group.calls < 0 || !Number.isSafeInteger(calls + group.calls)) throw new Error('Invalid calls')
+    checkedUsage(group.usage)
     calls += group.calls
   }
   for (const group of groups) {
