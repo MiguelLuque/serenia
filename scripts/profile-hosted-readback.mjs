@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { lstatSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -25,30 +25,51 @@ const limitations = ['RLS_ENFORCEMENT_NOT_VERIFIED', 'ROLE_ATTRIBUTES_AND_MEMBER
   'JWT_DATA_API_NOT_VERIFIED', 'PRECOMMIT_ROW_PRESERVATION_NOT_RECONSTRUCTIBLE']
 
 export function expected() {
-  const manifest = JSON.parse(read('supabase/hosted/profile-dashboard-20261102.json'))
-  const profile = JSON.parse(read('supabase/hosted/profile-manifest.json'))
+  const files = [
+    'supabase/hosted/profile-dashboard-20261102.json', 'supabase/hosted/profile-manifest.json',
+    'supabase/hosted/profile-baseline-20261101.json', 'supabase/hosted/profile-atomic.sql',
+    'supabase/hosted/profile-dashboard-20261102.sql', 'supabase/hosted/profile-new-objects.json',
+    'supabase/hosted/profile-baseline-query.sql', 'supabase/hosted/profile-new-objects-query.sql',
+  ]
+  // Reject symlinked inputs before reading any referenced artifact.
+  for (const path of ['supabase', 'supabase/hosted', ...files]) {
+    const stat = lstatSync(resolve(root, path))
+    if (stat.isSymbolicLink() || (files.includes(path) ? !stat.isFile() : !stat.isDirectory())) throw new Error('Prepared profile artifact identity changed')
+  }
+  const manifestBytes = read(files[0])
+  const profileBytes = read(files[1])
+  if (sha256(manifestBytes) !== '3bff0639e9f36f4bf74b854ab9ba7cd82aed069baad5353ac47ca7654d2f00b1'
+    || sha256(profileBytes) !== 'ae2d3ece1fe8b9ba528005ffcf1a1477d5e841f56bdc026082f462f8d6047d79') throw new Error('Prepared profile artifact identity changed')
+  const manifest = JSON.parse(manifestBytes)
+  const profile = JSON.parse(profileBytes)
+  if (manifest.baselinePath !== files[2] || profile.baselinePath !== files[2]
+    || manifest.packetPath !== files[3] || manifest.wrapperPath !== files[4]
+    || profile.newObjectsPath !== files[5] || manifest.originalManifestPath !== files[1]) throw new Error('Prepared profile artifact identity changed')
   const baselineBytes = read(manifest.baselinePath)
   const baseline = JSON.parse(baselineBytes)
   const packet = read(manifest.packetPath)
   const newObjectsBytes = read(profile.newObjectsPath)
+  const baselineQueryBytes = read(files[6])
+  const newObjectsQueryBytes = read(files[7])
+  const wrapperBytes = read(manifest.wrapperPath)
   if (manifest.status !== 'PREPARED_NOT_APPLIED' || profile.status !== 'PREPARED_NOT_APPLIED'
     || manifest.version !== '20261102122007' || manifest.name !== 'serenia_progressive_profile_review'
     || manifest.projectId !== profile.projectId || manifest.packetSha256 !== profile.packetSha256
     || manifest.packetBytes !== packet.length || sha256(packet) !== manifest.packetSha256
     || sha256(baselineBytes) !== manifest.baselineSha256 || sha256(newObjectsBytes) !== profile.newObjectsSha256
-    || sha256(read('supabase/hosted/profile-baseline-query.sql')) !== profile.baselineQuerySha256
-    || sha256(read('supabase/hosted/profile-new-objects-query.sql')) !== profile.newObjectsQuerySha256
-    || sha256(read(manifest.wrapperPath)) !== manifest.wrapperSha256
-    || read(manifest.wrapperPath).length !== manifest.wrapperBytes
+    || sha256(baselineQueryBytes) !== profile.baselineQuerySha256
+    || sha256(newObjectsQueryBytes) !== profile.newObjectsQuerySha256
+    || sha256(wrapperBytes) !== manifest.wrapperSha256
+    || wrapperBytes.length !== manifest.wrapperBytes
     || !equal(baseline.history, profile.history) || baseline.history.length !== manifest.oldHistoryCount
     || manifest.newHistoryCount !== manifest.oldHistoryCount + 1) throw new Error('Prepared profile artifact identity changed')
-  return { manifest, profile, baseline, packetMd5: md5(packet), newObjects: JSON.parse(newObjectsBytes) }
+  return { manifest, profile, baseline, packetMd5: md5(packet), newObjects: JSON.parse(newObjectsBytes), baselineQueryBytes, newObjectsQueryBytes }
 }
 
 export function makeQuery() {
-  const { manifest, baseline } = expected()
-  const snapshotSource = read('supabase/hosted/profile-baseline-query.sql').toString('utf8').trim().replace(/;$/, '')
-  const newObjectsSource = read('supabase/hosted/profile-new-objects-query.sql').toString('utf8').trim().replace(/;$/, '')
+  const { manifest, baseline, baselineQueryBytes, newObjectsQueryBytes } = expected()
+  const snapshotSource = baselineQueryBytes.toString('utf8').trim().replace(/;$/, '')
+  const newObjectsSource = newObjectsQueryBytes.toString('utf8').trim().replace(/;$/, '')
   const tableNeedle = "c.relkind in ('r','p')"
   const routineNeedle = "p.prokind='f'"
   if (snapshotSource.split(tableNeedle).length !== 2 || snapshotSource.split(routineNeedle).length !== 2) throw new Error('Baseline query structure changed')

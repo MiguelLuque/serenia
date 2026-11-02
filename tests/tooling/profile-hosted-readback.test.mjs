@@ -1,10 +1,100 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { expected, makeQuery, verifyReadback } from '../../scripts/profile-hosted-readback.mjs'
 
 const clone = value => structuredClone(value)
+
+function isolatedReadback() {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'serenia-readback-integrity-')))
+  const files = [
+    'scripts/profile-hosted-readback.mjs',
+    'supabase/hosted/profile-dashboard-20261102.json',
+    'supabase/hosted/profile-manifest.json',
+    'supabase/hosted/profile-baseline-20261101.json',
+    'supabase/hosted/profile-atomic.sql',
+    'supabase/hosted/profile-dashboard-20261102.sql',
+    'supabase/hosted/profile-new-objects.json',
+    'supabase/hosted/profile-baseline-query.sql',
+    'supabase/hosted/profile-new-objects-query.sql',
+  ]
+  for (const path of files) {
+    mkdirSync(dirname(join(directory, path)), { recursive:true })
+    copyFileSync(join(root, path), join(directory, path))
+  }
+  const run = () => spawnSync(process.execPath, [join(directory, files[0]), 'query'], { encoding:'utf8', timeout:5000, maxBuffer:1024*1024, env:{ PATH:process.env.PATH, NODE_ENV:'test' } })
+  return { directory, run }
+}
+
+test('rejects a coordinated change to the baseline and its manifest hash', () => {
+  const f = isolatedReadback()
+  try {
+    assert.equal(f.run().status, 0, 'untampered isolated fixture must be valid')
+    const baseline = join(f.directory, 'supabase/hosted/profile-baseline-20261101.json')
+    const manifestPath = join(f.directory, 'supabase/hosted/profile-dashboard-20261102.json')
+    const value = JSON.parse(readFileSync(baseline, 'utf8'))
+    value.capturedAt = '1900-01-01T00:00:00Z'
+    writeFileSync(baseline, JSON.stringify(value))
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.baselineSha256 = createHash('sha256').update(readFileSync(baseline)).digest('hex')
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+    const result = f.run()
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /Prepared profile artifact identity changed/)
+  } finally { rmSync(f.directory, { recursive:true, force:true }) }
+})
+
+test('rejects an external manifest path before attempting to read it', () => {
+  const f = isolatedReadback()
+  try {
+    assert.equal(f.run().status, 0, 'untampered isolated fixture must be valid')
+    const manifestPath = join(f.directory, 'supabase/hosted/profile-dashboard-20261102.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.baselinePath = '/nonexistent-external-profile-readback-sentinel'
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+    const result = f.run()
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /Prepared profile artifact identity changed/)
+    assert.doesNotMatch(result.stderr, /nonexistent-external-profile-readback-sentinel/)
+  } finally { rmSync(f.directory, { recursive:true, force:true }) }
+})
+
+test('rejects a symlinked baseline before reading the target', () => {
+  const f = isolatedReadback()
+  try {
+    assert.equal(f.run().status, 0, 'untampered isolated fixture must be valid')
+    const baseline = join(f.directory, 'supabase/hosted/profile-baseline-20261101.json')
+    const target = join(f.directory, 'otherwise-valid-baseline.json')
+    copyFileSync(baseline, target)
+    rmSync(baseline)
+    symlinkSync(target, baseline)
+    const result = f.run()
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /Prepared profile artifact identity changed/)
+  } finally { rmSync(f.directory, { recursive:true, force:true }) }
+})
+
+test('generates the query from the verified bytes without reading the input again', () => {
+  const f = isolatedReadback()
+  try {
+    const target = join(f.directory, 'supabase/hosted/profile-baseline-query.sql')
+    const script = join(f.directory, 'scripts/profile-hosted-readback.mjs')
+    const code = `import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module'; import {pathToFileURL} from 'node:url';
+      const original=fs.readFileSync; let reads=0;
+      fs.readFileSync=(path,...args)=>{const value=original(path,...args);if(String(path)===${JSON.stringify(target)} && ++reads===2)return Buffer.from(value.toString()+'\\n-- unverified_second_read');return value};
+      syncBuiltinESMExports();const module=await import(pathToFileURL(${JSON.stringify(script)}).href);const sql=module.makeQuery();
+      console.log(JSON.stringify({reads,containsUnverified:sql.includes('unverified_second_read')}));`
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding:'utf8', timeout:5000, env:{ PATH:process.env.PATH, NODE_ENV:'test' } })
+    assert.equal(result.status, 0, result.stderr)
+    assert.deepEqual(JSON.parse(result.stdout), { reads:1, containsUnverified:false })
+  } finally { rmSync(f.directory, { recursive:true, force:true }) }
+})
 
 function matchingReceipt() {
   const { manifest, baseline, packetMd5, newObjects } = expected()
