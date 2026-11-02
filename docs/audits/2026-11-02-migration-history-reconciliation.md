@@ -2,6 +2,12 @@
 
 **Scope:** read-only inspection of the repository and its recorded hosted baseline. No hosted query, migration repair, SQL Editor Run, secret access, or repository edit was performed. The hosted state below is the captured `profile-baseline-20261101.json`, not a fresh live result. Every proposed route remains **NOT_TESTED**.
 
+## Subsequent isolated prototype
+
+A later, explicitly scoped read-only query recovered the four May seed/drop statements, after a metadata-only check. No hosted migration or history row was changed. A prototype outside the repository preserved all 53 local source files and replayed three trees on PostgreSQL 17.6 with a synthetic empty `auth.users`, no network and temporary storage: 43 recorded versions with local May substitutes; 43 with the four actual hosted May statements; and a hypothetical 44-version profile tree. All migrations replayed and the five instrument catalog fingerprints matched the recorded baseline in each case. [The mapping](../../supabase/hosted/history-prototype-20261102.json) has SHA-256 `25c75bccc648c4ab6fa172d413bc7f4c3efbcc98872e221c70bf4e5d0dd8d853`; [May source metadata](../../supabase/hosted/history-may-source-metadata-20261102.json) records hashes without storing the retrieved SQL. This is a clean-database experiment, not proof of equivalent behavior on existing data or a deployable lineage.
+
+The exact historical statements for same-version `20260502000004` and `20260502000005` remain unverified; the former concerns a historical wipe, so never replay it against current accounts. Full hosted schema, ACL, RLS, routines, triggers and data effects were not compared. The profile version remains proposed and chronology has no observed application receipt. Ordinary remote CLI migration workflows and Branching remain unaccepted; do not repair or change the active lineage based on this prototype.
+
 ## Observed version sets
 
 The repo has 53 `supabase/migrations/*.sql` versions. The recorded hosted baseline has 43 `supabase_migrations.schema_migrations` versions. Their intersection is 36; **17 are local-only and 7 are hosted-only before the new Dashboard wrapper**. This is a pre-existing divergence. A successful profile Dashboard wrapper would add hosted version `20261102122007`, making 44 hosted rows and 8 hosted-only versions while the 17 local-only versions remain. The wrapper does not create the original divergence.
