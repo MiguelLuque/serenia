@@ -32,10 +32,10 @@
 
 **Interfaces:** Consumes `TaskPolicy`; produces `resolveTaskModel(policy: TaskPolicy, env?: Record<string,string|undefined>): LanguageModel` and optional direct-specific provider settings through model middleware, not caller flags.
 
-- [ ] Escribir primero tests de configuración, clave, proveedor, Responses y límites, usando fetch en memoria y clave ficticia.
-- [ ] Ejecutar focused: observar RED por resolver inexistente.
-- [ ] Añadir adaptador compatible exacto, inspeccionar fuente/docs instaladas e implementar resolver y cuatro consumidores.
-- [ ] Ejecutar focused y regresiones de políticas/perfil/informes/chat: GREEN.
-- [ ] Documentar activación/reversión y límites; verificar suite y gates completos, preservando fallos.
-- [ ] Commit; revisión independiente del incremento desde 6ae9ea2; corregir hallazgos materiales con RED/GREEN.
+- [x] Escribir primero tests de configuración, clave, proveedor, Responses y límites, usando fetch en memoria y clave ficticia.
+- [x] Ejecutar focused: observar RED por resolver inexistente.
+- [x] Añadir adaptador compatible exacto, inspeccionar fuente/docs instaladas e implementar resolver y cuatro consumidores.
+- [x] Ejecutar focused y regresiones de políticas/perfil/informes/chat: GREEN.
+- [x] Documentar activación/reversión y límites; verificar suite y gates completos, preservando fallos (verify exit 1 por audit previo).
+- [x] Commit; revisión independiente del incremento desde 6ae9ea2: C0/I0/M1 de cobertura conjunta SSE pendiente, sin fallo observado.
 - [ ] Actualizar PR borrador con estado preparado, sin merge/deploy ni afirmar acceso real.
