@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync } from 'node:fs'
+import { lstatSync, readFileSync, realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -195,7 +195,12 @@ export function verifyReadback(result) {
   return { ok: errors.length === 0, errors, status: errors.length === 0 ? 'POST_COMMIT_READBACK_MATCHED' : 'NO_MATCHING_COMMIT_RECEIPT', limitations }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function isEntrypoint() {
+  if (!process.argv[1]) return false
+  try { return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)) } catch { return false }
+}
+
+if (isEntrypoint()) {
   const [command, path] = process.argv.slice(2)
   if (command === 'query' && !path) process.stdout.write(makeQuery())
   else if (command === 'verify' && path && process.argv.length === 4) {

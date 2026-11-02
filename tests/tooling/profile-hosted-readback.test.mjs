@@ -96,6 +96,30 @@ test('generates the query from the verified bytes without reading the input agai
   } finally { rmSync(f.directory, { recursive:true, force:true }) }
 })
 
+test('runs the CLI when its parent path is reached through a symlink', () => {
+  const f = isolatedReadback()
+  try {
+    const alias = join(f.directory, 'linked-parent')
+    symlinkSync(f.directory, alias)
+    for (const flags of [[], ['--preserve-symlinks-main']]) {
+      const result = spawnSync(process.execPath, [...flags, join(alias, 'scripts/profile-hosted-readback.mjs'), 'query'], { encoding:'utf8', timeout:5000, maxBuffer:1024*1024, env:{ PATH:process.env.PATH, NODE_ENV:'test' } })
+      assert.equal(result.status, 0, result.stderr)
+      assert.match(result.stdout, /select jsonb_build_object\(/)
+    }
+  } finally { rmSync(f.directory, { recursive:true, force:true }) }
+})
+
+test('does not run the CLI when imported by another process with unrelated arguments', () => {
+  const f = isolatedReadback()
+  try {
+    const script = join(f.directory, 'scripts/profile-hosted-readback.mjs')
+    const code = `import {pathToFileURL} from 'node:url';process.argv=['node','nonexistent-host','query'];await import(pathToFileURL(${JSON.stringify(script)}).href);console.log('imported')`
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding:'utf8', timeout:5000, env:{ PATH:process.env.PATH, NODE_ENV:'test' } })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.stdout.trim(), 'imported')
+  } finally { rmSync(f.directory, { recursive:true, force:true }) }
+})
+
 function matchingReceipt() {
   const { manifest, baseline, packetMd5, newObjects } = expected()
   const tableAcl = []
