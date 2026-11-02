@@ -9,14 +9,18 @@
 3. Revisar `LLM_CONVERSATIONAL_*`, `LLM_PROFILE_EXTRACTION_*` y `LLM_CLOSURE_REPORT_*`. Si los pares de perfil/informe están vacíos, conservan `LLM_STRUCTURED_*`. Sus modelos son nombres sin el prefijo `openai/` (el resolver lo deriva del ID de política).
 4. Desplegar sólo cuando se cumplan los gates de `dependency-gates.md` y de base de datos. Verificar con casos ficticios texto, JSON, herramientas/continuación, cierre de sesión, errores y coste, antes de promover modelos nuevos o probar datos reales.
 
-Ejemplo de configuración **sin credenciales** y con la referencia existente (no una promoción de modelos):
+Configuración candidata **sin credenciales**, según la instrucción del usuario de retirar GPT-5.4 mini de la nueva versión:
 
 ```dotenv
 LLM_TRANSPORT=openai
 LLM_CONVERSATIONAL_PROVIDER=openai
-LLM_CONVERSATIONAL_MODEL=gpt-5.4-mini
+LLM_CONVERSATIONAL_MODEL=gpt-6-luna
 LLM_STRUCTURED_PROVIDER=openai
-LLM_STRUCTURED_MODEL=gpt-5.4-mini
+LLM_STRUCTURED_MODEL=gpt-6.1-sol
+LLM_PROFILE_EXTRACTION_PROVIDER=openai
+LLM_PROFILE_EXTRACTION_MODEL=gpt-6-luna
+LLM_CLOSURE_REPORT_PROVIDER=openai
+LLM_CLOSURE_REPORT_MODEL=gpt-6.1-sol
 ```
 
 El adaptador fijado `@ai-sdk/openai@3.0.135` usa explícitamente `https://api.openai.com/v1/responses`. Ignora `OPENAI_BASE_URL`, no usa la clave ni créditos de AI Gateway y no hace fallback a otro servicio. Transporte inválido, clave vacía o modelo no OpenAI fallan antes de la petición. La clave se lee al resolver, no al importar ni en el build. No se cambian IDs solicitados, límites por tarea ni retries durables por esta elección.
@@ -31,4 +35,6 @@ Todas las peticiones directas fuerzan `store: false`, también en continuación 
 
 OpenAI directo factura al proyecto OpenAI, separadamente de los créditos de Gateway. La autorización anterior de hasta 5 USD de saldo existente de Gateway no autoriza consumir saldo OpenAI ni recargarlo. Las proyecciones de `ai:costs` usan el snapshot de **Gateway**: no presentarlas como una factura o tarifa directa verificada.
 
-Metadatos oficiales de Vercel comprobados de nuevo el 2 de noviembre de 2026, tras el aviso del usuario: `OPENAI_API_KEY` existe como **Secret en Production**, añadida por el usuario; no aparece en Preview. No se leyó su valor. `LLM_TRANSPORT` sigue ausente. El agente no cambió variables remotas ni ejecutó inferencias de pago. El código y las pruebas simuladas no demuestran acceso real, calidad clínica ni funcionamiento del despliegue. La activación queda pendiente de la clave de Preview, verificación de saldo/permisos y los gates de publicación existentes.
+Metadatos oficiales de Vercel comprobados de nuevo el 2 de noviembre de 2026, tras el segundo aviso del usuario: `OPENAI_API_KEY` existe como **Secret en Production y Preview**. No se leyó su valor. Se preparó `LLM_TRANSPORT=openai` sólo para Preview de `codex/pablo-profile-release`; la selección candidata de esa rama es Luna para conversación/perfil y Sol para informe. Un cambio de variables no actualiza despliegues existentes: la lectura de configuración y el siguiente despliegue son comprobaciones separadas. Production no se modificó en esta operación y su versión anterior no se presenta como migrada.
+
+En los archivos de la nueva versión, GPT-5.4 mini se conserva únicamente en fuentes y resultados históricos de comparación, no como selección o fallback. La configuración pública anterior sigue separada de este cambio y no se presenta como migrada. El valor ausente de `LLM_TRANSPORT` sigue significando Gateway por compatibilidad del código; `.env.example` ahora elige OpenAI explícitamente. El código y las pruebas simuladas no demuestran acceso real, calidad clínica ni funcionamiento del despliegue. La activación pública queda pendiente de verificar saldo/permisos, evaluar los modelos y superar los gates de publicación existentes. No se ejecutaron inferencias de pago.
