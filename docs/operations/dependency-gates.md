@@ -2,6 +2,8 @@
 
 Node24.14.1, dependencias directas exactas y lockfile versionado. Usar rtk npm ci; no borrar lock/audit fix --force ni actualizar Node global. Hoja shadcn vendorizada sin cambios en app/vendor con licencia MIT y hash; CLI retirada del runtime/graph.
 
+La instalación ejecuta un adaptador de exportaciones para minimatch 11.0.4 con integridad verificada antes de escribir; una versión o contenido inesperados fallan la instalación. No usar `--ignore-scripts` para generar una instalación aceptada. El alcance, hashes y límites están en [compatibilidad minimatch](../audits/2026-11-02-minimatch-compatibility.md).
+
 ```sh
 rtk npm test
 rtk npm run lint

@@ -1,8 +1,43 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { chatHarness } from '../helpers/chat-harness'
-import { openAIResponseStream } from '../helpers/openai-response-stream'
+import { openAIResponseStream, openAIToolResponseStream } from '../helpers/openai-response-stream'
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 describe('authenticated server-owned chat transport', () => {
+  it('continues a direct streamed tool result statelessly, persists the final reply and replays without another request', async () => {
+    vi.stubEnv('LLM_TRANSPORT', 'openai')
+    vi.stubEnv('OPENAI_API_KEY', 'synthetic-openai-only')
+    vi.stubEnv('FEATURE_CLINICAL_CONVERSATION_PILOT', 'on')
+    vi.stubEnv('FEATURE_CROSS_SESSION_CONTEXT', 'off')
+    const requests: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      if (String(url) !== 'https://api.openai.com/v1/responses') throw Error('Unexpected service')
+      requests.push(JSON.parse(String(init.body)))
+      if (requests.length === 1) return openAIToolResponseStream('propose_questionnaire', { code: 'PHQ9', reason: 'Comprender cómo afecta el ánimo actualmente.' })
+      if (requests.length === 2) return openAIResponseStream('La propuesta está disponible; podemos continuar hablando.')
+      throw Error('Unexpected extra request')
+    })
+    const h = await chatHarness({ directOpenAI: true })
+    const first = await h.post('Sí, acepto ese cuestionario.')
+    expect(first.status).toBe(200)
+    const body = await first.text()
+    expect(body).toContain('La propuesta está disponible; podemos continuar hablando.')
+    expect(h.state.questionnaireCreations).toHaveLength(1)
+    expect(h.state.turns.get('turn-1').status).toBe('completed')
+    expect(h.state.rows.filter(row => row.role === 'assistant')).toHaveLength(1)
+    expect(requests).toHaveLength(2)
+    expect(requests.map(request => request.max_output_tokens)).toEqual([2500, 2495])
+    expect(requests.every(request => request.model === 'gpt-6-luna' && request.store === false && request.stream === true)).toBe(true)
+    expect(requests[1].tools ?? []).toEqual([])
+    expect(requests[1].previous_response_id).toBeUndefined()
+    expect(requests[1].input).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'function_call_output', call_id: 'call_fictional' }),
+      expect.objectContaining({ type: 'reasoning', encrypted_content: 'synthetic-opaque-reasoning' }),
+    ]))
+    expect(JSON.stringify(requests[1].input)).toContain('quiz')
+    expect(await (await h.post('Sí, acepto ese cuestionario.')).text()).toBe(body)
+    expect(h.state.questionnaireCreations).toHaveLength(1)
+    expect(requests).toHaveLength(2)
+  })
   it('persists a direct OpenAI streamed reply through the real SDK before returning it to the user', async () => {
     vi.stubEnv('LLM_TRANSPORT', 'openai')
     vi.stubEnv('OPENAI_API_KEY', 'synthetic-openai-only')
