@@ -2,6 +2,8 @@
 
 **Status: PREPARED_NOT_APPLIED.** This is a separately labelled, custom SQL Editor delivery. It does not change the reviewed MCP packet, its manifest, the four source migrations, any existing history row, or the local CLI policy. It is not a claim of Supabase CLI/MCP migration acceptance or hosted application success.
 
+**Delivery hold:** independent review found pre-existing local/hosted migration-history and content divergence. The custom registration adds another hosted-only version and its later CLI/Branching replay is unverified. Do not run this artifact until a safe continuity and readback procedure has been reviewed and tested. See [migration history review](2026-11-02-migration-history-reconciliation.md). No history repair or renaming may be used to force agreement.
+
 ## Fixed artifact
 
 - Destination: Supabase project `brpozobkoatabctjjadc`, database role `postgres` in its Dashboard SQL Editor.

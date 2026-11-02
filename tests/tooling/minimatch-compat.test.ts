@@ -11,6 +11,8 @@ const files = [
   ['dist/commonjs/index.js', '\n// Restore the callable CommonJS API expected by pinned ESLint plugins.\nmodule.exports = Object.assign(exports.minimatch, exports);\n'],
   ['dist/esm/index.js', '\n// Restore the default ESM export expected by ESLint legacy consumers.\nexport default minimatch;\n'],
 ] as const
+const originalCall = "return _minimatch2['default'].makeRe(p);"
+const adaptedCall = "return { test: function (value) { return (0, _minimatch2['default'])(value, p); } };"
 const child = (code: string) => spawnSync(process.execPath, ['--max-old-space-size=128', '--input-type=module', '-e', code], { cwd: root, encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024, env: { PATH: process.env.PATH, NODE_ENV: 'test' } })
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'serenia-minimatch-compat-'))
@@ -20,6 +22,12 @@ function fixture() {
   mkdirSync(target, { recursive: true })
   copyFileSync(join(root, 'scripts/restore-minimatch-legacy-api.mjs'), join(directory, 'scripts/restore-minimatch-legacy-api.mjs'))
   copyFileSync(join(root, 'node_modules/minimatch/package.json'), join(target, 'package.json'))
+  const plugin = join(directory, 'node_modules/eslint-plugin-import')
+  mkdirSync(join(plugin, 'lib/rules'), { recursive: true })
+  copyFileSync(join(root, 'node_modules/eslint-plugin-import/package.json'), join(plugin, 'package.json'))
+  const rule = join(plugin, 'lib/rules/no-internal-modules.js')
+  const ruleSource = readFileSync(join(root, 'node_modules/eslint-plugin-import/lib/rules/no-internal-modules.js'), 'utf8').replaceAll(adaptedCall, originalCall)
+  writeFileSync(rule, ruleSource)
   const pristine = new Map<string, string>()
   for (const [file, addition] of files) {
     const source = readFileSync(join(root, 'node_modules/minimatch', file), 'utf8')
@@ -29,7 +37,7 @@ function fixture() {
     writeFileSync(join(target, file), original)
   }
   const run = () => spawnSync(process.execPath, [join(directory, 'scripts/restore-minimatch-legacy-api.mjs')], { cwd: tmpdir(), encoding: 'utf8', timeout: 5000, env: { PATH: process.env.PATH, NODE_ENV: 'test' } })
-  return { directory, target, pristine, run }
+  return { directory, target, pristine, run, rule, ruleSource }
 }
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
 
@@ -43,6 +51,11 @@ describe('fixed minimatch with legacy consumer exports', () => {
     const result = child(`import {createRequire} from 'node:module';const r=createRequire(import.meta.url);const f=r('eslint-plugin-jsx-a11y/lib/util/mayContainChildComponent');const tree={children:[{type:'JSXElement',openingElement:{name:{type:'JSXIdentifier',name:'CustomInput'},attributes:[]},children:[]}]};console.log(JSON.stringify([f(tree,'Custom*'),f(tree,'Other*')]));`)
     expect(result.status, result.stderr).toBe(0)
     expect(JSON.parse(result.stdout)).toEqual([true, false])
+  })
+  it('allows the real import rule to use allow and forbid glob patterns', () => {
+    const result = child(`import {createRequire} from 'node:module';const r=createRequire(import.meta.url);const{Linter}=r('eslint');const rule=r('eslint-plugin-import/lib/rules/no-internal-modules');const l=new Linter();const config=options=>[{languageOptions:{ecmaVersion:2022,sourceType:'module'},plugins:{import:{rules:{'no-internal-modules':rule}}},rules:{'import/no-internal-modules':['error',options]}}];console.log(JSON.stringify({allowed:l.verify("import x from 'pkg/allowed/a'",config({forbid:['pkg/private/*']})).map(x=>x.ruleId),blocked:l.verify("import x from 'pkg/private/a'",config({forbid:['pkg/private/*']})).map(x=>x.ruleId),allowedFile:l.verify("import x from './scripts/restore-minimatch-legacy-api.mjs'",config({allow:['scripts/restore-*']})).map(x=>x.ruleId),blockedFile:l.verify("import x from './scripts/verify.mjs'",config({allow:['scripts/restore-*']})).map(x=>x.ruleId)}));`)
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({ allowed: [], blocked: ['import/no-internal-modules'], allowedFile: [], blockedFile: ['import/no-internal-modules'] })
   })
   it('supports callable CommonJS and default ESM while retaining modern named exports', () => {
     const result = child(`import mm,{minimatch,Minimatch} from 'minimatch';import{createRequire}from'node:module';const c=createRequire(import.meta.url)('minimatch');console.log(JSON.stringify([c('src/a.ts','src/*.ts'),mm('src/a.js','src/*.ts'),minimatch('src/a.ts','src/*.ts'),new Minimatch('src/*.ts').match('src/a.ts'),c.defaults({nocase:true})('FOO','foo')]));`)
@@ -58,8 +71,10 @@ describe('fixed minimatch with legacy consumer exports', () => {
     const f = fixture()
     expect(f.run().status).toBe(0)
     for (const [file, addition] of files) expect(readFileSync(join(f.target, file), 'utf8')).toBe(f.pristine.get(file) + addition)
+    expect(readFileSync(f.rule, 'utf8')).toBe(f.ruleSource.replaceAll(originalCall, adaptedCall))
     expect(f.run().status).toBe(0)
     for (const [file, addition] of files) expect(readFileSync(join(f.target, file), 'utf8')).toBe(f.pristine.get(file) + addition)
+    expect(readFileSync(f.rule, 'utf8')).toBe(f.ruleSource.replaceAll(originalCall, adaptedCall))
   })
   it('validates the second file before changing the first when content is unexpected', () => {
     const f = fixture()
@@ -68,6 +83,27 @@ describe('fixed minimatch with legacy consumer exports', () => {
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('content mismatch')
     expect(readFileSync(join(f.target, files[0][0]), 'utf8')).toBe(f.pristine.get(files[0][0]))
+  })
+  it('validates the plugin rule before changing the minimatch files', () => {
+    const f = fixture()
+    writeFileSync(f.rule, f.ruleSource + '\n// tampered\n')
+    expect(f.run().status).not.toBe(0)
+    for (const [file] of files) expect(readFileSync(join(f.target, file), 'utf8')).toBe(f.pristine.get(file))
+  })
+  it('supports production-only installs without the development plugin', () => {
+    const f = fixture()
+    rmSync(join(f.directory, 'node_modules/eslint-plugin-import'), { recursive: true })
+    expect(f.run().status).toBe(0)
+    for (const [file, addition] of files) expect(readFileSync(join(f.target, file), 'utf8')).toBe(f.pristine.get(file) + addition)
+    expect(f.run().status).toBe(0)
+  })
+  it('rejects a symlinked plugin when one is present', () => {
+    const f = fixture()
+    const plugin = join(f.directory, 'node_modules/eslint-plugin-import')
+    rmSync(plugin, { recursive: true })
+    symlinkSync(join(f.directory, 'missing-plugin'), plugin)
+    expect(f.run().status).not.toBe(0)
+    for (const [file] of files) expect(readFileSync(join(f.target, file), 'utf8')).toBe(f.pristine.get(file))
   })
   it('rejects an unexpected package version before changing its files', () => {
     const f = fixture()
