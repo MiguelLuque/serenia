@@ -478,7 +478,7 @@ export function computeRiskOpeningNotice(ctx: PatientContext): string | null {
     case 'active':
       return '[AVISO DE CONTINUIDAD — RIESGO ACTIVO] Abre con un check-in cálido y específico sobre cómo está hoy respecto a la ideación reportada. Si el paciente abre con afecto positivo claro, haz el check-in en UNA frase breve y devuélvele el espacio inmediatamente. Ten la Línea 024 lista.\n\n---\n\n'
     case 'watch':
-      return '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.\n\n---\n\n'
+      return '[AVISO DE CONTINUIDAD — VIGILANCIA] Hay información de seguridad registrada que puede requerir aclaración contextual. Considérala sin dar por hecho su origen, sujeto, momento ni grado de confirmación. Abre normalmente y mantén atención a señales actuales o nuevas; valora una comprobación proporcionada ante antecedentes o preocupaciones actuales pertinentes. No impongas ni descartes una comprobación de seguridad solo por el afecto expresado.\n\n---\n\n'
   }
 }
 

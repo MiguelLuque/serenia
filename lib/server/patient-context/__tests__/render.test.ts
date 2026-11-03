@@ -7,6 +7,8 @@ import {
   renderProtocolPhaseSection,
 } from '@/lib/server/patient-context/render'
 import type { PatientContext, PatientIntake } from '@/lib/server/patient-context/builder'
+import { derivePatientRiskState } from '@/lib/server/risk-rules'
+import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -606,8 +608,37 @@ describe('computeRiskOpeningNotice', () => {
   it('returns exact watch notice string ending with block separator', () => {
     const ctx = makeTierACtx({ riskState: 'watch' })
     expect(computeRiskOpeningNotice(ctx)).toBe(
-      '[AVISO DE CONTINUIDAD — VIGILANCIA] En la sesión / informe anterior se registraron señales leves. Abre normalmente, pero mantén atención a reaparición; si el paciente abre con afecto positivo, no fuerces un check-in de seguridad.\n\n---\n\n',
+      '[AVISO DE CONTINUIDAD — VIGILANCIA] Hay información de seguridad registrada que puede requerir aclaración contextual. Considérala sin dar por hecho su origen, sujeto, momento ni grado de confirmación. Abre normalmente y mantén atención a señales actuales o nuevas; valora una comprobación proporcionada ante antecedentes o preocupaciones actuales pertinentes. No impongas ni descartes una comprobación de seguridad solo por el afecto expresado.\n\n---\n\n',
     )
+  })
+
+  it('does not invent an earlier session when watch comes from a current lexical signal', () => {
+    const now = new Date('2026-10-27T10:00:00Z')
+    const crisis = detectCrisis('Quiero cortarme el pelo')
+    expect(crisis.detected).toBe(true)
+    // The event is hand-constructed to represent SQL's mapping. This test does
+    // not execute the detector → SQL → builder → prompt chain.
+    const riskState = derivePatientRiskState({
+      lastValidatedAssessment: null,
+      openRiskEvents: [{ severity: 'high', createdAt: now.toISOString() }],
+      previousSession: null,
+      now,
+    })
+    const notice = computeRiskOpeningNotice(makeNoneCtx({ riskState }))!
+    expect(riskState).toBe('watch')
+    expect(notice).not.toMatch(/sesi[oó]n\s*\/\s*informe anterior|señales leves/i)
+    expect(notice).toContain('mantén atención')
+    expect(notice).toContain('mantén atención a señales actuales o nuevas')
+  })
+
+  it('allows a proportionate safety check for relevant history or current concerns without relying on affect alone', () => {
+    const notice = computeRiskOpeningNotice(makeNoneCtx({ riskState: 'watch' }))!
+    expect(notice).toContain('Hay información de seguridad registrada que puede requerir aclaración contextual')
+    expect(notice).toContain('ante antecedentes o preocupaciones actuales pertinentes')
+    expect(notice).toContain('comprobación proporcionada')
+    expect(notice).toContain('sin dar por hecho su origen, sujeto, momento ni grado de confirmación')
+    expect(notice).toContain('No impongas ni descartes una comprobación de seguridad solo por el afecto expresado')
+    expect(notice).not.toContain('si el paciente abre con afecto positivo, no fuerces')
   })
 
   it('all non-none notices end with the project separator so adjacent blocks do not glue', () => {
