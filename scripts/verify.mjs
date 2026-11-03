@@ -7,7 +7,7 @@ const directory = mkdtempSync(resolve(tmpdir(), 'serenia-verify-'))
 const env = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, NEXT_TELEMETRY_DISABLED: '1', DO_NOT_TRACK: '1', SUPABASE_TELEMETRY_DISABLED: '1', SERENIA_CHECK_LOG_DIR: directory }
 const results = []
 // Explicit gates; a missing executable, failed command or absent evidence fails.
-for (const gate of ['test', 'lint', 'typecheck', 'workflow:wire', 'db:test', 'audit:dependencies', 'build:isolated']) {
+for (const gate of ['test', 'lint', 'typecheck', 'workflow:wire', 'db:test', 'chronology:test', 'audit:dependencies', 'build:isolated']) {
   const logfile = resolve(directory, gate.replaceAll(':', '-') + '.log')
   const fd = openSync(logfile, 'w', 0o600)
   const result = spawnSync('npm', ['run', gate], { env, stdio: ['ignore', fd, fd] })

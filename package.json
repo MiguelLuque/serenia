@@ -23,6 +23,7 @@
     "workflow:wire": "node scripts/workflow-wire.mjs verify",
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "db:test": "python3 scripts/test-database.py",
+    "chronology:test": "node scripts/chronology-test.mjs",
     "supabase:local": "node scripts/supabase-local.mjs",
     "db:lint": "node scripts/supabase-local.mjs db lint --local --schema public --level warning --fail-on warning",
     "db:advisors": "node scripts/supabase-local.mjs db advisors --local --type all --level warn --fail-on warn",
