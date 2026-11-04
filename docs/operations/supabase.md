@@ -19,6 +19,8 @@ Descubrir ayuda de cada comando instalado antes de usarlo. db:test aplica migrac
 
 db:verify requiere stack Supabase local saludable con migraciones aplicadas. Lint/advisors usan fail-on warning/warn y fallan si faltan servicios; typecheck compara tipos generados. db:types:generate sólo sustituye tras generación exitosa; revisar diff antes de commit. Tipos sólo con --local --schema public. Migraciones incluyen grants mínimos/RLS/policies; no grants generales para ocultar fallos Data API.
 
+La [guía de recuperación para Supabase Free](backup-recovery.md) incluye un ensayo opcional con datos ficticios. No es una copia del proyecto alojado ni habilita comandos remotos en el wrapper local.
+
 .env.example incluye NEXT_PUBLIC_SITE_URL y claves modernas: browser/server/proxy prefieren NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, con NEXT_PUBLIC_SUPABASE_ANON_KEY fallback cuando vacía; servidor privilegiado prefiere SUPABASE_SECRET_KEY, con SUPABASE_SERVICE_ROLE_KEY fallback. Secretos nunca públicos. No se rota ninguna clave ni se lee .env.local.
 
 SSR0.12.7 usa getAll/setAll. Proxy conserva cookies y Cache-Control/Expires/Pragma en múltiples writes y redirects; getUser conserva validación con Auth. Server Components toleran sólo el error conocido read-only; proxy refresca allí. Callback construye respuesta antes de exchange PKCE y conserva cookies/cache, rechaza code ausente/fallido hacia login sin mostrar detalles SDK. Acepta sb_flow_id opcional para verifier concurrente; no activa appendPkceFlowIdToRedirects experimental en producción. Signout conserva el alcance global previo. Regresiones del SDK real verifican refresh/PKCE y eliminación de cookies con transporte ficticio. Task6 prueba Auth/JWT/PostgREST/browser/Workflow generado y restart.
