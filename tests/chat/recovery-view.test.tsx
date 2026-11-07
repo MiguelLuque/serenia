@@ -3,12 +3,12 @@ import React from 'react'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { createUIMessageStreamResponse } from 'ai'
-const fixture = vi.hoisted(() => ({ closed: false, failed: true, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
+const fixture = vi.hoisted(() => ({ closed: false, failed: true, generating: null as null | 'waiting' | 'retryable', rpcCalls: 0, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: fixture.refresh, replace: fixture.replace, push: vi.fn() }) }))
 vi.mock('@/app/app/actions', () => ({ endSessionAction: async () => {} }))
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => ({
  auth: { getUser: async () => ({ data: { user: { id: 'patient' } }, error: null }) },
- rpc: async () => ({ data: fixture.closed || !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null }),
+ rpc: async () => { fixture.rpcCalls++; return { data: fixture.closed ? null : fixture.generating ? { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'generating', canRetry: fixture.generating === 'retryable', leaseUntil: new Date(Date.now() + (fixture.generating === 'waiting' ? 60_000 : -1000)).toISOString() } : !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null } },
  from: (table: string) => {
   const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open', opened_at: new Date().toISOString() } : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }, ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
  },
@@ -18,7 +18,7 @@ import { ChatView } from '@/components/chat/chat-view'
 const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user', text: 'Mi texto original', status: 'failed' as const, canRetry: true, leaseUntil: '2026-01-01' }
 const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
 function reply(messageId = 'assistant') { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
-beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockClear(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
+beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.generating = null; fixture.rpcCalls = 0; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockReset(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
 it.each([null, recovery])('preserves an explicit urgent draft through the displayed deadline and keeps a send path (recovery=%j)', async initialRecovery => {
  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-13T23:00:00Z'))
@@ -49,6 +49,75 @@ it('rehydrates a failed turn and retries the same request and text without dupli
  expect(screen.getAllByText('Mi texto original')).toHaveLength(1)
  const body = JSON.parse(fetch.mock.calls[0][1].body)
  expect(body.requestId).toBe('retry-original'); expect(body.messages).toEqual([{ id: 'retry-original', role: 'user', parts: [{ type: 'text', text: 'Mi texto original' }] }])
+})
+it('refreshes server-rendered questionnaire state after a successful retry without tool events', async () => {
+ const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
+ // The failed turn may already have persisted a questionnaire whose tool event
+ // was never returned. The retry can be plain text, as the server test shows.
+ render(<ChatView {...props} activeQuestionnaire={null} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await screen.findByText('Respuesta guardada')
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalled())
+})
+it('refreshes server-rendered questionnaire state after recovering a failed turn without requiring a retry', async () => {
+ const fetch = vi.fn().mockResolvedValue(new Response('temporarily unavailable', { status: 503 })); vi.stubGlobal('fetch', fetch)
+ // The server may have created the questionnaire before its continuation
+ // failed, without ever sending its tool result to the client.
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} activeQuestionnaire={null} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: fixture.text } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByRole('button', { name: 'Reintentar el mismo mensaje' })
+ expect(fetch).toHaveBeenCalledTimes(1)
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalled())
+})
+it('shows a newly loaded questionnaire after recovery refresh without losing the next draft', async () => {
+ const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
+ const view = render(<ChatView {...props} activeQuestionnaire={null} />)
+ const input = screen.getByRole('textbox') as HTMLTextAreaElement
+ fireEvent.change(input, { target: { value: 'Borrador siguiente' } })
+ fixture.refresh.mockImplementationOnce(() => {
+  view.rerender(<ChatView {...props} activeQuestionnaire={{ instanceId: 'quiz', status: 'proposed', definition: { code: 'PHQ9', name: 'Cuestionario recuperado' }, items: [{ id: '1', order_index: 1, prompt: 'Pregunta ficticia', options_json: [{ value: 0, label: 'No' }] }] }} />)
+ })
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await screen.findByText('Respuesta guardada')
+ await screen.findByText('PHQ-9 — Cómo te has sentido estas 2 últimas semanas')
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+})
+it('renders refreshed server questionnaire props without discarding the current draft', () => {
+ const view = render(<ChatView {...props} activeQuestionnaire={null} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Borrador siguiente' } })
+ view.rerender(<ChatView {...props} activeQuestionnaire={{ instanceId: 'quiz', status: 'proposed', definition: { code: 'PHQ9', name: 'Cuestionario recuperado' }, items: [{ id: '1', order_index: 1, prompt: 'Pregunta ficticia', options_json: [{ value: 0, label: 'No' }] }] }} />)
+ expect(screen.getByText('PHQ-9 — Cómo te has sentido estas 2 últimas semanas')).toBeTruthy()
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+})
+it('refreshes questionnaire state when polling changes a generating turn into a failed turn', async () => {
+ const generating = { ...recovery, status: 'generating' as const, canRetry: false, leaseUntil: new Date(Date.now() - 1000).toISOString() }
+ // The first reconciliation was still generating. Before its next poll the
+ // provider can create a questionnaire and the turn can subsequently fail.
+ render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
+ await screen.findByRole('button', { name: 'Reintentar el mismo mensaje' }, { timeout: 3000 })
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalled())
+})
+it('retains the pending questionnaire refresh after a generating snapshot until a later failed snapshot', async () => {
+ fixture.generating = 'waiting'
+ const generating = { ...recovery, status: 'generating' as const, canRetry: false, leaseUntil: new Date(Date.now() + 60_000).toISOString() }
+ render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.rpcCalls).toBeGreaterThanOrEqual(2))
+ expect(fixture.refresh).not.toHaveBeenCalled()
+ fixture.generating = null
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(1))
+})
+it('refreshes again after a retryable generating snapshot later becomes failed', async () => {
+ fixture.generating = 'retryable'
+ const generating = { ...recovery, status: 'generating' as const, canRetry: true, leaseUntil: new Date(Date.now() - 1000).toISOString() }
+ render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(1))
+ fixture.generating = null
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(2))
 })
 it('allows typing during screening and while submitted, with an accessible urgent exit', async () => {
  const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
@@ -127,6 +196,7 @@ it('a delayed old snapshot cannot overwrite a newer urgent response', async () =
  expect(screen.getByText('Respuesta guardada')).toBeTruthy()
  expect(screen.getByText('Voy a matarme ahora')).toBeTruthy()
  expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+ expect(fixture.refresh).not.toHaveBeenCalled()
 })
 it('a delayed old snapshot cannot overwrite a successful retry', async () => {
  fixture.holdNextMessages = true

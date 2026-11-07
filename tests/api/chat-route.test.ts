@@ -3,6 +3,34 @@ import { chatHarness } from '../helpers/chat-harness'
 import { openAIResponseStream, openAIToolResponseStream } from '../helpers/openai-response-stream'
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 describe('authenticated server-owned chat transport', () => {
+  it('keeps a questionnaire created before a direct continuation failure, then accepts a retry with no tool event', async () => {
+    vi.stubEnv('LLM_TRANSPORT', 'openai')
+    vi.stubEnv('OPENAI_API_KEY', 'synthetic-openai-only')
+    vi.stubEnv('FEATURE_CLINICAL_CONVERSATION_PILOT', 'on')
+    vi.stubEnv('FEATURE_CROSS_SESSION_CONTEXT', 'off')
+    let calls = 0
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (String(url) !== 'https://api.openai.com/v1/responses') throw Error('Unexpected service')
+      calls++
+      if (calls === 1) return openAIToolResponseStream('propose_questionnaire', { code: 'PHQ9', reason: 'Comprender cómo afecta el ánimo actualmente.' })
+      if (calls === 2) return new Response('{"error":{"message":"Synthetic unavailable","type":"server_error","code":"server_error"}}', { status: 503, headers: { 'content-type': 'application/json' } })
+      if (calls === 3) return openAIResponseStream('Podemos seguir hablando.')
+      throw Error('Unexpected extra request')
+    })
+    const h = await chatHarness({ directOpenAI: true })
+    expect((await h.post('Sí, acepto ese cuestionario.')).status).toBe(503)
+    expect(h.state.questionnaireCreations).toHaveLength(1)
+    expect(h.state.turns.get('turn-1').status).toBe('failed')
+    expect(h.state.rows.filter(row => row.role === 'assistant')).toHaveLength(0)
+    h.state.activeQuestionnaire = true
+    const retry = await h.post('Sí, acepto ese cuestionario.')
+    expect(retry.status).toBe(200)
+    const body = await retry.text()
+    expect(body).toContain('Podemos seguir hablando.')
+    expect(body).not.toContain('tool-output-available')
+    expect(h.state.questionnaireCreations).toHaveLength(1)
+    expect(calls).toBe(3)
+  })
   it('continues a direct streamed tool result statelessly, persists the final reply and replays without another request', async () => {
     vi.stubEnv('LLM_TRANSPORT', 'openai')
     vi.stubEnv('OPENAI_API_KEY', 'synthetic-openai-only')
