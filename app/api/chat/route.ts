@@ -1,8 +1,10 @@
 import { convertToModelMessages, createUIMessageStreamResponse, stepCountIs, streamText, tool, type UIMessage, type UIMessageChunk } from 'ai'
 import { z } from 'zod'
+import { after } from 'next/server'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
+import { resolveTaskModel } from '@/lib/server/llm/model-resolver'
 import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
 import { getOrResolveActiveSession, isSessionExpired } from '@/lib/server/sessions/service'
 import { isSessionInactive } from '@/lib/shared/chat/session-time'
@@ -26,9 +28,11 @@ import { buildPilotSafetyNotice } from '@/lib/shared/chat/pilot-safety-notice'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
 import { renderPilotQuestionnaireFacts } from '@/lib/server/chat/pilot-questionnaire-context'
 import { modelHistoryParts } from '@/lib/server/chat/tool-feedback'
+import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { loadProfileContext } from '@/lib/server/profile/context'
+import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 
 export const maxDuration = 60
-const MAX_OUTPUT_TOKENS = 2500
 
 function replay(chunks: UIMessageChunk[]) {
   return createUIMessageStreamResponse({ stream: new ReadableStream({ start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } }), headers: { 'Cache-Control': 'no-store' } })
@@ -69,6 +73,11 @@ export async function POST(req: Request) {
   }
   const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
+  if (progressiveProfileEnabled(process.env, user.id)) {
+    after(async () => {
+      try { await enqueueProfileExtraction(user.id, 1) } catch { /* Admission already persisted; the durable queue remains recoverable. */ }
+    })
+  }
   const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string }
   if (turn.replay) return replay(turn.chunks ?? [])
   const token = turn.token
@@ -137,8 +146,16 @@ export async function POST(req: Request) {
       }
     }
     const timeNotice = buildSessionTimeNotice(session.opened_at)
-    const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
-    checkContextBudget([systemPrompt, ...messages])
+    const profileContextBlock = await loadProfileContext(supabase, lastUserText, user.id)
+    const promptPieces = { basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock }
+    let systemPrompt = buildChatSystemPrompt({ ...promptPieces, profileContextBlock })
+    try { checkContextBudget([systemPrompt, ...messages]) }
+    catch (error) {
+      if (!profileContextBlock) throw error
+      // Optional memory cannot break an otherwise admissible conversation.
+      systemPrompt = buildChatSystemPrompt(promptPieces)
+      checkContextBudget([systemPrompt, ...messages])
+    }
     return { messages, systemPrompt, timeNotice }
   }
   let awaitingGeneration = false
@@ -183,11 +200,12 @@ export async function POST(req: Request) {
       closeReason = reason
       return { closed: true, reason }
     }
+    const policy = resolveTaskPolicy('conversation')
     awaitingGeneration = true
     const result = streamText({
-      model: llm.conversational(), system: systemPrompt,
+      model: resolveTaskModel(policy), system: systemPrompt,
       messages: await convertToModelMessages(messages),
-      maxOutputTokens: MAX_OUTPUT_TOKENS, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
+      maxOutputTokens: policy.maxOutputTokens, maxRetries: policy.maxRetries, abortSignal: AbortSignal.timeout(policy.timeoutMs),
       stopWhen: stepCountIs(pilot ? 2 : 1),
       prepareStep: ({ stepNumber, messages: stepMessages, steps }) => {
         if (isSessionExpired(session)) { generationTimeExpired = true; throw new Error('session_time_limit') }
@@ -197,7 +215,7 @@ export async function POST(req: Request) {
         modelStep = stepNumber
         checkContextBudget([systemPrompt, ...stepMessages])
         if (stepNumber > 0) {
-          let remaining = MAX_OUTPUT_TOKENS
+          let remaining = policy.maxOutputTokens
           for (const step of steps) {
             const used = step.usage.outputTokens
             if (typeof used !== 'number' || !Number.isSafeInteger(used) || used < 0) throw new Error('response_limit')

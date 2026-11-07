@@ -1,5 +1,7 @@
 # Publicación de la prueba supervisada de Pablo
 
+Actualización30-10-2026: publicada la versión estable11ec2c2/piloto0.2 y enviado a `preguera@us.es` el correo autorizado con acceso y dos adjuntos. [Recibo y alcance de la entrega](../handoff/para-pablo-piloto-2026-10-30/README.md). La instrucción histórica de conservar un borrador quedó sustituida por la autorización explícita de envío del30octubre. El perfil progresivo continúa local y no se incluyó en esta publicación.
+
 26-10-2026. Autorización del usuario: integrar cambios en main, publicar automáticamente en Vercel, crear una cuenta ficticia de paciente y enviar a Pablo sus credenciales e instrucciones. No amplía el alcance clínico ni autoriza dar acceso clínico a esa cuenta.
 
 ## Destino verificado

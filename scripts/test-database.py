@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--baseline-security', action='store_true', help='Historical baseline without the two nonportable data operations or hardening migration')
 parser.add_argument('--baseline-chat', action='store_true', help='Task 1 schema with Task 2 regressions and no Task 2 migration')
 parser.add_argument('--baseline-flows', action='store_true', help='Task 2 schema with Task 3 functional regressions')
+parser.add_argument('--profile-history', action='store_true', help='Focused profile history regression on the full migrated ephemeral schema')
 args = parser.parse_args()
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 
@@ -100,7 +101,76 @@ try:
                     if query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='review_assessment_atomic';").splitlines()[2].strip() != '1':
                         raise RuntimeError('Review signature drift left an overload')
                 print('PASS review forward rejects body/config/owner/ACL/security/signature drift atomically')
+            if 'assessment_observed_chronology' in path.name:
+                chronology_signature = 'public.get_clinician_inbox_page(integer,integer,boolean)'
+                chronology_contract = f"select (to_jsonb(p)-'prosrc')::text from pg_proc p where oid='{chronology_signature}'::regprocedure;"
+                chronology_definition = f"select pg_get_functiondef('{chronology_signature}'::regprocedure);"
+                chronology_before_metadata = query(chronology_contract)
+                chronology_before_definition = query(chronology_definition)
+                drifts = {
+                    'body': f"do $drift$ declare d text; begin d=pg_get_functiondef('{chronology_signature}'::regprocedure); execute replace(d,E'begin\n if auth.uid()',E'begin\n -- deliberate drift\n if auth.uid()'); end $drift$;",
+                    'config': f'alter function {chronology_signature} set search_path=public;',
+                    'owner': f'alter function {chronology_signature} owner to service_role;',
+                    'acl': f'grant execute on function {chronology_signature} to service_role;',
+                    'security': f'alter function {chronology_signature} security invoker;',
+                    'volatility': f'alter function {chronology_signature} volatile;',
+                    'defaults': f"do $drift$ declare d text; begin d=pg_get_functiondef('{chronology_signature}'::regprocedure); execute replace(d,'DEFAULT true','DEFAULT false'); end $drift$;",
+                    'signature': 'create function public.get_clinician_inbox_page(text) returns jsonb language sql as $extra$ select null::jsonb $extra$;',
+                }
+                for label, drift in drifts.items():
+                    try:
+                        query('BEGIN;\n' + drift + '\n' + path.read_text() + '\nCOMMIT;')
+                    except RuntimeError as error:
+                        if 'Unexpected assessment chronology baseline' not in str(error):
+                            raise RuntimeError(f'Unexpected chronology {label} guard failure: {error}') from error
+                    else:
+                        raise RuntimeError(f'Chronology forward accepted {label} drift')
+                    if query(chronology_contract) != chronology_before_metadata or query(chronology_definition) != chronology_before_definition:
+                        raise RuntimeError(f'Chronology {label} guard left partial changes')
+                    if query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='get_clinician_inbox_page';").splitlines()[2].strip() != '1':
+                        raise RuntimeError('Chronology guard left an overload')
+                print('PASS inbox chronology forward rejects body/config/owner/ACL/security/volatility/defaults/signature drift atomically')
+            if 'profile_nonretryable_conflicts' in path.name:
+                profile_signatures = [
+                    'public.review_profile_observation(uuid,text,timestamptz)',
+                    'public.start_profile_job(uuid,uuid)',
+                    'public.update_profile_job(uuid,uuid,text,text)',
+                ]
+                profile_oids = ','.join("'" + signature + "'::regprocedure" for signature in profile_signatures)
+                profile_contract = "select jsonb_agg(jsonb_build_object('metadata',to_jsonb(p)-'prosrc','definition',pg_get_functiondef(p.oid)) order by p.proname)::text from pg_proc p where oid in (" + profile_oids + ");"
+                profile_before = query(profile_contract)
+                for signature in profile_signatures:
+                    routine_name = signature.split('.')[1].split('(')[0]
+                    drifts = {
+                        'body': f"do $drift$ declare d text; begin d=pg_get_functiondef('{signature}'::regprocedure); execute replace(d,E'\\ndeclare',E'\\n-- deliberate drift\\ndeclare'); end $drift$;",
+                        'config': f'alter function {signature} set search_path=public;',
+                        'owner': f'alter function {signature} owner to service_role;',
+                        'acl': f'grant execute on function {signature} to anon;',
+                        'security': f'alter function {signature} security invoker;',
+                        'signature': f'create function public.{routine_name}(text) returns void language plpgsql as $extra$ begin return; end $extra$;',
+                    }
+                    for label, drift in drifts.items():
+                        try:
+                            query('BEGIN;\n' + drift + '\n' + path.read_text() + '\nCOMMIT;')
+                        except RuntimeError as error:
+                            if 'Unexpected profile conflict' not in str(error):
+                                raise RuntimeError(f'Unexpected profile {routine_name} {label} guard failure: {error}') from error
+                        else:
+                            raise RuntimeError(f'Profile conflict forward accepted {routine_name} {label} drift')
+                        if query(profile_contract) != profile_before:
+                            raise RuntimeError(f'Profile conflict {routine_name} {label} drift left partial changes')
+                        overloads = query("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='" + routine_name + "';")
+                        if overloads.splitlines()[2].strip() != '1':
+                            raise RuntimeError('Profile conflict signature drift left an overload')
+                print('PASS all three profile conflict routines reject body/config/owner/ACL/security/signature drift atomically')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'assessment_observed_chronology' in path.name and query(chronology_contract) != chronology_before_metadata:
+                raise RuntimeError('Chronology forward changed metadata/ACL/signature')
+            if 'profile_nonretryable_conflicts' in path.name:
+                expected_contract = profile_before.replace("errcode='40001'", "errcode='PT409'")
+                if query(profile_contract) != expected_contract:
+                    raise RuntimeError('Profile conflict forward changed more than the deterministic error codes')
+                print('PASS profile conflict forward changes only deterministic error codes and preserves complete metadata')
             if 'review_questionnaire_facts_immutable' in path.name and query(contract) != before_metadata:
                 raise RuntimeError('Review facts forward changed metadata/ACL/signature')
             if 'acceptance_strict_rls_advisors' in path.name and query(invariant) != before_contract:
@@ -112,6 +182,10 @@ try:
     query((ROOT / 'supabase/seed.sql').read_text())
     query("do $$ begin if exists(select 1 from questionnaire_definitions where code='ASQ') or (select count(*) from questionnaire_definitions where code in ('PHQ9','GAD7','BDI2','BAI','CSSRS'))<>5 or exists(select 1 from auth.users) then raise exception 'Seed lost instruments, reenabled ASQ or created accounts'; end if; end $$;")
     print('PASS seed from empty, repeatable and without ASQ/accounts')
+    if args.profile_history:
+        query((ROOT / 'supabase/tests/profile-memory-page.sql').read_text())
+        print('PASS profile history pagination, precision, ownership, disputes and stale review')
+        raise SystemExit(0)
     # Keep the temporary must_deny helper and fixtures on one SQL connection.
     query((ROOT / 'supabase/tests/authorization-review.sql').read_text() + '\n' +
           (ROOT / 'supabase/tests/relationships.sql').read_text() + '\n' +
@@ -144,12 +218,14 @@ try:
         latest = max((e['createdAt'] for e in v['events']), default=None)
         high = max((e['createdAt'] for e in v['events'] if e['severity']=='high'), default=None)
         prev = v['previous'] or {}
-        params = [v['reviewedAt'],v['suicidality'],None,latest,high,prev.get('closedAt'),prev.get('closureReason'),parity['now']]
+        params = [v['observedAt'],v['suicidality'],None,latest,high,prev.get('closedAt'),prev.get('closureReason'),parity['now']]
         terms = [literal(x) for x in params]
         terms[2] = 'true' if any(e['severity']=='critical' for e in v['events']) else 'false'
         query("do $$ begin if derive_patient_risk_state_sql(" + ','.join(terms) + ")<>" + literal(v['expected']) + " then raise exception 'SQL risk parity failed: " + v['name'] + "'; end if; end $$;")
     for item in json.loads((ROOT / 'tests/fixtures/assessment-risk-parity.json').read_text()):
         query("do $$ begin if assessment_summary_valid_for_risk(" + literal(json.dumps(item['summary'])) + "::jsonb) is distinct from " + ('true' if item['expected'] else 'false') + " then raise exception 'Full schema parity failed: " + item['name'] + "'; end if; end $$;")
+    query((ROOT / 'supabase/tests/assessment-chronology.sql').read_text())
+    print('PASS late review preserves observed session chronology and later risk events')
     query((ROOT / 'supabase/tests/clinician-inbox-page.sql').read_text())
     print('PASS globally prioritized bounded inbox, old pending pagination, snapshots and 12 SQL/TypeScript parity vectors')
     # Non-binding synthetic acknowledgement for existing Task 2 actor fixtures.
@@ -261,6 +337,115 @@ try:
         touching.result()
     query(f"do $$ begin if (select status from clinical_sessions where id='{race_sid}')<>'open' or exists(select 1 from assessment_jobs where session_id='{race_sid}') then raise exception 'Stale inactivity job created'; end if; end $$;")
     print('PASS concurrent touch/inactivity lock revalidation preserves active session without outbox')
+    query((ROOT / 'supabase/tests/progressive-profile.sql').read_text())
+    print('PASS progressive profile grants, sources, consent, fencing, ordering, corrections and cascades')
+    query((ROOT / 'supabase/tests/profile-memory-page.sql').read_text())
+    print('PASS profile history pagination, precision, ownership, disputes and stale review')
+    # Profile queue/review races use independent connections and observed lock barriers.
+    def profile_value(sql):
+        result = docker('exec', '-i', name, 'psql', '-X', '-At', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=False)
+        if result.returncode:
+            raise RuntimeError(result.stdout + result.stderr)
+        return result.stdout.strip()
+
+    def profile_barrier(application):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if profile_value(f"select count(*) from pg_stat_activity where application_name='{application}' and wait_event='PgSleep';") == '1':
+                return
+            time.sleep(.02)
+        raise RuntimeError('Profile lock barrier not observed: ' + application)
+
+    pu = '00000000-0000-0000-0000-000000000201'
+    pv = '00000000-0000-0000-0000-000000000202'
+    pc = '10000000-0000-0000-0000-000000000201'
+    pd = '10000000-0000-0000-0000-000000000202'
+    ps = '20000000-0000-0000-0000-000000000201'
+    pt = '20000000-0000-0000-0000-000000000202'
+    owner = f"set role authenticated; select set_config('request.jwt.claim.sub','{pu}',false);"
+    other = f"set role authenticated; select set_config('request.jwt.claim.sub','{pv}',false);"
+    query(f"""insert into auth.users(id) values('{pu}'),('{pv}');
+      update user_profiles set informal_name='Synthetic',pronouns='elle',birth_date='1990-01-01',reason_for_consulting='Synthetic profile races' where user_id in ('{pu}','{pv}');
+      insert into consents(user_id,consent_version,server_recorded,payload_json) values('{pu}','technical-draft-2026-10-11',true,'{{"birthDate":"1990-01-01"}}'),('{pv}','technical-draft-2026-10-11',true,'{{"birthDate":"1990-01-01"}}');
+      insert into conversations(id,user_id) values('{pc}','{pu}'),('{pd}','{pv}');
+      insert into clinical_sessions(id,conversation_id,user_id) values('{ps}','{pc}','{pu}'),('{pt}','{pd}','{pv}');""")
+    query(owner + 'select set_profile_enabled(true);')
+    query(other + 'select set_profile_enabled(true);')
+    query(f"""insert into messages(id,session_id,conversation_id,role,parts,created_at) values
+      ('40000000-0000-0000-0000-000000000201','{ps}','{pc}','user','[{{"type":"text","text":"Vivo en Sevilla."}}]',now()-interval '1 minute'),
+      ('40000000-0000-0000-0000-000000000202','{ps}','{pc}','user','[{{"type":"text","text":"Ahora vivo en Cádiz. Ahora vivo en Málaga."}}]',now()),
+      ('40000000-0000-0000-0000-000000000203','{pt}','{pd}','user','[{{"type":"text","text":"Otro usuario."}}]',now());""")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(profile_value, [server + f"select count(*) from claim_profile_jobs('{pu}',1);"] * 2))
+    if sorted(claims) != ['0', '1']:
+        raise RuntimeError('Profile concurrent claims were not exclusive')
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        holding = pool.submit(query, f"set application_name='profile-independent-user'; begin; select 1 from profile_settings where user_id='{pu}' for update; select pg_sleep(1); commit;")
+        profile_barrier('profile-independent-user')
+        if profile_value(server + f"select user_id from claim_profile_jobs(null,10);") != pv:
+            raise RuntimeError('Profile locked owner blocked independent user')
+        holding.result()
+    job = json.loads(profile_value(f"select row_to_json(j) from profile_extraction_jobs j where source_message_id='40000000-0000-0000-0000-000000000201';"))
+    start = server + f"select start_profile_job('{job['id']}','{job['token']}');"
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for attempt in [pool.submit(query, start), pool.submit(query, start)]:
+            try: attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'Profile worker already started' not in str(error): raise
+    if successes != 1: raise RuntimeError('Profile concurrent start not exclusive')
+    payload = json.dumps([{'category': 'context', 'quote': 'Vivo en Sevilla.', 'time_scope': 'current', 'supersedes_id': None}], ensure_ascii=False)
+    finish = server + f"select finish_profile_job('{job['id']}','{job['token']}','{payload}','synthetic');"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(query, [finish, finish]))
+    obs = json.loads(profile_value(f"select row_to_json(o) from profile_observations o where job_id='{job['id']}';"))
+    review = owner + f"select review_profile_observation('{obs['id']}','confirm','{obs['updated_at']}');"
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for attempt in [pool.submit(query, review), pool.submit(query, review)]:
+            try: attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'Profile observation changed; reload' not in str(error): raise
+    if successes != 1: raise RuntimeError('Profile stale concurrent review accepted')
+    job2 = json.loads(profile_value(server + f"select row_to_json(j) from claim_profile_jobs('{pu}',1) j;"))
+    query(server + f"select start_profile_job('{job2['id']}','{job2['token']}');")
+    payload = json.dumps([{'category': 'context', 'quote': quote, 'time_scope': 'current', 'supersedes_id': obs['id']} for quote in ['Ahora vivo en Cádiz.', 'Ahora vivo en Málaga.']], ensure_ascii=False)
+    query(server + f"select finish_profile_job('{job2['id']}','{job2['token']}','{payload}','synthetic');")
+    siblings = json.loads(profile_value(f"select json_agg(o) from profile_observations o where job_id='{job2['id']}';"))
+    successes = 0
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        attempts = [pool.submit(query, owner + f"select review_profile_observation('{o['id']}','confirm','{o['updated_at']}');") for o in siblings]
+        for attempt in attempts:
+            try: attempt.result(); successes += 1
+            except RuntimeError as error:
+                if 'Profile observation changed; reload' not in str(error): raise
+    if successes != 1: raise RuntimeError('Profile sibling correction winners diverged')
+    if profile_value(f"select count(*) from profile_observations where user_id='{pu}' and status='confirmed';") != '1':
+        raise RuntimeError('Profile correction left multiple confirmed facts')
+    query("delete from messages where id='40000000-0000-0000-0000-000000000201';")
+    if profile_value(f"select count(*) from profile_observations where user_id='{pu}' and status='confirmed' and supersedes_id is null;") != '1':
+        raise RuntimeError('Deleting old source erased independent correction')
+    other_job = json.loads(profile_value(f"select row_to_json(j) from profile_extraction_jobs j where user_id='{pv}';"))
+    query(server + f"select start_profile_job('{other_job['id']}','{other_job['token']}');")
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        disabling = pool.submit(query, f"set application_name='profile-disable-finish'; begin; {other} select set_profile_enabled(false); select pg_sleep(1); commit;")
+        profile_barrier('profile-disable-finish')
+        try:
+            query(server + f"select finish_profile_job('{other_job['id']}','{other_job['token']}','[]','synthetic');")
+        except RuntimeError as error:
+            if 'Profile consent inactive' not in str(error): raise
+        else: raise RuntimeError('Concurrent opt-out permitted completion')
+        disabling.result()
+    query(other + 'select set_profile_enabled(true);')
+    try:
+        query(server + f"select finish_profile_job('{other_job['id']}','{other_job['token']}','[]','synthetic');")
+    except RuntimeError as error:
+        if 'Profile claim stale' not in str(error): raise
+    else: raise RuntimeError('Re-enable resurrected old generation')
+    if profile_value(f"select count(*) from profile_observations where user_id='{pv}';") != '0':
+        raise RuntimeError('Opt-out race persisted observations')
+    query(f"delete from auth.users where id in ('{pu}','{pv}');")
+    print('PASS profile concurrent claims/start/replay/reviews, sibling correction winner, independent owners and opt-out fencing')
     query((ROOT / 'supabase/tests/read-policy-equivalence.sql').read_text())
     print('PASS baseline/new read rowsets across owner, foreign, clinician, anon and inherited authenticated role')
 finally:

@@ -31,6 +31,7 @@ interface ChatViewProps {
   serverNow?: Date
   activeQuestionnaire?: ActiveQuestionnaire | null
   initialRecovery?: ChatRecovery | null
+  initialClosed?: boolean
 }
 
 function minutesRemaining(expiresAt: Date, now = Date.now()): number {
@@ -76,6 +77,7 @@ export function ChatView({
   serverNow,
   activeQuestionnaire,
   initialRecovery = null,
+  initialClosed = false,
 }: ChatViewProps) {
   const router = useRouter()
   const [clock, setClock] = useState(() => ({ serverNow: serverNow?.getTime() ?? Date.now(), expiresAt: expiresAt.getTime(), monotonic: performance.now() }))
@@ -91,7 +93,7 @@ export function ChatView({
 
   const [recovery, setRecovery] = useState(initialRecovery)
   const [recoveryError, setRecoveryError] = useState(false)
-  const [externallyClosed, setExternallyClosed] = useState(false)
+  const [externallyClosed, setExternallyClosed] = useState(initialClosed)
   const [urgentMode, setUrgentMode] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const failedRef = useRef(false)
@@ -102,6 +104,10 @@ export function ChatView({
   // Reads order snapshots without invalidating a valid transport completion.
   const transitionRef = useRef(0)
   const recoveryReadRef = useRef(0)
+  // A failed or interrupted turn may have committed a questionnaire without
+  // returning its tool event. Reconcile the server-rendered card on recovery;
+  // keep the intent while a generating turn may still finish.
+  const questionnaireRefreshPendingRef = useRef(initialRecovery !== null)
   const lifecycleRef = useRef({ mounted: false, sessionId })
 
   useEffect(() => {
@@ -126,7 +132,7 @@ export function ChatView({
   const { messages, sendMessage, status, error, stop, setMessages, clearError } = useChat({
     id: sessionId,
     messages: initialMessages,
-    onError: () => { failedRef.current = true; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
+    onError: () => { failedRef.current = true; questionnaireRefreshPendingRef.current = true; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
     // The installed SDK constructor stores fetch; it runs only when sending.
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -160,6 +166,7 @@ export function ChatView({
       if (!isCurrentTransition(operation) || recoveryReadRef.current !== read) return null
       setRecoveryError(false)
       if (state.closed) {
+        questionnaireRefreshPendingRef.current = false
         transitionRef.current += 1
         setMessages(state.messages)
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
@@ -168,6 +175,10 @@ export function ChatView({
       if (state.timing) syncClock(state.timing)
       setRecovery(state.recovery ?? localFallback)
       setMessages(state.messages)
+      if (questionnaireRefreshPendingRef.current && (state.recovery?.status !== 'generating' || state.recovery.canRetry)) {
+        if (state.recovery?.status !== 'generating') questionnaireRefreshPendingRef.current = false
+        router.refresh()
+      }
       return { operation, read }
     } catch {
       if (isCurrentTransition(operation) && recoveryReadRef.current === read) setRecoveryError(true)
@@ -223,6 +234,7 @@ export function ChatView({
 
   async function retry() {
     if (!recovery?.canRetry || retrying) return
+    questionnaireRefreshPendingRef.current = true
     const operation = ++transitionRef.current
     const attempt = recovery
     activeRequestRef.current = attempt.requestId
@@ -252,7 +264,9 @@ export function ChatView({
     await sendMessage({ id: requestId, role: 'user', parts: [{ type: 'text', text }] })
     const completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(requestId)
     if (completed) { transitionRef.current += 1; setRecovery(null); setUrgentMode(false) }
-    return completed
+    // Once dispatched, the transcript/retry owns the submitted text even
+    // when transport fails. The composer belongs to the next draft.
+    return true
   }
 
   useEffect(() => {
@@ -283,14 +297,14 @@ export function ChatView({
   // end-of-session banner below has a link to /app when the patient is
   // ready.
   useEffect(() => {
-    if (closeSignal !== 'crisis' || draft.trim()) return
+    if (initialClosed || closeSignal !== 'crisis' || draft.trim()) return
     if (crisisRedirectRef.current) return
     crisisRedirectRef.current = true
     const timer = setTimeout(() => {
       router.push('/app')
     }, 1800)
     return () => clearTimeout(timer)
-  }, [closeSignal, router, draft])
+  }, [closeSignal, router, draft, initialClosed])
 
   useEffect(() => {
     if (isClosed) return

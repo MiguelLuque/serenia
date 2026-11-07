@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "ai:evaluate:offline": "node scripts/evaluate-ai-launcher.mjs",
+    "ai:costs": "node --import tsx scripts/model-costs.ts",
     "verify": "node scripts/verify.mjs",
     "build:isolated": "node scripts/build-isolated.mjs",
     "hosted:packet": "node scripts/hosted-packet.mjs",
@@ -22,14 +23,17 @@
     "workflow:wire": "node scripts/workflow-wire.mjs verify",
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "db:test": "python3 scripts/test-database.py",
+    "chronology:test": "node scripts/chronology-test.mjs",
     "supabase:local": "node scripts/supabase-local.mjs",
     "db:lint": "node scripts/supabase-local.mjs db lint --local --schema public --level warning --fail-on warning",
     "db:advisors": "node scripts/supabase-local.mjs db advisors --local --type all --level warn --fail-on warn",
     "db:types:check": "node scripts/database-types.mjs check",
     "db:types:generate": "node scripts/database-types.mjs generate",
-    "db:verify": "npm run db:lint && npm run db:advisors && npm run db:types:check"
+    "db:verify": "npm run db:lint && npm run db:advisors && npm run db:types:check",
+    "postinstall": "node scripts/restore-minimatch-legacy-api.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai": "3.0.135",
     "@ai-sdk/react": "3.0.306",
     "@base-ui/react": "1.4.0",
     "@supabase/ssr": "0.12.7",
@@ -74,7 +78,8 @@
     },
     "zod@^4.0.0": "4.6.6",
     "undici@^6.0.0": "6.29.1",
-    "undici@^7.0.0": "7.30.1"
+    "undici@^7.0.0": "7.30.1",
+    "minimatch": "11.0.4"
   },
   "engines": {
     "node": ">=24.14.1 <25"

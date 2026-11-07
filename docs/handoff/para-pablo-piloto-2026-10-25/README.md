@@ -1,5 +1,7 @@
 # Serenia: versión para que Pablo pruebe evaluación y conversación
 
+Actualización1noviembre2026: la [nota del perfil progresivo](actualizacion-perfil-2026-10-30.md) amplía el material del correo y conserva enlace y credenciales. Consultar el [recibo de calidad y publicación](../../audits/2026-11-01-quality-audit.md) para distinguir lo preparado, lo probado y lo efectivamente desplegado. Mientras no se confirme una generación válida, el acceso al modelo sigue pendiente de la incidencia de AI Gateway descrita allí.
+
 25 de octubre de 2026. Variante `0.1.0-pilot`. Preparada para casos ficticios supervisados; pendiente de valoración de Pablo. Esta entrega trabaja el método y la experiencia de conversación.
 
 Actualización en rama26octubre: variante `0.2.0-pilot`, con [síntesis científica](../../research/2026-10-26-psychological-assessment-evidence.md) y [ocho episodios adicionales](evidencia-casos-2026-10-26.md) de evaluación contextual. Se corrigen procedencia de saltos en el informe y reutilización de informes rechazados. La validación clínica sigue pendiente. El despliegue `a852e9c` conserva0.1 hasta publicar expresamente esta actualización; las pruebas de código no son conversaciones ejecutadas con el proveedor.
@@ -48,7 +50,7 @@ rtk npm run dev:clinical
 
 Abre [Serenia local](http://127.0.0.1:3217). El comando activa el piloto y continuidad, escucha sólo en loopback y utiliza el modelo configurado; no añade ni cambia credenciales. Para conversar realmente necesita acceso válido al proveedor. Las respuestas reales consumen su cuota habitual; la verificación técnica de esta entrega no demuestra calidad del modelo. Si hay error de acceso al proveedor, registrarlo como problema de configuración, no como fallo clínico del método.
 
-Usar cuentas y relatos de prueba, sin datos de pacientes. Si falta una cuenta de prueba, crearla con el flujo normal y verificar el acceso clínico habitual antes de ensayar revisión de informes; este paquete no crea ni promueve cuentas automáticamente. El paciente sólo ve lo que su rol permite. El panel clínico requiere el rol y asignación existentes.
+Usar cuentas y relatos de prueba, sin datos de pacientes. Si falta una cuenta de prueba, crearla con el flujo normal y verificar el acceso clínico habitual antes de ensayar revisión de informes; este paquete no crea ni promueve cuentas automáticamente. El panel requiere el rol clínico, pero **no está implementada la asignación de pacientes por profesional**: las funciones clínicas revisadas permiten acceso global a quienes tienen ese rol. Limitar el piloto a cuentas y relatos ficticios, y revisar este modelo antes de utilizar datos de pacientes o incorporar más profesionales. Véase la [revisión de permisos](../../audits/2026-11-06-supabase-security-advisors.md).
 
 Para comparar, parar el proceso con Ctrl+C y arrancar la referencia sin flag piloto:
 

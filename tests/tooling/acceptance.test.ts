@@ -48,6 +48,49 @@ describe('synthetic acceptance boundary', () => {
     const env = acceptanceEnvironment({ PATH: process.env.PATH, NODE_OPTIONS: '--require /bad', OPENAI_API_KEY: 'bad', SUPABASE_ACCESS_TOKEN: 'bad', HTTP_PROXY: 'bad' }, { url: 'http://127.0.0.1:54321', publicKey: 'fictional', secretKey: 'fictional' }, '/private/tmp/fictional')
     for (const name of ['NODE_OPTIONS', 'OPENAI_API_KEY', 'SUPABASE_ACCESS_TOKEN', 'HTTP_PROXY']) expect(env).not.toHaveProperty(name)
   })
+  it('enables progressive memory only through the explicit isolated selector and never copies external secrets', () => {
+    const credentials = { url: 'http://127.0.0.1:54321', publicKey: 'fictional', secretKey: 'fictional' }
+    const source = { FEATURE_PROGRESSIVE_PROFILE: 'on', CRON_SECRET: 'EXTERNAL_SECRET', OPENAI_API_KEY: 'EXTERNAL_SECRET', LLM_STRUCTURED_MODEL: 'external' }
+    const defaultEnvironment = acceptanceEnvironment(source, credentials, '/private/tmp/fictional')
+    expect(defaultEnvironment.FEATURE_PROGRESSIVE_PROFILE).toBe('off')
+    expect(defaultEnvironment).not.toHaveProperty('CRON_SECRET')
+    const enabled = acceptanceEnvironment({ ...source, SERENIA_ACCEPTANCE_PROFILE: 'on' }, credentials, '/private/tmp/fictional')
+    expect(enabled.FEATURE_PROGRESSIVE_PROFILE).toBe('on')
+    expect(enabled.CRON_SECRET).toBe('synthetic-profile-cron-secret')
+    expect(enabled.LLM_STRUCTURED_MODEL).toBe('structured')
+    expect(Object.values(enabled)).not.toContain('EXTERNAL_SECRET')
+    for (const selector of ['true', 'ON', 'off']) expect(acceptanceEnvironment({ ...source, SERENIA_ACCEPTANCE_PROFILE: selector }, credentials, '/private/tmp/fictional').FEATURE_PROGRESSIVE_PROFILE).toBe('off')
+  })
+  it('uses installed structured Output.object through ProviderV3 for fixed literal profile fixtures and logs only context metadata', () => {
+    const directory = realpathSync(mkdtempSync(resolve(tmpdir(), 'serenia-provider-profile-test-')))
+    writeFileSync(resolve(directory, 'control.json'), '{"structured":"success"}')
+    try {
+      const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', resolve('scripts/acceptance-provider.mjs'), '--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        import { generateText, Output } from 'ai';
+        import { ProfileExtractionSchema as schema } from './lib/shared/profile/schema.ts';
+        async function extract(sourceText,knownTargets=[]) {
+          return (await generateText({model:'synthetic/structured',system:'[profile-v1]\\nFixture extraction',prompt:JSON.stringify({sourceText,knownTargets}),output:Output.object({schema}),maxRetries:0})).output;
+        }
+        assert.deepEqual(await extract('[PERFIL_SINTETICO] Me preocupa dormir mal.'),{observations:[{category:'concern',quote:'Me preocupa dormir mal.',time_scope:'current',supersedes_id:null}]});
+        const target={id:'11111111-1111-4111-8111-111111111111',category:'concern',quote:'Me preocupa dormir mal.',status:'confirmed'};
+        assert.deepEqual(await extract('[PERFIL_CORRECCION] Ahora duermo bien.',[target]),{observations:[{category:'concern',quote:'Ahora duermo bien.',time_scope:'current',supersedes_id:target.id}]});
+        assert.deepEqual(await extract('Un texto ficticio distinto'),{observations:[]});
+        const report = await generateText({model:'synthetic/structured',system:'Report',prompt:'El usuario cita [profile-v1] en texto'});
+        assert.ok(report.text.includes('patient_facing_summary'));
+        const conversational = globalThis.AI_SDK_DEFAULT_PROVIDER.languageModel('synthetic/conversational');
+        const context = '[MEMORIA DE AUTORREPORTE — PERFIL PROGRESIVO]\\n'+JSON.stringify({quote:'Me preocupa dormir mal.',status:'confirmed'})+'\\n'+JSON.stringify({quote:'Ahora duermo bien.',status:'pending',correction_of:target.id})+'\\n[FIN MEMORIA DE AUTORREPORTE]';
+        await conversational.doStream({prompt:[{role:'system',content:context},{role:'user',content:[{type:'text',text:'Hola'}]}]});
+      `], { encoding: 'utf8', env: acceptanceEnvironment({ ...process.env, SERENIA_ACCEPTANCE_PROFILE: 'on' }, { url: 'http://127.0.0.1:54321', publicKey: 'fictional', secretKey: 'fictional' }, directory) })
+      expect(result.stderr).toBe('')
+      expect(result.status).toBe(0)
+      const ledger = readFileSync(resolve(directory, 'provider.jsonl'), 'utf8')
+      const conversational = ledger.trim().split('\n').map(line => JSON.parse(line)).find(row => row.modelId === 'synthetic/conversational')
+      expect(conversational.profileContext).toEqual({ present: true, quotes: 2, confirmed: 1, pending: 1, corrections: 1, fixturePrimary: true, fixtureCorrection: true })
+      expect(ledger).not.toContain('Me preocupa dormir mal')
+      expect(ledger).not.toContain('Ahora duermo bien')
+    } finally { rmSync(directory, { recursive: true, force: true }) }
+  })
   it('runs installed AI SDK through ProviderV3 and fails closed for model/network expansion', () => {
     const directory = realpathSync(mkdtempSync(resolve(tmpdir(), 'serenia-provider-test-')))
     writeFileSync(resolve(directory, 'control.json'), '{"structured":"success"}')

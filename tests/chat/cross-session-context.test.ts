@@ -48,6 +48,7 @@ function makeTierACtx(overrides: Partial<PatientContext> = {}): PatientContext {
     validated: {
       id: 'assessment-tierA',
       reviewedAt: daysAgo(10),
+      observedAt: daysAgo(10),
       summary: {
         chief_complaint: 'Ansiedad persistente.',
         presenting_issues: ['insomnio'],
@@ -104,7 +105,7 @@ describe('assemblePlan6ContextPieces — tier=tierA with riskState=watch', () =>
     // Context block includes patient name, session number, and tier-A header.
     expect(patientContextBlock).toContain('Ana López')
     expect(patientContextBlock).toContain('Sesión nº 3')
-    expect(patientContextBlock).toContain('última revisión clínica de hace 10 días')
+    expect(patientContextBlock).toContain('material de sesión de hace 10 días')
 
     // Risk notice is the exact "watch" string.
     expect(riskOpeningNotice).toContain('[AVISO DE CONTINUIDAD — VIGILANCIA]')
@@ -139,13 +140,13 @@ describe('assemblePlan6ContextPieces — tier=tierA with riskState=watch', () =>
 
 describe('assemblePlan6ContextPieces — retake hint integration', () => {
   it('injects the retake hint as a bullet INSIDE the Instructions section (not below the separator)', () => {
-    // PHQ-9 score=18 (severe) scored 10 days ago → severe rule fires (>7 days).
+    // PHQ-9 score=18 (moderately severe) scored 10 days ago → severe rule fires (>7 days).
     const ctx = makeTierACtx({
       recentQuestionnaires: [
         {
           code: 'PHQ9',
           score: 18,
-          band: 'severe',
+          band: 'moderately_severe',
           scoredAt: daysAgo(10),
           deltaVsPrevious: null,
         },
@@ -153,9 +154,9 @@ describe('assemblePlan6ContextPieces — retake hint integration', () => {
     })
     const { patientContextBlock } = assemblePlan6ContextPieces(ctx, NOW)
 
-    expect(patientContextBlock).toContain('PHQ-9 del paciente era severo')
+    expect(patientContextBlock).toContain('PHQ-9 del paciente era moderadamente severo')
 
-    const hintIndex = patientContextBlock.indexOf('el PHQ-9 del paciente era severo')
+    const hintIndex = patientContextBlock.indexOf('el PHQ-9 del paciente era moderadamente severo')
     const instructionsIndex = patientContextBlock.indexOf('Instrucciones para esta sesión:')
     const finalSeparatorIndex = patientContextBlock.lastIndexOf('\n\n---')
 
@@ -163,7 +164,7 @@ describe('assemblePlan6ContextPieces — retake hint integration', () => {
     // Must be inside Instructions, i.e. before the closing separator.
     expect(hintIndex).toBeLessThan(finalSeparatorIndex)
     // Must be rendered as a bullet.
-    expect(patientContextBlock).toContain('- el PHQ-9 del paciente era severo')
+    expect(patientContextBlock).toContain('- el PHQ-9 del paciente era moderadamente severo')
   })
 
   it('omits the hint line when no retake rule fires', () => {
@@ -192,6 +193,7 @@ describe('assemblePlan6ContextPieces — truncatedSections propagation', () => {
       validated: {
         id: 'assessment-trunc',
         reviewedAt: daysAgo(10),
+        observedAt: daysAgo(10),
         summary: {
           chief_complaint: hugeCc,
           presenting_issues: hugePresenting,

@@ -2,6 +2,7 @@
 import { safeValidateUIMessages } from 'ai'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { ChatRecoverySchema } from '@/lib/shared/chat/recovery'
+import { readOwnedChatSnapshot } from '@/lib/server/chat/owned-snapshot'
 import { sessionTiming } from '@/lib/shared/chat/session-time'
 import { closeSession } from '@/lib/server/sessions/service'
 
@@ -17,22 +18,15 @@ async function ownedSession(sessionId: string) {
 /** Rehydrate only an authenticated patient's owned conversation and narrow turn projection. */
 export async function getOwnedChatState(sessionId: string) {
   const { client, session } = await ownedSession(sessionId)
-  const closed = session.status !== 'open'
-  let recovery = null
-  if (!closed) {
-    const { data, error: recoveryError } = await client.rpc('get_chat_turn_recovery', { p_session_id: sessionId })
-    if (recoveryError) throw recoveryError
-    recovery = data === null ? null : ChatRecoverySchema.parse(data)
-  }
-  const { data: rows, error: messagesError } = await client.from('messages').select('id,role,parts').eq('conversation_id', session.conversation_id).eq('visible_to_user', true).order('created_at', { ascending: true })
-  if (messagesError) throw messagesError
-  const messages = (rows ?? []).map(row => ({ id: row.id, role: row.role, parts: row.parts }))
+  const snapshot = await readOwnedChatSnapshot(client, session)
+  const closed = snapshot.session.status !== 'open'
+  const messages = snapshot.rows.map(row => ({ id: row.id, role: row.role, parts: row.parts }))
   const validated = await safeValidateUIMessages({ messages })
   if (!validated.success) throw new Error('No se pudo recuperar la conversación')
   // A closed session may be the successful result of a lost HTTP response.
   // Its final persisted answer must remain recoverable on the same owned view.
   if (closed) return { closed: true as const, recovery: null, messages: validated.data }
-  return { closed: false as const, recovery, messages: validated.data, timing: sessionTiming(session.opened_at) }
+  return { closed: false as const, recovery: snapshot.recovery, messages: validated.data, timing: sessionTiming(snapshot.session.opened_at) }
 }
 
 /** Explicit user action. Never make the browser timer a persistence trigger. */
