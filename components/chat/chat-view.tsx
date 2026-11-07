@@ -108,6 +108,7 @@ export function ChatView({
   // returning its tool event. Reconcile the server-rendered card on recovery;
   // keep the intent while a generating turn may still finish.
   const questionnaireRefreshPendingRef = useRef(initialRecovery !== null)
+  const generatingRefreshRef = useRef<string | null>(null)
   const lifecycleRef = useRef({ mounted: false, sessionId })
 
   useEffect(() => {
@@ -132,7 +133,7 @@ export function ChatView({
   const { messages, sendMessage, status, error, stop, setMessages, clearError } = useChat({
     id: sessionId,
     messages: initialMessages,
-    onError: () => { failedRef.current = true; questionnaireRefreshPendingRef.current = true; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
+    onError: () => { failedRef.current = true; questionnaireRefreshPendingRef.current = true; generatingRefreshRef.current = null; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
     // The installed SDK constructor stores fetch; it runs only when sending.
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -167,6 +168,7 @@ export function ChatView({
       setRecoveryError(false)
       if (state.closed) {
         questionnaireRefreshPendingRef.current = false
+        generatingRefreshRef.current = null
         transitionRef.current += 1
         setMessages(state.messages)
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
@@ -175,9 +177,18 @@ export function ChatView({
       if (state.timing) syncClock(state.timing)
       setRecovery(state.recovery ?? localFallback)
       setMessages(state.messages)
-      if (questionnaireRefreshPendingRef.current && (state.recovery?.status !== 'generating' || state.recovery.canRetry)) {
-        if (state.recovery?.status !== 'generating') questionnaireRefreshPendingRef.current = false
-        router.refresh()
+      if (questionnaireRefreshPendingRef.current) {
+        if (state.recovery?.status === 'generating') {
+          const generation = `${state.recovery.requestId}:${state.recovery.canRetry}`
+          if (generatingRefreshRef.current !== generation) {
+            generatingRefreshRef.current = generation
+            router.refresh()
+          }
+        } else {
+          questionnaireRefreshPendingRef.current = false
+          generatingRefreshRef.current = null
+          router.refresh()
+        }
       }
       return { operation, read }
     } catch {
@@ -235,6 +246,7 @@ export function ChatView({
   async function retry() {
     if (!recovery?.canRetry || retrying) return
     questionnaireRefreshPendingRef.current = true
+    generatingRefreshRef.current = null
     const operation = ++transitionRef.current
     const attempt = recovery
     activeRequestRef.current = attempt.requestId

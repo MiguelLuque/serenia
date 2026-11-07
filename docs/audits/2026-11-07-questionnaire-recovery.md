@@ -2,7 +2,7 @@
 
 En la variante de conversación, el servidor puede confirmar la creación de un cuestionario y fallar al obtener la respuesta posterior del modelo. La respuesta de error no contiene el evento de herramienta: recuperar mensajes o reintentar el turno con una respuesta de texto no actualizaba necesariamente la tarjeta, que se carga desde la página de servidor.
 
-La interfaz solicita una actualización de la ruta tras recuperar una sesión abierta mediante una lectura vigente. Conserva la intención de actualizar si el turno sigue generándose, incluso cuando ya es reintentable; una lectura posterior estable puede solicitar otra actualización. Se descartan lecturas obsoletas y no se actualiza la ruta tras comprobar que la sesión está cerrada. La actualización conserva el mecanismo existente de recuperación y no cambia los permisos ni el contrato de base de datos.
+La interfaz solicita una actualización de la ruta tras recuperar una sesión abierta mediante una lectura vigente. Si el turno sigue generándose, solicita una actualización por cada fase observada —esperando o reintentable— y conserva la intención de actualizar al llegar a una lectura estable. Se descartan lecturas obsoletas y no se actualiza la ruta tras comprobar que la sesión está cerrada. La actualización conserva el mecanismo existente de recuperación y no cambia los permisos ni el contrato de base de datos.
 
 Las pruebas usan transporte OpenAI y persistencia simulados: reproducen una creación confirmada antes de un error 503, un reintento sin evento de herramienta, lecturas de recuperación sucesivas y un rerender simulado que presenta la tarjeta sin perder el borrador. No acreditan una llamada real al proveedor, el renderizado de Next en navegador ni una escritura real en Supabase.
 

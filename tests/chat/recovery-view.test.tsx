@@ -98,16 +98,39 @@ it('refreshes questionnaire state when polling changes a generating turn into a 
  await screen.findByRole('button', { name: 'Reintentar el mismo mensaje' }, { timeout: 3000 })
  await waitFor(() => expect(fixture.refresh).toHaveBeenCalled())
 })
-it('retains the pending questionnaire refresh after a generating snapshot until a later failed snapshot', async () => {
+it('refreshes once for a valid generating snapshot, then again when it settles without looping', async () => {
  fixture.generating = 'waiting'
  const generating = { ...recovery, status: 'generating' as const, canRetry: false, leaseUntil: new Date(Date.now() + 60_000).toISOString() }
  render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
  fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
- await waitFor(() => expect(fixture.rpcCalls).toBeGreaterThanOrEqual(2))
- expect(fixture.refresh).not.toHaveBeenCalled()
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(1))
+ const callsAfterFirst = fixture.rpcCalls
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.rpcCalls).toBeGreaterThanOrEqual(callsAfterFirst + 2))
+ expect(fixture.refresh).toHaveBeenCalledTimes(1)
  fixture.generating = null
  fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
- await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(1))
+ await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(2))
+ const callsAfterSettled = fixture.rpcCalls
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.rpcCalls).toBeGreaterThanOrEqual(callsAfterSettled + 2))
+ expect(fixture.refresh).toHaveBeenCalledTimes(2)
+})
+it('does not refresh from a stale generating snapshot after an urgent response', async () => {
+ fixture.generating = 'waiting'; fixture.holdNextMessages = true
+ const generating = { ...recovery, status: 'generating' as const, canRetry: false, leaseUntil: new Date(Date.now() + 60_000).toISOString() }
+ vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => reply()))
+ render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ fireEvent.click(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' }))
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Voy a matarme ahora' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText('Respuesta guardada')
+ fixture.generating = null
+ await act(async () => { fixture.releases.shift()!() })
+ expect(screen.getByText('Respuesta guardada')).toBeTruthy()
+ expect(fixture.refresh).not.toHaveBeenCalled()
 })
 it('refreshes again after a retryable generating snapshot later becomes failed', async () => {
  fixture.generating = 'retryable'
@@ -118,6 +141,25 @@ it('refreshes again after a retryable generating snapshot later becomes failed',
  fixture.generating = null
  fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
  await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(2))
+})
+it('refreshes only once per waiting, retryable and settled recovery phase', async () => {
+ fixture.generating = 'waiting'
+ const generating = { ...recovery, status: 'generating' as const, canRetry: false, leaseUntil: new Date(Date.now() + 60_000).toISOString() }
+ render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
+ const check = async () => {
+  const before = fixture.rpcCalls
+  fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+  await waitFor(() => expect(fixture.rpcCalls).toBeGreaterThanOrEqual(before + 2))
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+ }
+ await check(); expect(fixture.refresh).toHaveBeenCalledTimes(1)
+ await check(); expect(fixture.refresh).toHaveBeenCalledTimes(1)
+ fixture.generating = 'retryable'
+ await check(); await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(2))
+ await check(); expect(fixture.refresh).toHaveBeenCalledTimes(2)
+ fixture.generating = null
+ await check(); await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(3))
+ await check(); expect(fixture.refresh).toHaveBeenCalledTimes(3)
 })
 it('allows typing during screening and while submitted, with an accessible urgent exit', async () => {
  const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
