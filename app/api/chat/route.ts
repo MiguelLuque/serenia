@@ -307,7 +307,8 @@ export async function POST(req: Request) {
       catch { /* Record failed persistence using the normal fenced path below. */ }
     }
     const { error: persistenceError } = await service.rpc('fail_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_error: error instanceof Error && error.message === 'context_limit' ? 'context_limit' : 'turn_failed' })
-    console.error('[chat] turn failed', { requestId, failureRecorded: !persistenceError })
+    // A successful void RPC does not prove that a matching row was updated.
+    console.error('[chat] turn failed', { requestId, failureRpcSucceeded: !persistenceError })
     return Response.json({ error: 'No se pudo completar el turno. Reintenta el mismo mensaje o recarga.', requestId }, { status: 503 })
   }
 }

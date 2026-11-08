@@ -50,8 +50,25 @@ describe('safety notices and final input precedence',()=>{
     expect(h.state.session.status).toBe('open')
     expect(h.state.rows.filter(row=>row.role==='assistant')).toHaveLength(1)
     expect(h.state.writes.find(w=>w.name==='begin_chat_turn').args.p_urgent).toBe(true)
-    expect(expectedError.mock.calls).toEqual([['[chat] turn failed',{requestId:'turn-1',failureRecorded:true}]])
+    expect(expectedError.mock.calls).toEqual([['[chat] turn failed',{requestId:'turn-1',failureRpcSucceeded:true}]])
     } finally {expectedError.mockRestore()}
+  })
+  it.each([true, false])('reports only the failure RPC outcome without claiming a state transition (succeeded=%s)', async succeeded => {
+    const expectedError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const h = await chatHarness()
+      h.state.generationFailure = true
+      const originalRpc = h.service.rpc.getMockImplementation()!
+      h.service.rpc.mockImplementation(async (name, args) => name === 'fail_chat_turn'
+        ? { data: null, error: succeeded ? null : { code: '55P03', message: 'synthetic private detail' } }
+        : originalRpc(name, args))
+      const response = await h.post('Fictional private text')
+      expect(response.status).toBe(503)
+      expect(h.state.turns.get('turn-1').status).toBe('generating')
+      expect(expectedError.mock.calls).toEqual([['[chat] turn failed', { requestId: 'turn-1', failureRpcSucceeded: succeeded }]])
+      expect(JSON.stringify(expectedError.mock.calls)).not.toContain('Fictional private text')
+      expect(JSON.stringify(expectedError.mock.calls)).not.toContain('synthetic private detail')
+    } finally { expectedError.mockRestore() }
   })
   it('keeps safety resources when only the final prompt exceeds the context budget',async()=>{
     const h=await chatHarness(); h.state.prompt='Synthetic system context '.repeat(600)
