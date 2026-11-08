@@ -3,14 +3,14 @@ import React from 'react'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { createUIMessageStreamResponse } from 'ai'
-const fixture = vi.hoisted(() => ({ closed: false, failed: true, generating: null as null | 'waiting' | 'retryable', rpcCalls: 0, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
+const fixture = vi.hoisted(() => ({ closed: false, failed: true, failRecoveryRpc: false, omitUser: false, generating: null as null | 'waiting' | 'retryable', rpcCalls: 0, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: fixture.refresh, replace: fixture.replace, push: vi.fn() }) }))
 vi.mock('@/app/app/actions', () => ({ endSessionAction: async () => {} }))
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => ({
  auth: { getUser: async () => ({ data: { user: { id: 'patient' } }, error: null }) },
- rpc: async () => { fixture.rpcCalls++; return { data: fixture.closed ? null : fixture.generating ? { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'generating', canRetry: fixture.generating === 'retryable', leaseUntil: new Date(Date.now() + (fixture.generating === 'waiting' ? 60_000 : -1000)).toISOString() } : !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null } },
+ rpc: async () => { fixture.rpcCalls++; if (fixture.failRecoveryRpc) return { data: null, error: new Error('Synthetic recovery unavailable') }; return { data: fixture.closed ? null : fixture.generating ? { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'generating', canRetry: fixture.generating === 'retryable', leaseUntil: new Date(Date.now() + (fixture.generating === 'waiting' ? 60_000 : -1000)).toISOString() } : !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null } },
  from: (table: string) => {
-  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open', opened_at: new Date().toISOString() } : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }, ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
+  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open', opened_at: new Date().toISOString() } : [...(fixture.omitUser ? [] : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }]), ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
  },
 }) }))
 vi.mock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn() }))
@@ -18,7 +18,7 @@ import { ChatView } from '@/components/chat/chat-view'
 const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user', text: 'Mi texto original', status: 'failed' as const, canRetry: true, leaseUntil: '2026-01-01' }
 const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
 function reply(messageId = 'assistant') { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
-beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.generating = null; fixture.rpcCalls = 0; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockReset(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
+beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.failRecoveryRpc = false; fixture.omitUser = false; fixture.generating = null; fixture.rpcCalls = 0; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockReset(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
 it.each([null, recovery])('preserves an explicit urgent draft through the displayed deadline and keeps a send path (recovery=%j)', async initialRecovery => {
  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-13T23:00:00Z'))
@@ -161,6 +161,29 @@ it('refreshes only once per waiting, retryable and settled recovery phase', asyn
  await check(); await waitFor(() => expect(fixture.refresh).toHaveBeenCalledTimes(3))
  await check(); expect(fixture.refresh).toHaveBeenCalledTimes(3)
 })
+it('explains an uncertain retryable turn while preserving the same retry, draft and urgent options', async () => {
+ fixture.generating = 'retryable'
+ const generating = { ...recovery, status: 'generating' as const, canRetry: true, leaseUntil: new Date(Date.now() - 1000).toISOString() }
+ const fetch = vi.fn().mockImplementation(async () => { fixture.generating = null; return reply() }); vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={generating} />)
+
+ const notice = screen.getByText(/no (?:podemos|se puede) confirmar.*cómo terminó el turno/i)
+ expect(notice.getAttribute('role')).toBe('status')
+ expect(notice.getAttribute('aria-live')).toBe('polite')
+ expect(notice.textContent).not.toMatch(/no se (?:guardó|registró)|ningún cambio/i)
+ expect(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' })).toBeTruthy()
+ expect(screen.getByRole('link', { name: /Línea 024/i })).toBeTruthy()
+ expect(screen.getByRole('link', { name: /emergencias/i })).toBeTruthy()
+ const draft = screen.getByRole('textbox') as HTMLTextAreaElement
+ fireEvent.change(draft, { target: { value: 'Borrador siguiente' } })
+
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await screen.findByText('Respuesta guardada')
+ const body = JSON.parse(fetch.mock.calls[0][1].body)
+ expect(body.requestId).toBe('retry-original')
+ expect(body.messages[0].parts).toEqual([{ type: 'text', text: 'Mi texto original' }])
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+})
 it('allows typing during screening and while submitted, with an accessible urgent exit', async () => {
  const fetch = vi.fn().mockImplementation(async () => reply()); vi.stubGlobal('fetch', fetch)
  render(<ChatView {...props} activeQuestionnaire={{ instanceId: 'quiz', status: 'proposed', definition: { code: 'CSSRS', name: 'Cribado' }, items: [{ id: '1', order_index: 1, prompt: 'Pregunta', options_json: [{ value: 0, label: 'No' }] }] }} />)
@@ -195,6 +218,137 @@ it('an exhausted turn exposes a non-retryable state and an urgent exit', () => {
  expect(screen.getByText(/No se puede reintentar/)).toBeTruthy()
  expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
  expect(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' })).toBeTruthy()
+})
+
+it('does not announce a definitive outcome while a lost response is still being checked', async () => {
+ let loseResponse!: () => void
+ fixture.holdNextMessages = true
+ const fetch = vi.fn().mockImplementation(() => new Promise<Response>(resolve => {
+  loseResponse = () => resolve(new Response('connection lost', { status: 503 }))
+ }))
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ const input = screen.getByRole('textbox') as HTMLTextAreaElement
+ fireEvent.change(input, { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText(/Esperando respuesta/)
+ fireEvent.change(input, { target: { value: 'Borrador siguiente' } })
+
+ // The server has a final answer, but the HTTP response is lost and the
+ // subsequent recovery read has not yet returned it to the client.
+ fixture.failed = false; fixture.replied = true
+ await act(async () => { loseResponse() })
+ await waitFor(() => expect(fixture.releases).toHaveLength(1))
+ expect(input.value).toBe('Borrador siguiente')
+ expect(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' })).toBeTruthy()
+ expect(screen.getByRole('link', { name: /Línea 024/i })).toBeTruthy()
+ expect(screen.getByRole('link', { name: /emergencias/i })).toBeTruthy()
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+ expect(screen.queryByText(/No se completó la respuesta/i)).toBeNull()
+ expect(screen.queryByText(/No se puede reintentar este turno/i)).toBeNull()
+ expect(screen.queryByText(/turno guardado/i)).toBeNull()
+ const notice = screen.getByText(/(?:estamos|seguimos) comprobando/i)
+ expect(notice.getAttribute('role')).toBe('status')
+ expect(notice.getAttribute('aria-live')).toBe('polite')
+
+ await act(async () => { fixture.releases.shift()!() })
+ await screen.findByText('Respuesta guardada')
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+})
+
+it('keeps the outcome unconfirmed when recovery fails and allows checking again', async () => {
+ let loseResponse!: () => void
+ fixture.failRecoveryRpc = true
+ const fetch = vi.fn().mockImplementation(() => new Promise<Response>(resolve => {
+  loseResponse = () => resolve(new Response('connection lost', { status: 503 }))
+ }))
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ const input = screen.getByRole('textbox') as HTMLTextAreaElement
+ fireEvent.change(input, { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText(/Esperando respuesta/)
+ fireEvent.change(input, { target: { value: 'Borrador siguiente' } })
+
+ // The server committed a response, but the HTTP response and the first
+ // recovery read fail; the client cannot yet know the durable outcome.
+ fixture.failed = false; fixture.replied = true
+ await act(async () => { loseResponse() })
+ await screen.findByText(/No se pudo comprobar el estado/i)
+ expect(input.value).toBe('Borrador siguiente')
+ expect(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' })).toBeTruthy()
+ expect(screen.getByRole('link', { name: /Línea 024/i })).toBeTruthy()
+ expect(screen.getByRole('link', { name: /emergencias/i })).toBeTruthy()
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
+ expect(screen.queryByText(/No se completó la respuesta/i)).toBeNull()
+ expect(screen.queryByText(/No se puede reintentar este turno/i)).toBeNull()
+ expect(screen.queryByText(/turno guardado/i)).toBeNull()
+
+ fixture.failRecoveryRpc = false
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await screen.findByText('Respuesta guardada')
+ expect(fetch).toHaveBeenCalledTimes(1)
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+})
+
+it('keeps uncertainty when recovery has no pending turn but shows an assistant answer', async () => {
+ fixture.failed = false; fixture.replied = true
+ const fetch = vi.fn().mockResolvedValue(new Response('connection lost', { status: 503 })); vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText('Respuesta guardada')
+ expect(screen.getByText(/no (?:podemos|se puede) confirmar.*cómo terminó el turno/i)).toBeTruthy()
+ expect(screen.queryByText(/No se completó la respuesta/i)).toBeNull()
+ expect(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeTruthy()
+ expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+it('keeps an idempotent retry when recovery has no pending turn and admission is unconfirmed', async () => {
+ fixture.failed = false; fixture.omitUser = true
+ const fetch = vi.fn().mockResolvedValueOnce(new Response('connection lost', { status: 503 }))
+  .mockImplementationOnce(async () => { fixture.omitUser = false; return reply() })
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ const retry = await screen.findByRole('button', { name: 'Reintentar el mismo mensaje' })
+ expect(screen.getByText(/no (?:podemos|se puede) confirmar.*cómo terminó el turno/i)).toBeTruthy()
+ const original = JSON.parse(fetch.mock.calls[0][1].body)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Borrador siguiente' } })
+ fireEvent.click(retry)
+ await screen.findByText('Respuesta guardada')
+ const retried = JSON.parse(fetch.mock.calls[1][1].body)
+ expect(retried.requestId).toBe(original.requestId)
+ expect(retried.messages[0].parts).toEqual([{ type: 'text', text: 'Mi texto original' }])
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+})
+
+it('clears an old recovery alert after urgent success without hiding a later read failure', async () => {
+ fixture.failRecoveryRpc = true
+ const fetch = vi.fn().mockResolvedValueOnce(new Response('connection lost', { status: 503 }))
+  .mockImplementationOnce(async () => reply()).mockImplementationOnce(() => new Promise<Response>(() => {}))
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText(/No se pudo comprobar el estado/i)
+ fireEvent.click(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' }))
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Voy a matarme ahora' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText('Respuesta guardada')
+ fixture.failRecoveryRpc = false
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Una idea nueva' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ await screen.findByText(/Esperando respuesta/)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Borrador siguiente' } })
+ expect(screen.queryByText(/No se pudo comprobar el estado/i)).toBeNull()
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
+
+ fixture.failRecoveryRpc = true
+ fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+ await screen.findByText(/No se pudo comprobar el estado/i)
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Borrador siguiente')
 })
 
 it('transport failure before admission retains the original retry ID and text', async () => {

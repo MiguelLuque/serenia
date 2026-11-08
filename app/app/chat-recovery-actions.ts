@@ -21,12 +21,15 @@ export async function getOwnedChatState(sessionId: string) {
   const snapshot = await readOwnedChatSnapshot(client, session)
   const closed = snapshot.session.status !== 'open'
   const messages = snapshot.rows.map(row => ({ id: row.id, role: row.role, parts: row.parts }))
-  const validated = await safeValidateUIMessages({ messages })
-  if (!validated.success) throw new Error('No se pudo recuperar la conversación')
+  // An owned conversation can be empty when a request failed before admission.
+  // The SDK validator rejects an empty list, so validate only nonempty history.
+  const validated = messages.length ? await safeValidateUIMessages({ messages }) : null
+  if (validated && !validated.success) throw new Error('No se pudo recuperar la conversación')
+  const recoveredMessages = validated?.data ?? []
   // A closed session may be the successful result of a lost HTTP response.
   // Its final persisted answer must remain recoverable on the same owned view.
-  if (closed) return { closed: true as const, recovery: null, messages: validated.data }
-  return { closed: false as const, recovery: snapshot.recovery, messages: validated.data, timing: sessionTiming(snapshot.session.opened_at) }
+  if (closed) return { closed: true as const, recovery: null, messages: recoveredMessages }
+  return { closed: false as const, recovery: snapshot.recovery, messages: recoveredMessages, timing: sessionTiming(snapshot.session.opened_at) }
 }
 
 /** Explicit user action. Never make the browser timer a persistence trigger. */
