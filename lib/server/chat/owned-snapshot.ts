@@ -24,7 +24,7 @@ export async function readOwnedChatSnapshot(client: SupabaseClient<Database>, se
   const after = await readRecovery()
   const { data: latest, error } = await client.from('clinical_sessions')
     .select('id,user_id,conversation_id,status,opened_at').eq('id', session.id).eq('user_id', session.user_id).single()
-  if (error || !latest || latest.user_id !== session.user_id || latest.conversation_id !== session.conversation_id) {
+  if (error || !latest || latest.id !== session.id || latest.user_id !== session.user_id || latest.conversation_id !== session.conversation_id) {
     throw new Error('Owned session required')
   }
   // finish_chat_turn commits answer + completed/closure atomically. If that

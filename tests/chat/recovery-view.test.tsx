@@ -3,22 +3,22 @@ import React from 'react'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { createUIMessageStreamResponse } from 'ai'
-const fixture = vi.hoisted(() => ({ closed: false, failed: true, failRecoveryRpc: false, omitUser: false, generating: null as null | 'waiting' | 'retryable', rpcCalls: 0, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
+const fixture = vi.hoisted(() => ({ closed: false, failed: true, failRecoveryRpc: false, failReceipt: false, omitUser: false, generating: null as null | 'waiting' | 'retryable', receipt: null as string | null, rpcCalls: 0, requestId: 'retry-original', messageId: 'persisted-user', text: 'Mi texto original', refresh: vi.fn(), replace: vi.fn(), replied: false, holdNextMessages: false, holdNextSession: false, releases: [] as Array<() => void> }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: fixture.refresh, replace: fixture.replace, push: vi.fn() }) }))
 vi.mock('@/app/app/actions', () => ({ endSessionAction: async () => {} }))
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => ({
  auth: { getUser: async () => ({ data: { user: { id: 'patient' } }, error: null }) },
  rpc: async () => { fixture.rpcCalls++; if (fixture.failRecoveryRpc) return { data: null, error: new Error('Synthetic recovery unavailable') }; return { data: fixture.closed ? null : fixture.generating ? { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'generating', canRetry: fixture.generating === 'retryable', leaseUntil: new Date(Date.now() + (fixture.generating === 'waiting' ? 60_000 : -1000)).toISOString() } : !fixture.failed ? null : { requestId: fixture.requestId, userMessageId: fixture.messageId, text: fixture.text, status: 'failed', canRetry: true, leaseUntil: '2026-01-01' }, error: null } },
  from: (table: string) => {
-  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: 'session', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open', opened_at: new Date().toISOString() } : [...(fixture.omitUser ? [] : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }]), ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
+  const chain = { select: () => chain, eq: () => chain, order: () => chain, single: () => chain, maybeSingle: () => chain, then: (resolve: (v: unknown) => unknown) => { const snapshot = { data: table === 'clinical_sessions' ? { id: '20000000-0000-4000-8000-000000000001', user_id: 'patient', conversation_id: 'conversation', status: fixture.closed ? 'closed' : 'open', opened_at: new Date().toISOString() } : table === 'conversations' ? { id: 'conversation', user_id: 'patient' } : [...(fixture.omitUser ? [] : [{ id: fixture.messageId, role: 'user', parts: [{ type: 'text', text: fixture.text }] }]), ...(fixture.replied ? [{ id: 'assistant', role: 'assistant', parts: [{ type: 'text', text: 'Respuesta guardada' }] }] : [])], error: null }; if ((table === 'messages' && fixture.holdNextMessages) || (table === 'clinical_sessions' && fixture.holdNextSession)) { fixture.holdNextMessages = false; fixture.holdNextSession = false; return new Promise(done => { fixture.releases.push(() => done(snapshot)) }).then(resolve) } return Promise.resolve(snapshot).then(resolve) } }; return chain
  },
-}) }))
+}), createServiceRoleClient: () => ({ from: () => { const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: fixture.receipt ? { status: fixture.receipt } : null, error: fixture.failReceipt ? new Error('unavailable') : null }) }; return q } }) }))
 vi.mock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn() }))
 import { ChatView } from '@/components/chat/chat-view'
 const recovery = { requestId: 'retry-original', userMessageId: 'persisted-user', text: 'Mi texto original', status: 'failed' as const, canRetry: true, leaseUntil: '2026-01-01' }
-const props = { sessionId: 'session', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
+const props = { sessionId: '20000000-0000-4000-8000-000000000001', initialMessages: [{ id: 'persisted-user', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Mi texto original' }] }], expiresAt: new Date(Date.now() + 60_000*50), initialRecovery: recovery }
 function reply(messageId = 'assistant') { fixture.failed = false; fixture.replied = true; return createUIMessageStreamResponse({ stream: new ReadableStream({ start(c) { c.enqueue({ type: 'start', messageId }); c.enqueue({ type: 'text-start', id: 'answer' }); c.enqueue({ type: 'text-delta', id: 'answer', delta: 'Respuesta guardada' }); c.enqueue({ type: 'text-end', id: 'answer' }); c.enqueue({ type: 'finish' }); c.close() } }) }) }
-beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.failRecoveryRpc = false; fixture.omitUser = false; fixture.generating = null; fixture.rpcCalls = 0; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockReset(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
+beforeEach(() => { fixture.closed = false; fixture.failed = true; fixture.failRecoveryRpc = false; fixture.failReceipt = false; fixture.omitUser = false; fixture.generating = null; fixture.receipt = null; fixture.rpcCalls = 0; fixture.replied = false; fixture.text = 'Mi texto original'; fixture.refresh.mockReset(); fixture.replace.mockClear(); fixture.holdNextMessages = false; fixture.holdNextSession = false; fixture.releases = [] })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
 it.each([null, recovery])('preserves an explicit urgent draft through the displayed deadline and keeps a send path (recovery=%j)', async initialRecovery => {
  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-13T23:00:00Z'))
@@ -116,8 +116,8 @@ it('refreshes once for a valid generating snapshot, then again when it settles w
  await waitFor(() => expect(fixture.rpcCalls).toBeGreaterThanOrEqual(callsAfterSettled + 2))
  expect(fixture.refresh).toHaveBeenCalledTimes(2)
 })
-it('does not refresh from a stale generating snapshot after an urgent response', async () => {
- fixture.generating = 'waiting'; fixture.holdNextMessages = true
+it('does not apply an old completed receipt after an urgent response', async () => {
+ fixture.generating = 'waiting'; fixture.holdNextMessages = true; fixture.receipt = 'completed'
  const generating = { ...recovery, status: 'generating' as const, canRetry: false, leaseUntil: new Date(Date.now() + 60_000).toISOString() }
  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => reply()))
  render(<ChatView {...props} initialRecovery={generating} activeQuestionnaire={null} />)
@@ -203,6 +203,14 @@ it('external close after transport error rehydrates closed UI without retry', as
  await waitFor(() => expect(screen.getAllByText(/La sesión ha terminado/).length).toBeGreaterThan(0))
  expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
  expect(fixture.refresh).not.toHaveBeenCalled()
+})
+it('recovers an authenticated closed session even when receipt lookup fails', async () => {
+ fixture.closed = true; fixture.failReceipt = true
+ vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('connection lost', { status: 503 })))
+ render(<ChatView {...props} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await waitFor(() => expect(screen.getAllByText(/La sesión ha terminado/).length).toBeGreaterThan(0))
+ expect(screen.queryByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeNull()
 })
 it('recovers the persisted final answer when the server closed but its HTTP response was lost', async () => {
  fixture.closed = true; fixture.replied = true
@@ -302,6 +310,28 @@ it('keeps uncertainty when recovery has no pending turn but shows an assistant a
  expect(screen.queryByText(/No se completó la respuesta/i)).toBeNull()
  expect(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeTruthy()
  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+it.each([false, true])('keeps exact replay when completed response visibility is unconfirmed (other answer: %s)', async replied => {
+ fixture.failed = false; fixture.replied = replied; fixture.receipt = 'completed'
+ const fetch = vi.fn().mockResolvedValueOnce(new Response('connection lost', { status: 503 })).mockImplementationOnce(async () => reply('replayed-answer'))
+ vi.stubGlobal('fetch', fetch)
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ expect(await screen.findByText(/turno guardado.*no.*confirm.*respuesta/i)).toBeTruthy()
+ fireEvent.click(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' }))
+ await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+ expect(JSON.parse(fetch.mock.calls[1][1].body).requestId).toBe(JSON.parse(fetch.mock.calls[0][1].body).requestId)
+})
+
+it('keeps a newer server recovery even when the old attempt completed', async () => {
+ fixture.generating = 'retryable'; fixture.receipt = 'completed'; fixture.requestId = 'newer-turn'
+ vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('connection lost', { status: 503 })))
+ render(<ChatView {...props} initialRecovery={null} initialMessages={[]} />)
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Mi texto original' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+ expect(await screen.findByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeTruthy()
 })
 
 it('keeps an idempotent retry when recovery has no pending turn and admission is unconfirmed', async () => {

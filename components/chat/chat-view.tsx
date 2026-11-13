@@ -95,6 +95,7 @@ export function ChatView({
   const [recoveryError, setRecoveryError] = useState(false)
   const [recoveryChecking, setRecoveryChecking] = useState(false)
   const [recoveryUnconfirmed, setRecoveryUnconfirmed] = useState(false)
+  const [receiptCompleted, setReceiptCompleted] = useState(false)
   const [externallyClosed, setExternallyClosed] = useState(initialClosed)
   const [urgentMode, setUrgentMode] = useState(false)
   const [retrying, setRetrying] = useState(false)
@@ -164,13 +165,15 @@ export function ChatView({
     const read = ++recoveryReadRef.current
     const localFallback = allowLocalFallback && status === 'error' && lastAttemptRef.current
       ? { ...lastAttemptRef.current, canRetry: httpStatusRef.current !== 422 } : null
+    const requestId = status === 'error' || recovery !== null ? lastAttemptRef.current?.requestId : undefined
     try {
-      const state = await getOwnedChatState(sessionId)
-      if (!isCurrentTransition(operation) || recoveryReadRef.current !== read) return null
+      const state = await getOwnedChatState(sessionId, requestId)
+      if (!isCurrentTransition(operation) || recoveryReadRef.current !== read || (requestId !== undefined && lastAttemptRef.current?.requestId !== requestId)) return null
       setRecoveryError(false)
       setRecoveryChecking(false)
       if (state.closed) {
         setRecoveryUnconfirmed(false)
+        setReceiptCompleted(false)
         questionnaireRefreshPendingRef.current = false
         generatingRefreshRef.current = null
         transitionRef.current += 1
@@ -179,6 +182,7 @@ export function ChatView({
         return null
       }
       if (state.timing) syncClock(state.timing)
+      setReceiptCompleted(state.recovery === null && localFallback !== null && state.receipt === 'completed' && requestId !== undefined)
       setRecoveryUnconfirmed(state.recovery === null && localFallback !== null)
       setRecovery(state.recovery ?? localFallback)
       setMessages(state.messages)
@@ -426,7 +430,7 @@ export function ChatView({
               />
             )}
           {(isTimeExpired || recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
-            <p role="status" aria-live="polite">{recoveryChecking ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.' : recovery ? recovery.canRetry ? recovery.status === 'generating' || recoveryUnconfirmed ? 'Aún no podemos confirmar cómo terminó el turno. Puedes reintentar el mismo mensaje.' : 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'Estamos comprobando cómo terminó el turno.' : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.' : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'}</p>
+            <p role="status" aria-live="polite">{recoveryChecking ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.' : recovery ? recovery.canRetry ? receiptCompleted ? 'Tu turno guardado terminó, pero no podemos confirmar que la respuesta se muestre. Puedes recuperar el mismo mensaje.' : recovery.status === 'generating' || recoveryUnconfirmed ? 'Aún no podemos confirmar cómo terminó el turno. Puedes reintentar el mismo mensaje.' : 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'Estamos comprobando cómo terminó el turno.' : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.' : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'}</p>
             {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
             <button type="button" onClick={() => { transitionRef.current += 1; if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
             <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
