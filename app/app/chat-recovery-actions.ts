@@ -1,7 +1,9 @@
 'use server'
 import { safeValidateUIMessages } from 'ai'
-import { createAuthenticatedClient } from '@/lib/server/supabase/server'
+import { createAuthenticatedClient, createServiceRoleClient } from '@/lib/server/supabase/server'
+import { z } from 'zod'
 import { ChatRecoverySchema } from '@/lib/shared/chat/recovery'
+import { readOwnedChatSnapshot } from '@/lib/server/chat/owned-snapshot'
 import { sessionTiming } from '@/lib/shared/chat/session-time'
 import { closeSession } from '@/lib/server/sessions/service'
 
@@ -10,29 +12,44 @@ async function ownedSession(sessionId: string) {
   const { data: { user }, error: authError } = await client.auth.getUser()
   if (authError || !user) throw new Error('Unauthorized')
   const { data: session, error } = await client.from('clinical_sessions').select('id,user_id,conversation_id,status,opened_at').eq('id', sessionId).eq('user_id', user.id).single()
-  if (error || !session || session.user_id !== user.id) throw new Error('Owned session required')
-  return { client, session }
+  if (error || !session || session.id !== sessionId || session.user_id !== user.id) throw new Error('Owned session required')
+  return { client, session, user }
 }
 
 /** Rehydrate only an authenticated patient's owned conversation and narrow turn projection. */
-export async function getOwnedChatState(sessionId: string) {
-  const { client, session } = await ownedSession(sessionId)
-  const closed = session.status !== 'open'
-  let recovery = null
-  if (!closed) {
-    const { data, error: recoveryError } = await client.rpc('get_chat_turn_recovery', { p_session_id: sessionId })
-    if (recoveryError) throw recoveryError
-    recovery = data === null ? null : ChatRecoverySchema.parse(data)
+export async function getOwnedChatState(sessionId: string, requestId?: string) {
+  if (requestId !== undefined && (!z.string().uuid().safeParse(sessionId).success || !z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).safeParse(requestId).success)) throw new Error('Invalid request')
+  const { client, session, user } = await ownedSession(sessionId)
+  let receipt: 'generating' | 'failed' | 'completed' | 'interrupted' | 'missing' | undefined
+  let receiptUnavailable = false
+  if (requestId !== undefined) {
+    const { data: conversation, error } = await client.from('conversations').select('id,user_id').eq('id', session.conversation_id).eq('user_id', user.id).single()
+    if (error || !conversation || conversation.id !== session.conversation_id || conversation.user_id !== user.id) throw new Error('Owned conversation required')
+    try {
+      const service = createServiceRoleClient()
+      const result = await service.from('chat_turns').select('status').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
+      if (result.error) throw new Error('Receipt unavailable')
+      if (result.data === null) receipt = 'missing'
+      else {
+        const parsed = z.enum(['generating', 'failed', 'completed', 'interrupted']).safeParse(result.data.status)
+        if (!parsed.success) throw new Error('Receipt unavailable')
+        receipt = parsed.data
+      }
+    } catch { receiptUnavailable = true }
   }
-  const { data: rows, error: messagesError } = await client.from('messages').select('id,role,parts').eq('conversation_id', session.conversation_id).eq('visible_to_user', true).order('created_at', { ascending: true })
-  if (messagesError) throw messagesError
-  const messages = (rows ?? []).map(row => ({ id: row.id, role: row.role, parts: row.parts }))
-  const validated = await safeValidateUIMessages({ messages })
-  if (!validated.success) throw new Error('No se pudo recuperar la conversación')
+  const snapshot = await readOwnedChatSnapshot(client, session)
+  const closed = snapshot.session.status !== 'open'
+  if (!closed && receiptUnavailable) throw new Error('Receipt unavailable')
+  const messages = snapshot.rows.map(row => ({ id: row.id, role: row.role, parts: row.parts }))
+  // An owned conversation can be empty when a request failed before admission.
+  // The SDK validator rejects an empty list, so validate only nonempty history.
+  const validated = messages.length ? await safeValidateUIMessages({ messages }) : null
+  if (validated && !validated.success) throw new Error('No se pudo recuperar la conversación')
+  const recoveredMessages = validated?.data ?? []
   // A closed session may be the successful result of a lost HTTP response.
   // Its final persisted answer must remain recoverable on the same owned view.
-  if (closed) return { closed: true as const, recovery: null, messages: validated.data }
-  return { closed: false as const, recovery, messages: validated.data, timing: sessionTiming(session.opened_at) }
+  if (closed) return { closed: true as const, recovery: null, messages: recoveredMessages, receipt }
+  return { closed: false as const, recovery: snapshot.recovery, messages: recoveredMessages, timing: sessionTiming(snapshot.session.opened_at), receipt }
 }
 
 /** Explicit user action. Never make the browser timer a persistence trigger. */

@@ -1,0 +1,54 @@
+{
+  "snapshot": {
+    "date": "2026-11-01",
+    "source": "https://ai-gateway.vercel.sh/v1/models",
+    "fullCatalogSha256": "a0f22c61b24b6c3d7533ff1cfc581abe9ab30cc470edb79cce018f04660f45a8",
+    "processingMode": "standard"
+  },
+  "onlineCalls": 0,
+  "unit": "synthetic session",
+  "assumptions": [
+    "USD token estimates only",
+    "standard short-context rates selected per call",
+    "no cache hits or writes",
+    "no retries or tool continuations in base scenarios",
+    "output includes billed reasoning",
+    "regional, storage, tools, taxes and provider access excluded"
+  ],
+  "scenarios": {
+    "currentCadence": {
+      "calls": 41,
+      "baseline": {
+        "status": "estimated",
+        "usd": 0.37725,
+        "calls": 41,
+        "pricingSnapshot": "2026-11-01",
+        "measured": false
+      },
+      "lunaLunaSol": {
+        "status": "estimated",
+        "usd": 0.101,
+        "calls": 41,
+        "pricingSnapshot": "2026-11-01",
+        "measured": false
+      }
+    },
+    "hypotheticalFourProfileCalls": {
+      "calls": 25,
+      "baseline": {
+        "status": "estimated",
+        "usd": 0.23325,
+        "calls": 25,
+        "pricingSnapshot": "2026-11-01",
+        "measured": false
+      },
+      "lunaLunaSol": {
+        "status": "estimated",
+        "usd": 0.0834,
+        "calls": 25,
+        "pricingSnapshot": "2026-11-01",
+        "measured": false
+      }
+    }
+  }
+}

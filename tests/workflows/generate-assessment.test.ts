@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { retryableGateway } from '@/tests/helpers/retryable-gateway'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
 // Mocks (must be hoisted so module-init time imports use them)
@@ -13,9 +14,6 @@ vi.mock('ai', () => ({
   generateObject: generateObjectMock,
 }))
 
-vi.mock('@/lib/shared/llm/models', () => ({
-  llm: { structured: () => 'openai/gpt-5.4' },
-}))
 
 vi.mock('@/lib/server/llm/prompts/loader', () => ({
   loadPromptFromMarkdown: () => 'SYSTEM PROMPT',
@@ -200,12 +198,58 @@ const summaryResult = {
 // Tests
 // ---------------------------------------------------------------------------
 
+afterEach(() => vi.unstubAllEnvs())
 beforeEach(() => {
+  vi.stubEnv('LLM_STRUCTURED_PROVIDER', 'openai')
+  vi.stubEnv('LLM_STRUCTURED_MODEL', 'legacy-report')
+  vi.stubEnv('LLM_CLOSURE_REPORT_PROVIDER', 'synthetic')
+  vi.stubEnv('LLM_CLOSURE_REPORT_MODEL', 'report-only')
   generateObjectMock.mockReset()
   createServiceRoleClientMock.mockReset()
 })
 
 describe('generateAssessmentWorkflow', () => {
+  it('keeps sensitive SDK error text and causes outside the report boundary', async () => {
+    const marker = 'SENSITIVE_SYNTHETIC_SDK_PAYLOAD'
+    generateObjectMock.mockRejectedValue(new Error(marker, { cause: new Error(marker) }))
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+      messages: { rows: makeMessages(4) }, questionnaire_instances: { rows: [] }, risk_events: { rows: [] },
+    })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+    const error = await generateAssessmentStep(makeSession()).catch(error => error)
+    expect(error.message).toBe('assessment_generation_failed')
+    expect(error.cause).toBeUndefined()
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      expect(await generateAssessmentWorkflow({ sessionId: 'session-1' })).toEqual({ status: 'manual_review', error: 'assessment_generation_failed' })
+      const inserted = supabase.from.mock.results.flatMap(result => result.value.insert.mock.calls)
+      expect(JSON.stringify(inserted)).toContain('assessment_generation_failed')
+      expect(JSON.stringify(inserted)).not.toContain(marker)
+      expect(JSON.stringify(logs.mock.calls)).toContain('assessment_generation_failed')
+      expect(JSON.stringify(logs.mock.calls)).not.toContain(marker)
+    } finally { logs.mockRestore() }
+  })
+  it('makes one real SDK transport attempt on retryable 503 with the report policy', async () => {
+    const { gateway, requests } = retryableGateway()
+    const sdk = await vi.importActual<typeof import('ai')>('ai')
+    generateObjectMock.mockImplementationOnce(options => sdk.generateObject({ ...options, model: gateway(options.model) }))
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() },
+      messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [] }, risk_events: { rows: [] },
+      assessments: { rows: null },
+    })
+    createServiceRoleClientMock.mockReturnValue(supabase)
+    await expect(generateAssessmentStep(makeSession())).rejects.toThrow()
+    expect(generateAssessmentStep.maxRetries).toBe(3)
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe('https://synthetic.invalid/v1/ai/language-model')
+    expect(JSON.parse(requests[0].body)).toMatchObject({ maxOutputTokens: 6000 })
+    expect(timeout).toHaveBeenCalledWith(45_000)
+    timeout.mockRestore()
+  }, 15_000)
   it('happy path: inserts draft_ai assessment with the generated summary', async () => {
     generateObjectMock.mockResolvedValue({
       object: summaryResult,
@@ -225,6 +269,7 @@ describe('generateAssessmentWorkflow', () => {
 
     expect(result).toEqual({ status: 'completed' })
     expect(generateObjectMock).toHaveBeenCalledOnce()
+    expect(generateObjectMock.mock.calls[0][0]).toMatchObject({ model: 'synthetic/report-only', maxOutputTokens: 6000, maxRetries: 0, abortSignal: expect.any(AbortSignal) })
 
     // Verify the persist insert shape
     const assessmentsCalls = supabase.from.mock.calls.filter(
@@ -358,7 +403,7 @@ describe('generateAssessmentWorkflow', () => {
 
     expect(result).toEqual({
       status: 'manual_review',
-      error: 'LLM 5xx upstream timeout',
+      error: 'assessment_generation_failed',
     })
 
     // Verify a single requires_manual_review insert with the failure payload.
@@ -376,7 +421,7 @@ describe('generateAssessmentWorkflow', () => {
     const failure = inserted.summary_json as {
       generation_failure: { error: string; occurred_at: string }
     }
-    expect(failure.generation_failure.error).toBe('LLM 5xx upstream timeout')
+    expect(failure.generation_failure.error).toBe('assessment_generation_failed')
     expect(failure.generation_failure.occurred_at).toEqual(expect.any(String))
   })
 
@@ -813,7 +858,7 @@ describe('generateAssessmentWorkflow', () => {
 
     expect(result.status).toBe('manual_review')
     expect((result as { status: 'manual_review'; error: string }).error).toBe(
-      'LLM unavailable',
+      'assessment_generation_failed',
     )
   })
 })

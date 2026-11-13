@@ -3,7 +3,8 @@ import { FatalError } from 'workflow'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/shared/supabase/types'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
+import { resolveTaskModel } from '@/lib/server/llm/model-resolver'
 import { getClinicalReportPrompt } from '@/lib/server/llm/prompts'
 import { formatRiskEventForAssessment } from '@/lib/server/assessments/risk-observation'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
@@ -310,19 +311,26 @@ export async function generateAssessmentStep(
   const userPrompt = sections.join('\n')
   const systemPrompt = getClinicalReportPrompt(session.user_id)
 
+  const policy = resolveTaskPolicy('closureReport')
   const { object: summary, usage } = await generateObject({
-    model: llm.structured(),
+    model: resolveTaskModel(policy),
+    maxRetries: policy.maxRetries,
     schema: AssessmentGenerationSchema,
-    abortSignal: AbortSignal.timeout(45_000),
-    maxOutputTokens: 6000,
+    abortSignal: AbortSignal.timeout(policy.timeoutMs),
+    maxOutputTokens: policy.maxOutputTokens,
     system: systemPrompt,
     prompt: userPrompt,
+  }).catch(() => {
+    // SDK errors can include transcript/output and nested causes. Only this
+    // safe failure crosses logging, persistence and durable retry boundaries.
+    throw new Error('assessment_generation_failed')
   })
 
   console.info('[assessment-workflow]', {
     sessionId: session.id,
     step: 'generate_succeeded',
     usage,
+    requestedModel: policy.modelId,
   })
 
   return { ...summary, questionnaires: questionnaireFacts.map(fact => fact.report) } as AssessmentSummary

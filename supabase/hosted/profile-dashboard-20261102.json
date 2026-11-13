@@ -1,0 +1,21 @@
+{
+  "status": "PREPARED_NOT_APPLIED",
+  "mechanism": "custom Supabase Dashboard SQL Editor single-request explicit transaction with same-transaction migration registration",
+  "projectId": "brpozobkoatabctjjadc",
+  "version": "20261102122007",
+  "name": "serenia_progressive_profile_review",
+  "packetPath": "supabase/hosted/profile-atomic.sql",
+  "packetSha256": "313b31b1c06bbe461313a81af9ff0f18fe0cd0a1882ee66ac8013c2ffc05e04a",
+  "packetBytes": 81693,
+  "originalManifestPath": "supabase/hosted/profile-manifest.json",
+  "baselinePath": "supabase/hosted/profile-baseline-20261101.json",
+  "baselineSha256": "a93732427101c87e737a2c48a1c553941c2f19c3c300e209434c084e49553dda",
+  "wrapperPath": "supabase/hosted/profile-dashboard-20261102.sql",
+  "wrapperBytes": 165992,
+  "wrapperSha256": "b7abdf8c18ea1a8ab94d8349d7e2d25a9780ff0f16ec1cebdb73be3aa024cec0",
+  "oldHistoryCount": 43,
+  "newHistoryCount": 44,
+  "transactionTimeout": "50s",
+  "noHistoricalRepair": true,
+  "futureBranchingReplay": "NOT_VERIFIED"
+}

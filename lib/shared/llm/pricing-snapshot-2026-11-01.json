@@ -1,0 +1,352 @@
+{
+  "snapshotDate": "2026-11-01",
+  "currency": "USD",
+  "source": "https://ai-gateway.vercel.sh/v1/models",
+  "fullCatalogSha256": "a0f22c61b24b6c3d7533ff1cfc581abe9ab30cc470edb79cce018f04660f45a8",
+  "models": [
+    {
+      "id": "anthropic/claude-haiku-5.5",
+      "released": 1791331200,
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "supported_parameters": [
+        "max_tokens",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": false,
+      "pricing": {
+        "input": "0.0000001",
+        "input_tiers": [
+          {
+            "cost": "0.0000001",
+            "min": 0,
+            "max": 100001
+          },
+          {
+            "cost": "0.0000005",
+            "min": 100001
+          }
+        ],
+        "output": "0.0000005",
+        "output_tiers": [
+          {
+            "cost": "0.0000005",
+            "min": 0,
+            "max": 100001
+          },
+          {
+            "cost": "0.0000025",
+            "min": 100001
+          }
+        ],
+        "input_cache_read": "0.00000001",
+        "input_cache_read_tiers": [
+          {
+            "cost": "0.00000001",
+            "min": 0,
+            "max": 100001
+          },
+          {
+            "cost": "0.00000005",
+            "min": 100001
+          }
+        ],
+        "input_cache_write": "0.000000125",
+        "input_cache_write_tiers": [
+          {
+            "cost": "0.000000125",
+            "min": 0,
+            "max": 100001
+          },
+          {
+            "cost": "0.000000625",
+            "min": 100001
+          }
+        ]
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5",
+      "released": 1790553600,
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "supported_parameters": [
+        "max_tokens",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": false,
+      "pricing": {
+        "input": "0.000002",
+        "output": "0.00001",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000025"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-mini",
+      "released": 1773705600,
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": true,
+      "pricing": {
+        "input": "0.00000075",
+        "output": "0.0000045",
+        "input_cache_read": "0.000000075"
+      }
+    },
+    {
+      "id": "openai/gpt-6-luna",
+      "released": 1790035200,
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": true,
+      "pricing": {
+        "input": "0.0000001",
+        "input_tiers": [
+          {
+            "cost": "0.0000001",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.0000002",
+            "min": 272001
+          }
+        ],
+        "output": "0.0000005",
+        "output_tiers": [
+          {
+            "cost": "0.0000005",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.00000075",
+            "min": 272001
+          }
+        ],
+        "input_cache_read": "0.00000001",
+        "input_cache_read_tiers": [
+          {
+            "cost": "0.00000001",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.00000002",
+            "min": 272001
+          }
+        ],
+        "input_cache_write": "0.000000125",
+        "input_cache_write_tiers": [
+          {
+            "cost": "0.000000125",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.00000025",
+            "min": 272001
+          }
+        ]
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "released": 1790640000,
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": true,
+      "pricing": {
+        "input": "0.000002",
+        "input_tiers": [
+          {
+            "cost": "0.000002",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.000004",
+            "min": 272001
+          }
+        ],
+        "output": "0.00001",
+        "output_tiers": [
+          {
+            "cost": "0.00001",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.000015",
+            "min": 272001
+          }
+        ],
+        "input_cache_read": "0.0000001",
+        "input_cache_read_tiers": [
+          {
+            "cost": "0.0000001",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.0000002",
+            "min": 272001
+          }
+        ],
+        "input_cache_write": "0.0000025",
+        "input_cache_write_tiers": [
+          {
+            "cost": "0.0000025",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.000005",
+            "min": 272001
+          }
+        ]
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra",
+      "released": 1792972800,
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": true,
+      "pricing": {
+        "input": "0.000001",
+        "input_tiers": [
+          {
+            "cost": "0.000001",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.000002",
+            "min": 272001
+          }
+        ],
+        "output": "0.000005",
+        "output_tiers": [
+          {
+            "cost": "0.000005",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.0000075",
+            "min": 272001
+          }
+        ],
+        "input_cache_read": "0.00000005",
+        "input_cache_read_tiers": [
+          {
+            "cost": "0.00000005",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.0000001",
+            "min": 272001
+          }
+        ],
+        "input_cache_write": "0.00000125",
+        "input_cache_write_tiers": [
+          {
+            "cost": "0.00000125",
+            "min": 0,
+            "max": 272001
+          },
+          {
+            "cost": "0.0000025",
+            "min": 272001
+          }
+        ]
+      }
+    }
+  ],
+  "processingMode": "standard",
+  "unsupportedCharges": [
+    "regional",
+    "fast",
+    "flex",
+    "batch",
+    "tools",
+    "storage"
+  ]
+}

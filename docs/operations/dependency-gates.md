@@ -2,18 +2,21 @@
 
 Node24.14.1, dependencias directas exactas y lockfile versionado. Usar rtk npm ci; no borrar lock/audit fix --force ni actualizar Node global. Hoja shadcn vendorizada sin cambios en app/vendor con licencia MIT y hash; CLI retirada del runtime/graph.
 
+La instalación ejecuta un adaptador de exportaciones para minimatch 11.0.4 con integridad verificada antes de escribir; una versión o contenido inesperados fallan la instalación. No usar `--ignore-scripts` para generar una instalación aceptada. El alcance, hashes y límites están en [compatibilidad minimatch](../audits/2026-11-02-minimatch-compatibility.md).
+
 ```sh
 rtk npm test
 rtk npm run lint
 rtk npm run typecheck
 rtk npm run workflow:wire
 rtk npm run db:test
+rtk npm run chronology:test
 rtk npm run audit:dependencies
 rtk npm run build:isolated
 rtk npm run verify
 ```
 
-verify ejecuta estos gates secuencialmente y conserva todos los exits/logs completos privados. db:verify además requiere stack Supabase real con lint/advisors fail-closed y tipos comparados. CI ejecuta ambos; SQL shim no es aceptación JWT/Data API.
+verify ejecuta estos gates secuencialmente y conserva todos los exits/logs completos privados. chronology:test incluye pruebas de generador, readback, ciclo de vida Docker y PostgreSQL sintético; el paquete sigue en espera para hosted según su documento de entrega. El ensayo requiere un socket Docker Unix y que /tmp permita ejecutar el shim de prueba. db:verify además requiere stack Supabase real con lint/advisors fail-closed y tipos comparados. CI ejecuta ambos; SQL shim no es aceptación JWT/Data API.
 
 build:isolated exige tracked changes committed, crea git archive HEAD en temporal nuevo, rechaza env tracked salvo .env.example y symlinks externos. Copia node_modules instalado dentro del snapshot (clone APFS o copia completa), verifica versiones contra lock y ejecuta Next instalado con cwd snapshot. Child env es lista positiva con public placeholders ficticios/loopback y telemetría apagada, sin API/OIDC/BD/proxy/tracing/NODE_OPTIONS heredados ni .env.local. Registra commit construido, SHA lock, Node/versions, logs y exit. Puede descargar recursos estáticos Google fonts necesarios en build; no demuestra aislamiento universal de red ni runtime. Task6 posee Auth/JWT/PostgREST/browser/Workflow HTTP/reinicio del mismo artefacto.
 

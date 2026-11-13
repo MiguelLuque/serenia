@@ -6,7 +6,7 @@ const DECAY_WINDOW_MS = 21 * 24 * 60 * 60 * 1000
 
 export function derivePatientRiskState(input: {
   lastValidatedAssessment: {
-    reviewedAt: string
+    observedAt: string
     suicidality: 'none' | 'passive' | 'active' | 'acute'
   } | null
   openRiskEvents: Array<{ severity: string; createdAt: string }>
@@ -23,20 +23,20 @@ export function derivePatientRiskState(input: {
   if (lastValidatedAssessment?.suicidality === 'active') return 'active'
 
   if (lastValidatedAssessment?.suicidality === 'none') {
-    const reviewedAtMs = new Date(lastValidatedAssessment.reviewedAt).getTime()
+    const observedAtMs = new Date(lastValidatedAssessment.observedAt).getTime()
     const allEventsOlder = openRiskEvents.every(
-      (e) => reviewedAtMs > new Date(e.createdAt).getTime()
+      (e) => observedAtMs > new Date(e.createdAt).getTime()
     )
     const crisisSessionOlder =
       previousSession?.closureReason === 'crisis_detected'
-        ? reviewedAtMs > new Date(previousSession.closedAt).getTime()
+        ? observedAtMs > new Date(previousSession.closedAt).getTime()
         : true
     if (allEventsOlder && crisisSessionOlder) return 'none'
   }
 
   if (
     lastValidatedAssessment?.suicidality === 'passive' &&
-    new Date(lastValidatedAssessment.reviewedAt).getTime() >
+    new Date(lastValidatedAssessment.observedAt).getTime() >
       now.getTime() - DECAY_WINDOW_MS
   ) {
     return 'watch'

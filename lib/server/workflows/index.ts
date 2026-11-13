@@ -11,21 +11,27 @@ export async function dispatchAssessmentJob(job: ClaimedAssessmentJob): Promise<
   if (!job.token) throw new Error('Assessment job has no claim token')
   const token = job.token
   const service = createServiceRoleClient()
+  let runId: string
   try {
     const run = await start(generateAssessmentWorkflow, [{
       sessionId: job.session_id,
       jobToken: token,
       ...(job.context_json ? { rejectionContext: job.context_json as RejectionContext } : {}),
     }])
-    const { error } = await service.rpc('update_assessment_job', { p_session_id: job.session_id, p_token: token, p_action: 'enqueued', p_run_id: run.runId })
-    if (error) throw error
-    return { runId: run.runId }
-  } catch (error) {
+    runId = run.runId
+  } catch {
     // Durable backoff; a failed release is also recoverable by lease expiry.
-    const { error: releaseError } = await service.rpc('update_assessment_job', { p_session_id: job.session_id, p_token: token, p_action: 'failed' })
-    if (releaseError) console.error('[assessment-outbox] release failed', { code: releaseError.code })
-    throw error
+    try { await service.rpc('update_assessment_job', { p_session_id: job.session_id, p_token: token, p_action: 'failed' }) } catch { /* Preserve the safe start error. */ }
+    throw new Error('assessment_dispatch_failed')
   }
+  try {
+    const { data, error } = await service.rpc('update_assessment_job', { p_session_id: job.session_id, p_token: token, p_action: 'enqueued', p_run_id: runId })
+    if (error || data !== true) throw new Error('assessment_dispatch_ack_failed')
+  } catch {
+    // Start succeeded: an unknown ACK must not reset a running/completed worker.
+    throw new Error('assessment_dispatch_ack_failed')
+  }
+  return { runId }
 }
 
 export async function enqueueAssessmentGeneration(input: GenerateAssessmentInput): Promise<{ runId: string }> {

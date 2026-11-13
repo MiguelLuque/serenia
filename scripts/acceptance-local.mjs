@@ -31,6 +31,8 @@ export function acceptanceEnvironment(source, credentials, directory) {
     WORKFLOW_TARGET_WORLD: 'local', WORKFLOW_LOCAL_BASE_URL: 'http://127.0.0.1:3000',
     WORKFLOW_LOCAL_DATA_DIR: resolve(directory, 'workflow'),
     SERENIA_ACCEPTANCE_DIR: directory, FEATURE_CROSS_SESSION_CONTEXT: 'off', FEATURE_AUXILIARY_DECISIONS: 'off',
+    FEATURE_PROGRESSIVE_PROFILE: source.SERENIA_ACCEPTANCE_PROFILE === 'on' ? 'on' : 'off',
+    ...(source.SERENIA_ACCEPTANCE_PROFILE === 'on' ? { CRON_SECRET: 'synthetic-profile-cron-secret' } : {}),
   }
 }
 export function privateDirectory(directory) {

@@ -35,7 +35,8 @@ function computeHintForEntry(
 
   // Severe rule: score >= 15 AND age strictly > 7 days
   if (entry.score >= 15 && ageMs > SEVEN_DAYS_MS) {
-    return `el ${label} del paciente era severo y tiene más de una semana; considera proponerlo de nuevo si el encuadre de la sesión lo permite.`
+    const band = label === 'PHQ-9' && entry.score < 20 ? 'moderadamente severo' : 'severo'
+    return `el ${label} del paciente era ${band} y tiene más de una semana; considera proponerlo de nuevo si el encuadre de la sesión lo permite.`
   }
 
   // Moderate rule: score >= 10 AND age strictly > 14 days

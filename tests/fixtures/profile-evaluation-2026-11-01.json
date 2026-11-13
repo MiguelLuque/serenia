@@ -1,0 +1,24 @@
+{
+  "version": "fictional-profile-plan-1",
+  "status": "PLAN_ONLY",
+  "clinicalGold": "PENDING_HUMAN_APPROVAL",
+  "cases": [
+    { "id": "P01", "mode": "provider_review", "patientText": "Vivo con mi madre y me ayuda con las compras.", "reviewFocus": "First-person fact with exact source" },
+    { "id": "P02", "mode": "provider_review", "patientText": "Antes vivía con mi madre; ahora vivo solo.", "reviewFocus": "Current fact supersedes past fact" },
+    { "id": "P03", "mode": "provider_review", "patientText": "No vivo con mi madre.", "reviewFocus": "Negation is preserved" },
+    { "id": "P04", "mode": "provider_review", "patientText": "Mi hermano toma medicación; yo no.", "reviewFocus": "Third-party medication is not attributed to patient" },
+    { "id": "P05", "mode": "provider_review", "patientText": "Quizá cambie de trabajo, todavía no lo he decidido.", "reviewFocus": "Tentative plan is not stored as a current fact" },
+    { "id": "P06", "mode": "provider_review", "patientText": "Corrijo lo anterior: trabajo de tarde, no de mañana.", "reviewFocus": "Correction replaces contradicted schedule" },
+    { "id": "P07", "mode": "provider_review", "patientText": "En la novela el personaje dice que no duerme.", "reviewFocus": "Quotation is not patient history" },
+    { "id": "P08", "mode": "provider_review", "patientText": "No he hablado de mi familia; no sé qué contar.", "reviewFocus": "Insufficient evidence does not produce family facts" },
+    { "id": "P09", "mode": "provider_review", "patientText": "La semana pasada dormí mal; esta semana descanso mejor.", "reviewFocus": "Temporal scope of both statements" },
+    { "id": "P10", "mode": "provider_review", "patientText": "A veces me cuesta concentrarme; no sé por qué.", "reviewFocus": "No unsupported cause or diagnosis" },
+    { "id": "P11", "mode": "provider_review", "patientText": "Quiero hablar de otra cosa; el trabajo puede esperar.", "reviewFocus": "Postponement is respected" },
+    { "id": "P12", "mode": "provider_review", "patientText": "Me gusta caminar después de cenar.", "reviewFocus": "Preference is distinguished from a treatment commitment" },
+    { "id": "P13", "mode": "provider_review", "patientText": "Ayer dije que no tenía apoyo; olvidé mencionar a Ana.", "reviewFocus": "New support does not erase attributed earlier statement" },
+    { "id": "P14", "mode": "provider_review", "patientText": "No recuerdo si fue martes o miércoles.", "reviewFocus": "Uncertain day is not fabricated" },
+    { "id": "P15", "mode": "provider_review", "patientText": "El asistente dijo que tengo ansiedad, pero yo no dije eso.", "reviewFocus": "Assistant claim is not promoted to patient fact" },
+    { "id": "P16", "mode": "state_only", "patientText": "Rechazo este dato del perfil.", "reviewFocus": "Rejected item stays rejected without provider call" },
+    { "id": "P17", "mode": "state_only", "patientText": "El asistente dijo que vivo en Madrid.", "reviewFocus": "Assistant-only source cannot become patient-confirmed fact" }
+  ]
+}

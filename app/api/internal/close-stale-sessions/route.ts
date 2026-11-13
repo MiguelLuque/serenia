@@ -2,6 +2,8 @@ import { timingSafeEqual } from 'node:crypto'
 import { createServiceRoleClient } from '@/lib/server/supabase/server'
 import { dispatchAssessmentJob } from '@/lib/server/workflows'
 import { SESSION_INACTIVITY_MS } from '@/lib/server/sessions/service'
+import { progressiveProfileAvailable } from '@/lib/server/profile/config'
+import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -32,6 +34,14 @@ async function handle(request: Request): Promise<Response> {
     for (const result of results) {
       if (result.status === 'fulfilled') enqueued++
       else failed++
+    }
+  }
+  if (progressiveProfileAvailable()) {
+    try {
+      const profile = await enqueueProfileExtraction(undefined, 10)
+      return Response.json({ ok: true, closed, enqueued, failed, profile })
+    } catch {
+      return Response.json({ error: 'Recovery unavailable', closed, enqueued, failed }, { status: 503 })
     }
   }
   return Response.json({ ok: true, closed, enqueued, failed })

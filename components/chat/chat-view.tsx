@@ -31,6 +31,7 @@ interface ChatViewProps {
   serverNow?: Date
   activeQuestionnaire?: ActiveQuestionnaire | null
   initialRecovery?: ChatRecovery | null
+  initialClosed?: boolean
 }
 
 function minutesRemaining(expiresAt: Date, now = Date.now()): number {
@@ -76,6 +77,7 @@ export function ChatView({
   serverNow,
   activeQuestionnaire,
   initialRecovery = null,
+  initialClosed = false,
 }: ChatViewProps) {
   const router = useRouter()
   const [clock, setClock] = useState(() => ({ serverNow: serverNow?.getTime() ?? Date.now(), expiresAt: expiresAt.getTime(), monotonic: performance.now() }))
@@ -91,7 +93,10 @@ export function ChatView({
 
   const [recovery, setRecovery] = useState(initialRecovery)
   const [recoveryError, setRecoveryError] = useState(false)
-  const [externallyClosed, setExternallyClosed] = useState(false)
+  const [recoveryChecking, setRecoveryChecking] = useState(false)
+  const [recoveryUnconfirmed, setRecoveryUnconfirmed] = useState(false)
+  const [receiptCompleted, setReceiptCompleted] = useState(false)
+  const [externallyClosed, setExternallyClosed] = useState(initialClosed)
   const [urgentMode, setUrgentMode] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const failedRef = useRef(false)
@@ -102,6 +107,11 @@ export function ChatView({
   // Reads order snapshots without invalidating a valid transport completion.
   const transitionRef = useRef(0)
   const recoveryReadRef = useRef(0)
+  // A failed or interrupted turn may have committed a questionnaire without
+  // returning its tool event. Reconcile the server-rendered card on recovery;
+  // keep the intent while a generating turn may still finish.
+  const questionnaireRefreshPendingRef = useRef(initialRecovery !== null)
+  const generatingRefreshRef = useRef<string | null>(null)
   const lifecycleRef = useRef({ mounted: false, sessionId })
 
   useEffect(() => {
@@ -126,7 +136,7 @@ export function ChatView({
   const { messages, sendMessage, status, error, stop, setMessages, clearError } = useChat({
     id: sessionId,
     messages: initialMessages,
-    onError: () => { failedRef.current = true; if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
+    onError: () => { failedRef.current = true; questionnaireRefreshPendingRef.current = true; generatingRefreshRef.current = null; setRecoveryChecking(true); if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
     // The installed SDK constructor stores fetch; it runs only when sending.
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -155,19 +165,40 @@ export function ChatView({
     const read = ++recoveryReadRef.current
     const localFallback = allowLocalFallback && status === 'error' && lastAttemptRef.current
       ? { ...lastAttemptRef.current, canRetry: httpStatusRef.current !== 422 } : null
+    const requestId = status === 'error' || recovery !== null ? lastAttemptRef.current?.requestId : undefined
     try {
-      const state = await getOwnedChatState(sessionId)
-      if (!isCurrentTransition(operation) || recoveryReadRef.current !== read) return null
+      const state = await getOwnedChatState(sessionId, requestId)
+      if (!isCurrentTransition(operation) || recoveryReadRef.current !== read || (requestId !== undefined && lastAttemptRef.current?.requestId !== requestId)) return null
       setRecoveryError(false)
+      setRecoveryChecking(false)
       if (state.closed) {
+        setRecoveryUnconfirmed(false)
+        setReceiptCompleted(false)
+        questionnaireRefreshPendingRef.current = false
+        generatingRefreshRef.current = null
         transitionRef.current += 1
         setMessages(state.messages)
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
         return null
       }
       if (state.timing) syncClock(state.timing)
+      setReceiptCompleted(state.recovery === null && localFallback !== null && state.receipt === 'completed' && requestId !== undefined)
+      setRecoveryUnconfirmed(state.recovery === null && localFallback !== null)
       setRecovery(state.recovery ?? localFallback)
       setMessages(state.messages)
+      if (questionnaireRefreshPendingRef.current) {
+        if (state.recovery?.status === 'generating') {
+          const generation = `${state.recovery.requestId}:${state.recovery.canRetry}`
+          if (generatingRefreshRef.current !== generation) {
+            generatingRefreshRef.current = generation
+            router.refresh()
+          }
+        } else {
+          questionnaireRefreshPendingRef.current = false
+          generatingRefreshRef.current = null
+          router.refresh()
+        }
+      }
       return { operation, read }
     } catch {
       if (isCurrentTransition(operation) && recoveryReadRef.current === read) setRecoveryError(true)
@@ -223,6 +254,8 @@ export function ChatView({
 
   async function retry() {
     if (!recovery?.canRetry || retrying) return
+    questionnaireRefreshPendingRef.current = true
+    generatingRefreshRef.current = null
     const operation = ++transitionRef.current
     const attempt = recovery
     activeRequestRef.current = attempt.requestId
@@ -234,6 +267,7 @@ export function ChatView({
       if (isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(attempt.requestId)) {
         // Completion supersedes snapshots captured while this turn was pending.
         transitionRef.current += 1
+        setRecoveryChecking(true)
         const snapshot = await rehydrate(false)
         if (snapshot !== null && isCurrentTransition(snapshot.operation) && recoveryReadRef.current === snapshot.read) setUrgentMode(false)
       }
@@ -251,8 +285,10 @@ export function ChatView({
     lastAttemptRef.current = { requestId, userMessageId: requestId, text, status: 'failed', canRetry: true, leaseUntil: new Date().toISOString() }
     await sendMessage({ id: requestId, role: 'user', parts: [{ type: 'text', text }] })
     const completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(requestId)
-    if (completed) { transitionRef.current += 1; setRecovery(null); setUrgentMode(false) }
-    return completed
+    if (completed) { transitionRef.current += 1; setRecovery(null); setRecoveryError(false); setRecoveryChecking(false); setRecoveryUnconfirmed(false); setUrgentMode(false) }
+    // Once dispatched, the transcript/retry owns the submitted text even
+    // when transport fails. The composer belongs to the next draft.
+    return true
   }
 
   useEffect(() => {
@@ -283,14 +319,14 @@ export function ChatView({
   // end-of-session banner below has a link to /app when the patient is
   // ready.
   useEffect(() => {
-    if (closeSignal !== 'crisis' || draft.trim()) return
+    if (initialClosed || closeSignal !== 'crisis' || draft.trim()) return
     if (crisisRedirectRef.current) return
     crisisRedirectRef.current = true
     const timer = setTimeout(() => {
       router.push('/app')
     }, 1800)
     return () => clearTimeout(timer)
-  }, [closeSignal, router, draft])
+  }, [closeSignal, router, draft, initialClosed])
 
   useEffect(() => {
     if (isClosed) return
@@ -394,8 +430,8 @@ export function ChatView({
               />
             )}
           {(isTimeExpired || recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
-            <p role="status" aria-live="polite">{recovery ? recovery.canRetry ? 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'No se completó la respuesta. Tu texto se conserva; estamos comprobando el turno guardado.' : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.' : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'}</p>
-            {recovery?.canRetry && !urgentMode && <button type="button" disabled={closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
+            <p role="status" aria-live="polite">{recoveryChecking ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.' : recovery ? recovery.canRetry ? receiptCompleted ? 'Tu turno guardado terminó, pero no podemos confirmar que la respuesta se muestre. Puedes recuperar el mismo mensaje.' : recovery.status === 'generating' || recoveryUnconfirmed ? 'Aún no podemos confirmar cómo terminó el turno. Puedes reintentar el mismo mensaje.' : 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'Estamos comprobando cómo terminó el turno.' : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.' : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'}</p>
+            {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
             <button type="button" onClick={() => { transitionRef.current += 1; if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
             <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
             {recoveryError && <p role="alert">No se pudo comprobar el estado. Conserva tu texto y vuelve a comprobarlo o recarga.</p>}
