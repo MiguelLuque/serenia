@@ -1,6 +1,6 @@
 # Prepared Dashboard delivery for progressive profile
 
-**Status: PREPARED_NOT_APPLIED.** This is a separately labelled, custom SQL Editor delivery. It does not change the reviewed MCP packet, its manifest, the four source migrations, any existing history row, or the local CLI policy. It is not a claim of Supabase CLI/MCP migration acceptance or hosted application success.
+**Status of this exact artifact: PREPARED_NOT_APPLIED.** This is a separately labelled, custom SQL Editor delivery. It does not change the reviewed MCP packet, its manifest, the four source migrations, any existing history row, or the local CLI policy. It is not a claim of Supabase CLI/MCP migration acceptance or hosted application success. A later read-only migration-list query found the profile registered under `20261114172032`, not this wrapper's proposed `20261102122007`; this artifact itself is still not recorded as applied. See the [fresh migration-history read](2026-11-02-migration-history-reconciliation.md#fresh-hosted-migration-list-read--2026-11-14).
 
 **Delivery hold:** independent review found pre-existing local/hosted migration-history and content divergence. The custom registration adds another hosted-only version and its later CLI/Branching replay is unverified. Do not run this artifact until a safe continuity and readback procedure has been reviewed and tested. See [migration history review](2026-11-02-migration-history-reconciliation.md). No history repair or renaming may be used to force agreement.
 

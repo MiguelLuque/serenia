@@ -11,10 +11,17 @@ export function resolveTaskModel(policy: TaskPolicy, env: Record<string, string 
 
   const match = /^openai\/([a-zA-Z0-9][a-zA-Z0-9._:-]*)$/.exec(policy.modelId)
   if (!match) throw new Error('Direct OpenAI transport requires an OpenAI model')
+  const region = env.OPENAI_API_REGION ?? 'global'
+  const baseURL = region === 'global'
+    ? 'https://api.openai.com/v1'
+    : region === 'eu'
+      ? 'https://eu.api.openai.com/v1'
+      : null
+  if (!baseURL) throw new Error('Invalid OPENAI_API_REGION')
   const apiKey = env.OPENAI_API_KEY?.trim()
   if (!apiKey) throw new Error('Missing OPENAI_API_KEY')
 
-  const provider = createOpenAI({ apiKey, baseURL: 'https://api.openai.com/v1' })
+  const provider = createOpenAI({ apiKey, baseURL })
   return wrapLanguageModel({
     model: provider.responses(match[1]),
     middleware: {

@@ -12,6 +12,8 @@ import json
 import shutil
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from chat_lease_regression import run_chat_lease_regressions
+from chat_turn_resolution_regression import run_chat_turn_resolution_regressions
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -48,6 +50,8 @@ try:
         raise RuntimeError('PostgreSQL startup timed out:\n' + docker('logs', name, check=False).stdout)
     query((ROOT / 'supabase/tests/bootstrap.sql').read_text())
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
+        if ('chat_turn_lease_fencing' in path.name or 'resolve_expired_chat_turn' in path.name) and (args.baseline_security or args.baseline_chat or args.baseline_flows):
+            continue
         if args.baseline_flows and 'patient_flows_acceptance' in path.name:
             continue
         if args.baseline_chat and 'robust_chat_questionnaires_recovery' in path.name:
@@ -163,7 +167,87 @@ try:
                         if overloads.splitlines()[2].strip() != '1':
                             raise RuntimeError('Profile conflict signature drift left an overload')
                 print('PASS all three profile conflict routines reject body/config/owner/ACL/security/signature drift atomically')
+            if 'chat_turn_lease_fencing' in path.name:
+                lease_contract = """select jsonb_agg(to_jsonb(p)-'prosrc' order by p.oid)::text
+                    from pg_proc p where p.oid in (
+                    'public.begin_chat_turn_after_onboarding(uuid,uuid,text,text,boolean,boolean)'::regprocedure,
+                    'public.create_questionnaire_atomic(uuid,uuid,uuid,text,text,text,uuid)'::regprocedure,
+                    'public.finish_chat_turn(uuid,text,uuid,jsonb,jsonb,text,text)'::regprocedure,
+                    'public.close_chat_turn(uuid,text,uuid,text)'::regprocedure);"""
+                lease_before_metadata = query(lease_contract)
+                lease_source = path.read_text()
+                lease_definition = 'public.close_chat_turn(uuid,text,uuid,text)'
+                lease_drift_cases = (
+                    "alter function " + lease_definition + " owner to service_role;",
+                    "grant execute on function " + lease_definition + " to authenticated;",
+                    "alter function " + lease_definition + " set search_path to pg_catalog;",
+                    "alter function " + lease_definition + " immutable;",
+                    "alter function " + lease_definition + " security definer;",
+                    "create function public.close_chat_turn(uuid) returns boolean language sql as 'select false';",
+                    "alter function " + lease_definition + " rename to moved_chat_close;",
+                    """do $$ begin execute replace(pg_get_functiondef(
+                        'public.close_chat_turn(uuid,text,uuid,text)'::regprocedure),
+                        'return true;', 'return false;'); end $$;""",
+                )
+                lease_catalog = "select jsonb_agg(to_jsonb(p) order by p.oid)::text" + lease_contract[lease_contract.index('\n                    from pg_proc'):]
+                lease_original = query(lease_catalog)
+                for drift in lease_drift_cases:
+                    try:
+                        query('BEGIN;\n' + drift + '\n' + lease_source + '\nCOMMIT;')
+                    except RuntimeError as error:
+                        if 'Unexpected chat lease baseline' not in str(error):
+                            raise
+                    else:
+                        raise RuntimeError('Chat lease guard accepted baseline drift: ' + drift)
+                    if query(lease_catalog) != lease_original:
+                        raise RuntimeError('Chat lease migration left changes after rejected baseline')
+                try:
+                    query('BEGIN;\n' + lease_source.replace(
+                        'return true;', 'return false;', 1) + '\nCOMMIT;')
+                except RuntimeError as error:
+                    if 'Unexpected chat lease readback' not in str(error):
+                        raise
+                else:
+                    raise RuntimeError('Chat lease guard accepted changed replacement')
+                if query(lease_catalog) != lease_original:
+                    raise RuntimeError('Chat lease migration left changes after rejected readback')
+                print('PASS chat lease baseline/readback guards reject routine drift and roll back atomically')
+            if 'resolve_expired_chat_turn' in path.name:
+                try:
+                    query("BEGIN;\nALTER FUNCTION public.create_questionnaire_atomic(uuid,uuid,uuid,text,text,text,uuid) SECURITY DEFINER;\n" + path.read_text() + '\nCOMMIT;')
+                except RuntimeError as error:
+                    if 'Unexpected chat resolution prerequisite' not in str(error):
+                        raise
+                else:
+                    raise RuntimeError('Resolution migration accepted unfenced writer drift')
+                if query("select to_regprocedure('public.resolve_expired_chat_turn(uuid,text,integer)') is null;").splitlines()[2].strip() != 't':
+                    raise RuntimeError('Resolution prerequisite failure left function behind')
+                try:
+                    query("BEGIN;\nALTER FUNCTION public.get_chat_turn_recovery(uuid) SECURITY INVOKER;\n" + path.read_text() + '\nCOMMIT;')
+                except RuntimeError as error:
+                    if 'Unexpected chat recovery baseline' not in str(error):
+                        raise
+                else:
+                    raise RuntimeError('Resolution migration accepted recovery projection drift')
+                if query("select to_regprocedure('public.resolve_expired_chat_turn(uuid,text,integer)') is null;").splitlines()[2].strip() != 't':
+                    raise RuntimeError('Recovery baseline failure left function behind')
+                recovery_source = path.read_text()
+                recovery_fragment = "'attempt',t.attempts"
+                if recovery_source.count(recovery_fragment) != 1:
+                    raise RuntimeError('Unexpected recovery readback test source')
+                try:
+                    query('BEGIN;\n' + recovery_source.replace(recovery_fragment, "'attempt',0", 1) + '\nCOMMIT;')
+                except RuntimeError as error:
+                    if 'Unexpected chat recovery readback' not in str(error):
+                        raise
+                else:
+                    raise RuntimeError('Resolution migration accepted modified recovery projection')
+                if query("select to_regprocedure('public.resolve_expired_chat_turn(uuid,text,integer)') is null;").splitlines()[2].strip() != 't':
+                    raise RuntimeError('Recovery readback failure left function behind')
+                print('PASS resolution prerequisite rejects drift and rolls back')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'chat_turn_lease_fencing' in path.name and query(lease_contract) != lease_before_metadata:
+                raise RuntimeError('Chat lease fencing changed routine metadata or grants')
             if 'assessment_observed_chronology' in path.name and query(chronology_contract) != chronology_before_metadata:
                 raise RuntimeError('Chronology forward changed metadata/ACL/signature')
             if 'profile_nonretryable_conflicts' in path.name:
@@ -257,6 +341,9 @@ try:
     print('PASS concurrent confirm/modify and duplicate modify retry')
     query((ROOT / 'supabase/tests/chat-questionnaire-recovery.sql').read_text())
     print('PASS atomic questionnaire validation/retry/rollback, CSSRS priority, chat consent/leases and durable recovery')
+    if not (args.baseline_security or args.baseline_chat or args.baseline_flows):
+        run_chat_lease_regressions(query)
+        run_chat_turn_resolution_regressions(query)
     # Independent connections contend for the same questionnaire/turn/job.
     sid = '20000000-0000-0000-0000-000000000020'
     cid = '10000000-0000-0000-0000-000000000020'

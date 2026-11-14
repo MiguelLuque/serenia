@@ -16,24 +16,38 @@ async function ownedSession(sessionId: string) {
   return { client, session, user }
 }
 
+/** Explicitly fence an expired owned turn. Busy and unknown remain uncertain. */
+export async function resolveOwnedChatTurn(sessionId: string, requestId: string, attempt: number) {
+  if (!z.string().uuid().safeParse(sessionId).success || !z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).safeParse(requestId).success || !z.number().int().min(1).max(3).safeParse(attempt).success) throw new Error('Invalid request')
+  const { client } = await ownedSession(sessionId)
+  const { data, error } = await client.rpc('resolve_expired_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_expected_attempt: attempt })
+  if (error) throw new Error('Resolution unavailable')
+  return z.enum(['busy', 'active', 'failed', 'completed', 'interrupted', 'closed', 'unknown', 'stale']).parse(data)
+}
+
 /** Rehydrate only an authenticated patient's owned conversation and narrow turn projection. */
 export async function getOwnedChatState(sessionId: string, requestId?: string) {
   if (requestId !== undefined && (!z.string().uuid().safeParse(sessionId).success || !z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).safeParse(requestId).success)) throw new Error('Invalid request')
   const { client, session, user } = await ownedSession(sessionId)
   let receipt: 'generating' | 'failed' | 'completed' | 'interrupted' | 'missing' | undefined
+  let receiptUserMessageId: string | undefined
   let receiptUnavailable = false
   if (requestId !== undefined) {
     const { data: conversation, error } = await client.from('conversations').select('id,user_id').eq('id', session.conversation_id).eq('user_id', user.id).single()
     if (error || !conversation || conversation.id !== session.conversation_id || conversation.user_id !== user.id) throw new Error('Owned conversation required')
     try {
       const service = createServiceRoleClient()
-      const result = await service.from('chat_turns').select('status').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
+      const result = await service.from('chat_turns').select('status,user_message_id').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
       if (result.error) throw new Error('Receipt unavailable')
       if (result.data === null) receipt = 'missing'
       else {
-        const parsed = z.enum(['generating', 'failed', 'completed', 'interrupted']).safeParse(result.data.status)
+        const parsed = z.object({
+          status: z.enum(['generating', 'failed', 'completed', 'interrupted']),
+          user_message_id: z.string().uuid(),
+        }).safeParse(result.data)
         if (!parsed.success) throw new Error('Receipt unavailable')
-        receipt = parsed.data
+        receipt = parsed.data.status
+        receiptUserMessageId = parsed.data.user_message_id
       }
     } catch { receiptUnavailable = true }
   }
@@ -48,8 +62,8 @@ export async function getOwnedChatState(sessionId: string, requestId?: string) {
   const recoveredMessages = validated?.data ?? []
   // A closed session may be the successful result of a lost HTTP response.
   // Its final persisted answer must remain recoverable on the same owned view.
-  if (closed) return { closed: true as const, recovery: null, messages: recoveredMessages, receipt }
-  return { closed: false as const, recovery: snapshot.recovery, messages: recoveredMessages, timing: sessionTiming(snapshot.session.opened_at), receipt }
+  if (closed) return { closed: true as const, recovery: null, messages: recoveredMessages, receipt, receiptUserMessageId }
+  return { closed: false as const, recovery: snapshot.recovery, messages: recoveredMessages, timing: sessionTiming(snapshot.session.opened_at), receipt, receiptUserMessageId }
 }
 
 /** Explicit user action. Never make the browser timer a persistence trigger. */

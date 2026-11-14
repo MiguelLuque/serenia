@@ -42,6 +42,8 @@ Task11 está implementada en fuente `f1ff5b7`, pendiente de aprobación y acepta
 
 El revisor independiente confirmó como Important el segundo acceso a ese contrato: una petición directa de edición clínica podía sustituir la lista aunque el formulario fuera de solo lectura. Está preparado un forward independiente que rechaza cambios/omisiones frente al informe original bloqueado en la RPC y preserva edición narrativa, tareas e idempotencia:8.191bytes, SHA256 `86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504`. Metadata oficial24oct14:50:23 confirmó el cuerpo/propietario/configuración/ACL anteriores; aún no se ha aplicado este tercer cambio. Los dos paquetes aplicados conservan sus bytes. No se reescriben informes históricos ni se cambian reglas clínicas, prompts aprobados o modelos por este arreglo.
 
+**Corrección posterior — 14 noviembre 2026:** la nota anterior refleja el estado del checkpoint de 24 octubre. El registro posterior `supabase/hosted/application-20261024.json` marca el forward `serenia_review_questionnaire_facts_immutable` como `APPLIED_VERIFIED`, con versión alojada `20261024203657` y el mismo SHA-256 de 8.191 bytes. La lista alojada consultada después aún contiene esa versión. Esto confirma la aplicación registrada de ese forward; no amplía la aceptación técnica sintética a pruebas clínicas o de runtime.
+
 ## Dependencias: nuevo gate fallido24octubre
 
 La ejecución obligatoria sobre `f1ff5b7` terminó: test0(**752pruebas/64archivos**), lint0, tipos0, Workflowwire0(20payloads anteriores/24roundtrips), PostgreSQL0 y buildaislado0; **audit:dependencies1**, conjunto verify1. No son siete gates aprobados. Los JSON/stderr/exits completos se conservan en el directorio privado `serenia-verify-jgKyNw`.

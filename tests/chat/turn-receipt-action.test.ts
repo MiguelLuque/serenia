@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 
 const f = vi.hoisted(() => ({
   user: 'owner' as string | null, sessionOwner: 'owner', conversationOwner: 'owner',
-  receipt: null as string | null, receiptError: false, serviceCalls: 0,
+  receipt: null as string | null, receiptMessageId: '40000000-0000-4000-8000-000000000004', receiptError: false, serviceCalls: 0,
   filters: [] as Array<[string, string]>, selected: '', events: [] as string[],
 }))
 vi.mock('@/lib/server/supabase/server', () => ({
@@ -19,7 +19,7 @@ vi.mock('@/lib/server/supabase/server', () => ({
     f.serviceCalls++
     return { from: (table: string) => {
       if (table !== 'chat_turns') throw new Error('unexpected table')
-      const q = { select: (value: string) => { f.selected = value; return q }, eq: (key: string, value: string) => { f.filters.push([key, value]); return q }, maybeSingle: async () => { f.events.push('receipt'); return { data: f.receipt === null ? null : { status: f.receipt }, error: f.receiptError ? { code: 'fictional' } : null } } }
+      const q = { select: (value: string) => { f.selected = value; return q }, eq: (key: string, value: string) => { f.filters.push([key, value]); return q }, maybeSingle: async () => { f.events.push('receipt'); return { data: f.receipt === null ? null : { status: f.receipt, user_message_id: f.receiptMessageId }, error: f.receiptError ? { code: 'fictional' } : null } } }
       return q
     } }
   },
@@ -28,14 +28,15 @@ vi.mock('@/lib/server/chat/owned-snapshot', () => ({ readOwnedChatSnapshot: asyn
 import { getOwnedChatState } from '@/app/app/chat-recovery-actions'
 
 const sid = '20000000-0000-4000-8000-000000000001'
-const read = getOwnedChatState as unknown as (sessionId: string, requestId?: string) => Promise<{ receipt?: string }>
-beforeEach(() => { f.user = 'owner'; f.sessionOwner = 'owner'; f.conversationOwner = 'owner'; f.receipt = null; f.receiptError = false; f.serviceCalls = 0; f.filters = []; f.selected = ''; f.events = [] })
+const read = getOwnedChatState as unknown as (sessionId: string, requestId?: string) => Promise<{ receipt?: string; receiptUserMessageId?: string }>
+beforeEach(() => { f.user = 'owner'; f.sessionOwner = 'owner'; f.conversationOwner = 'owner'; f.receipt = null; f.receiptMessageId = '40000000-0000-4000-8000-000000000004'; f.receiptError = false; f.serviceCalls = 0; f.filters = []; f.selected = ''; f.events = [] })
 
 it('reads a minimal exact receipt before the transcript', async () => {
   f.receipt = 'completed'
   const result = await read(sid, 'turn-1')
   expect(result.receipt).toBe('completed')
-  expect(f.selected).toBe('status')
+  expect(result.receiptUserMessageId).toBe(f.receiptMessageId)
+  expect(f.selected).toBe('status,user_message_id')
   expect(f.filters).toEqual([['session_id', sid], ['user_id', 'owner'], ['request_id', 'turn-1']])
   expect(f.events).toEqual(['receipt', 'snapshot'])
 })
@@ -70,5 +71,11 @@ it('reports an absent row as missing and does not infer failure', async () => {
 it.each(['bad-status', 'query-error'])('fails closed for %s', async scenario => {
   f.receipt = scenario === 'bad-status' ? 'invented' : null
   f.receiptError = scenario === 'query-error'
+  await expect(read(sid, 'turn-1')).rejects.toThrow()
+})
+
+it('fails closed when the request receipt has an invalid user message ID', async () => {
+  f.receipt = 'completed'
+  f.receiptMessageId = 'not-a-uuid'
   await expect(read(sid, 'turn-1')).rejects.toThrow()
 })

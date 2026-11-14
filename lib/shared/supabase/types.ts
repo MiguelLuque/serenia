@@ -910,6 +910,9 @@ isOneToOne: false
 "regenerate_assessment_atomic":
 { Args: { "p_assessment_id": string,"p_expected_status": string,"p_restore"?: boolean }; Returns: boolean
                            },
+"resolve_expired_chat_turn":
+{ Args: { "p_expected_attempt": number,"p_request_id": string,"p_session_id": string }; Returns: string
+                           },
 "review_assessment_atomic":
 { Args: { "p_action": string,"p_assessment_id": string,"p_inherited_updates"?: Json,"p_notes"?: string,"p_reason"?: string,"p_session_id": string,"p_summary"?: Json }; Returns: string
                            },

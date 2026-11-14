@@ -46,6 +46,16 @@ describe('task model transport boundary', () => {
     expect(requests[0].headers.get('authorization')).toBe('Bearer synthetic-openai-only')
     expect(requests[0].body).toMatchObject({ model: 'gpt-6-luna', store: false, max_output_tokens: 32 })
   })
+  it('routes direct Responses through EU only when the region is explicitly selected', async () => {
+    const requests = transport([response()])
+    await generateText({ model: resolveTaskModel(policy, { ...direct, OPENAI_API_REGION: 'eu' }), prompt: 'Caso ficticio', maxRetries: 0 })
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe('https://eu.api.openai.com/v1/responses')
+    expect(requests[0].body.store).toBe(false)
+  })
+  it.each(['EU', 'us', 'https://example.invalid'])('rejects an unsupported OpenAI API region before creating a provider: %s', region => {
+    expect(() => resolveTaskModel(policy, { ...direct, OPENAI_API_REGION: region })).toThrow('Invalid OPENAI_API_REGION')
+  })
   it('retains schema-validated output through the direct adapter', async () => {
     const requests = transport([response([message('{"observations":[]}')])])
     const result = await generateText({ model: resolveTaskModel({ ...policy, task: 'profileExtraction' }, direct), prompt: 'Caso ficticio', output: Output.object({ schema: z.object({ observations: z.array(z.string()) }) }), maxRetries: 0 })

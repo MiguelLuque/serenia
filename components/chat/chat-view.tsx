@@ -9,7 +9,7 @@ import { MessageBubble } from './message-bubble'
 import { ChatInput } from './chat-input'
 import { CrisisBanner } from './crisis-banner'
 import { QuestionnaireCard } from './questionnaire-card'
-import { closeOwnedSessionFromView, getOwnedChatState } from '@/app/app/chat-recovery-actions'
+import { closeOwnedSessionFromView, getOwnedChatState, resolveOwnedChatTurn } from '@/app/app/chat-recovery-actions'
 import type { ChatRecovery } from '@/lib/shared/chat/recovery'
 
 interface ActiveQuestionnaire {
@@ -33,6 +33,17 @@ interface ChatViewProps {
   initialRecovery?: ChatRecovery | null
   initialClosed?: boolean
 }
+
+interface LocalSubmission {
+  requestId: string
+  userMessageId?: string
+  text: string
+  urgent: boolean
+  state: 'sending' | 'uncertain' | 'interrupted'
+}
+
+const CLOSE_ACTION_TIMEOUT_MS = 15_000
+const LOCAL_TEXT_COPY_WARNING = 'El texto pendiente solo sigue en esta pantalla. Cópialo antes de recargar o salir.'
 
 function minutesRemaining(expiresAt: Date, now = Date.now()): number {
   return Math.max(0, Math.ceil((expiresAt.getTime() - now) / 60_000))
@@ -70,6 +81,16 @@ function detectServerClose(
   return hit
 }
 
+function hasVisibleAssistantResponseAfter(messages: readonly UIMessage[], userMessageId: string): boolean {
+  const userIndex = messages.findIndex(message => message.id === userMessageId && message.role === 'user')
+  if (userIndex < 0) return false
+  for (const message of messages.slice(userIndex + 1)) {
+    if (message.role === 'user') return false
+    if (message.role === 'assistant' && message.parts.some(part => part.type === 'text' && part.text.trim().length > 0)) return true
+  }
+  return false
+}
+
 export function ChatView({
   sessionId,
   initialMessages,
@@ -84,6 +105,7 @@ export function ChatView({
   const [minsLeft, setMinsLeft] = useState(() => minutesRemaining(expiresAt, serverNow?.getTime() ?? Date.now()))
   const [draft, setDraft] = useState('')
   const [closing, setClosing] = useState(false)
+  const [closeUncertain, setCloseUncertain] = useState(false)
   const [closeNotice, setCloseNotice] = useState('')
   const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
@@ -94,15 +116,30 @@ export function ChatView({
   const [recovery, setRecovery] = useState(initialRecovery)
   const [recoveryError, setRecoveryError] = useState(false)
   const [recoveryChecking, setRecoveryChecking] = useState(false)
+  const [resolvingTurn, setResolvingTurn] = useState(false)
+  const resolvingRef = useRef(false)
+  const [resolutionNotice, setResolutionNotice] = useState('')
   const [recoveryUnconfirmed, setRecoveryUnconfirmed] = useState(false)
   const [receiptCompleted, setReceiptCompleted] = useState(false)
   const [externallyClosed, setExternallyClosed] = useState(initialClosed)
   const [urgentMode, setUrgentMode] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [localSubmissions, setLocalSubmissions] = useState<LocalSubmission[]>([])
+  const [copiedSubmissionIds, setCopiedSubmissionIds] = useState<string[]>([])
   const failedRef = useRef(false)
   const lastAttemptRef = useRef<ChatRecovery | null>(initialRecovery)
+  const completedRecoveryRef = useRef<ChatRecovery | null>(null)
+  const closeUncertainRef = useRef(false)
+  const closeActionPendingRef = useRef<string | null>(null)
   const activeRequestRef = useRef<string | null>(null)
-  const cancelledRequestsRef = useRef(new Set<string>())
+  const cancelledRequestsRef = useRef(new Set<number>())
+  const transportSequenceRef = useRef(0)
+  const activeTransportRef = useRef<number | null>(null)
+  const queuedTransportsRef = useRef<number[]>([])
+  const retryingTransportRef = useRef<number | null>(null)
+  const localSubmissionsRef = useRef<LocalSubmission[]>([])
+  const deferredClosedReadRef = useRef<string | null>(null)
+  const needsFreshClosedReadRef = useRef(false)
   const httpStatusRef = useRef<number | null>(null)
   // Reads order snapshots without invalidating a valid transport completion.
   const transitionRef = useRef(0)
@@ -127,17 +164,75 @@ export function ChatView({
     return transitionRef.current === operation && lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId
   }
 
+  function updateLocalSubmission(requestId: string, submission: LocalSubmission | null) {
+    const current = localSubmissionsRef.current
+    const next = submission === null
+      ? current.filter(item => item.requestId !== requestId)
+      : current.some(item => item.requestId === requestId)
+        ? current.map(item => item.requestId === requestId ? submission : item)
+        : [...current, submission]
+    localSubmissionsRef.current = next
+    setLocalSubmissions(next)
+  }
+
+  function beginTransport(requestId: string) {
+    const transport = ++transportSequenceRef.current
+    activeTransportRef.current = transport
+    activeRequestRef.current = requestId
+    queuedTransportsRef.current.push(transport)
+    // A response status belongs to one transport only. A network error before
+    // response headers leaves this null instead of inheriting an earlier 422.
+    httpStatusRef.current = null
+    return transport
+  }
+
+  function flushDeferredClosedRead() {
+    if (!needsFreshClosedReadRef.current || queuedTransportsRef.current.length > 0 || activeTransportRef.current !== null) return
+    const requestId = deferredClosedReadRef.current
+    needsFreshClosedReadRef.current = false
+    deferredClosedReadRef.current = null
+    setTimeout(() => {
+      if (queuedTransportsRef.current.length === 0 && activeTransportRef.current === null) void rehydrate(false, requestId ? { requestId } : undefined)
+      else {
+        needsFreshClosedReadRef.current = true
+        deferredClosedReadRef.current = requestId
+      }
+    }, 0)
+  }
+
+  function endTransport(transport: number) {
+    queuedTransportsRef.current = queuedTransportsRef.current.filter(item => item !== transport)
+    cancelledRequestsRef.current.delete(transport)
+    if (activeTransportRef.current === transport) {
+      activeTransportRef.current = null
+      activeRequestRef.current = null
+    }
+    if (queuedTransportsRef.current.length === 0) flushDeferredClosedRead()
+  }
+
   const trackedFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const transport = queuedTransportsRef.current.shift()
     const response = await fetch(url, init)
-    httpStatusRef.current = response.status
+    if (transport !== undefined && activeTransportRef.current === transport) httpStatusRef.current = response.status
     return response
   }, [])
 
   const { messages, sendMessage, status, error, stop, setMessages, clearError } = useChat({
     id: sessionId,
     messages: initialMessages,
-    onError: () => { failedRef.current = true; questionnaireRefreshPendingRef.current = true; generatingRefreshRef.current = null; setRecoveryChecking(true); if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false }) },
+    onError: () => {
+      failedRef.current = true
+      questionnaireRefreshPendingRef.current = true
+      generatingRefreshRef.current = null
+      setRecoveryChecking(true)
+      const requestId = activeRequestRef.current
+      const submission = requestId ? localSubmissionsRef.current.find(item => item.requestId === requestId) : null
+      if (submission) updateLocalSubmission(requestId!, { ...submission, state: 'uncertain' })
+      if (lastAttemptRef.current) setRecovery({ ...lastAttemptRef.current, canRetry: false })
+    },
     // The installed SDK constructor stores fetch; it runs only when sending.
+    // Its callback reads transport refs only after a user action, not during render.
+    // eslint-disable-next-line react-hooks/refs
     transport: new DefaultChatTransport({
       api: '/api/chat',
       fetch: trackedFetch,
@@ -160,31 +255,96 @@ export function ChatView({
   const isClosed = closeSignal !== 'none' || externallyClosed
   const isExpired = isTimeExpired || isClosed
 
-  async function rehydrate(allowLocalFallback = true) {
+  async function rehydrate(allowLocalFallback = true, options?: { completedFallback?: ChatRecovery; ignoreCompletedFallback?: boolean; requestId?: string; isValid?: () => boolean }) {
     const operation = transitionRef.current
     const read = ++recoveryReadRef.current
-    const localFallback = allowLocalFallback && status === 'error' && lastAttemptRef.current
-      ? { ...lastAttemptRef.current, canRetry: httpStatusRef.current !== 422 } : null
-    const requestId = status === 'error' || recovery !== null ? lastAttemptRef.current?.requestId : undefined
+    const transportWasActive = activeTransportRef.current !== null
+    const confirmedFallback = options?.completedFallback ?? (options?.ignoreCompletedFallback ? null : completedRecoveryRef.current)
+    const requestId = options?.requestId ?? (status === 'error' || recovery !== null ? lastAttemptRef.current?.requestId : undefined)
+    const currentAttempt = lastAttemptRef.current
+    const localFallback = confirmedFallback ?? (allowLocalFallback && status === 'error' && currentAttempt &&
+      (requestId === undefined || currentAttempt.requestId === requestId)
+      ? { ...currentAttempt, canRetry: httpStatusRef.current !== 422 } : null)
     try {
       const state = await getOwnedChatState(sessionId, requestId)
-      if (!isCurrentTransition(operation) || recoveryReadRef.current !== read || (requestId !== undefined && lastAttemptRef.current?.requestId !== requestId)) return null
+      if (options?.isValid?.() === false || recoveryReadRef.current !== read || !lifecycleRef.current.mounted || lifecycleRef.current.sessionId !== sessionId) return null
+      if (!isCurrentTransition(operation)) {
+        if (state.closed && transportWasActive) {
+          completedRecoveryRef.current = null
+          setRecoveryUnconfirmed(false)
+          setReceiptCompleted(false)
+          questionnaireRefreshPendingRef.current = false
+          generatingRefreshRef.current = null
+          setRecoveryChecking(false)
+          setExternallyClosed(true)
+          setRecovery(null)
+          setUrgentMode(false)
+          needsFreshClosedReadRef.current = true
+          deferredClosedReadRef.current = requestId ?? activeRequestRef.current ?? lastAttemptRef.current?.requestId ?? null
+          flushDeferredClosedRead()
+        }
+        return null
+      }
+      if (options?.requestId === undefined && requestId !== undefined && lastAttemptRef.current?.requestId !== requestId) return null
       setRecoveryError(false)
-      setRecoveryChecking(false)
+      const completedResponseVisible = requestId !== undefined && state.receipt === 'completed' && state.receiptUserMessageId !== undefined && hasVisibleAssistantResponseAfter(state.messages, state.receiptUserMessageId)
+      if (requestId && state.receiptUserMessageId) {
+        const localSubmission = localSubmissionsRef.current.find(item => item.requestId === requestId)
+        if (localSubmission) {
+          updateLocalSubmission(requestId, completedResponseVisible ? null : {
+            ...localSubmission,
+            userMessageId: state.receiptUserMessageId,
+            state: state.receipt === 'interrupted' ? 'interrupted' : localSubmission.state,
+          })
+        }
+      }
+      const interruptedReceipt = requestId !== undefined && state.receipt === 'interrupted'
       if (state.closed) {
+        closeUncertainRef.current = false
+        setCloseUncertain(false)
+        setCloseNotice('')
+        completedRecoveryRef.current = null
         setRecoveryUnconfirmed(false)
         setReceiptCompleted(false)
         questionnaireRefreshPendingRef.current = false
         generatingRefreshRef.current = null
-        transitionRef.current += 1
-        setMessages(state.messages)
+        // A closed snapshot is authoritative for session status, but may have
+        // been read before the currently dispatched message was persisted.
+        // Keep the optimistic transcript and local copy until its receipt is
+        // known; incrementing the transition here would make that receipt stale.
+        const transportActive = transportWasActive || queuedTransportsRef.current.length > 0
+        if (!transportActive) {
+          transitionRef.current += 1
+          setMessages(state.messages)
+        } else {
+          needsFreshClosedReadRef.current = true
+          deferredClosedReadRef.current = requestId ?? activeRequestRef.current ?? lastAttemptRef.current?.requestId ?? null
+          flushDeferredClosedRead()
+        }
+        setRecoveryChecking(false)
         setExternallyClosed(true); setRecovery(null); setUrgentMode(false)
         return null
       }
+      // Even an open snapshot can predate an optimistic send or a later draft.
+      // Discard its conversation data while the transport is in flight; each
+      // deferred read is also fenced by both transition and read identity.
+      if (transportWasActive || activeTransportRef.current !== null) return null
+      if (closeUncertainRef.current && closeActionPendingRef.current !== sessionId) {
+        closeUncertainRef.current = false
+        setCloseUncertain(false)
+        setCloseNotice('El estado guardado confirma que la sesión sigue abierta.')
+      }
+      setRecoveryChecking(false)
       if (state.timing) syncClock(state.timing)
-      setReceiptCompleted(state.recovery === null && localFallback !== null && state.receipt === 'completed' && requestId !== undefined)
-      setRecoveryUnconfirmed(state.recovery === null && localFallback !== null)
-      setRecovery(state.recovery ?? localFallback)
+      if (completedResponseVisible || interruptedReceipt) setUrgentMode(false)
+      if (state.recovery && completedRecoveryRef.current && (state.recovery.requestId !== completedRecoveryRef.current.requestId || state.recovery.attempt !== completedRecoveryRef.current.attempt)) completedRecoveryRef.current = null
+      const effectiveFallback = completedResponseVisible || (interruptedReceipt && localFallback?.requestId === requestId) ? null : localFallback
+      const effectiveRecovery = interruptedReceipt && state.recovery?.requestId === requestId
+        ? { ...state.recovery, canRetry: false }
+        : state.recovery
+      setReceiptCompleted(effectiveRecovery === null && effectiveFallback !== null && (confirmedFallback !== null || (state.receipt === 'completed' && requestId !== undefined)))
+      setRecoveryUnconfirmed(effectiveRecovery === null && effectiveFallback !== null)
+      setRecovery(effectiveRecovery ?? effectiveFallback)
       setMessages(state.messages)
       if (questionnaireRefreshPendingRef.current) {
         if (state.recovery?.status === 'generating') {
@@ -201,7 +361,7 @@ export function ChatView({
       }
       return { operation, read }
     } catch {
-      if (isCurrentTransition(operation) && recoveryReadRef.current === read) setRecoveryError(true)
+      if (options?.isValid?.() !== false && isCurrentTransition(operation) && recoveryReadRef.current === read) setRecoveryError(true)
       return null
     }
   }
@@ -212,13 +372,40 @@ export function ChatView({
   }
 
   async function finishSession() {
-    if (closing || isClosed || status === 'submitted' || status === 'streaming') return
+    if (closing || closeUncertain || closeActionPendingRef.current === sessionId || isClosed || status === 'submitted' || status === 'streaming') return
     const operation = ++transitionRef.current
     setClosing(true); setCloseNotice('')
     try {
-      const result = await closeOwnedSessionFromView(sessionId, isTimeExpired ? 'time_limit' : 'user_request')
-      if (!isCurrentTransition(operation)) return
-      if (result.closed) { transitionRef.current += 1; setExternallyClosed(true); setRecovery(null); setUrgentMode(false) }
+      const closeRequest = closeOwnedSessionFromView(sessionId, isTimeExpired ? 'time_limit' : 'user_request')
+      closeActionPendingRef.current = sessionId
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      const outcome = await Promise.race([
+        closeRequest.then(result => ({ kind: 'result' as const, result })),
+        new Promise<{ kind: 'timeout' }>(resolve => { timeout = setTimeout(() => resolve({ kind: 'timeout' }), CLOSE_ACTION_TIMEOUT_MS) }),
+      ])
+      if (timeout) clearTimeout(timeout)
+      if (outcome.kind === 'timeout') {
+        if (isCurrentTransition(operation)) {
+          transitionRef.current += 1
+          closeUncertainRef.current = true
+          setCloseUncertain(true)
+          setCloseNotice(`No se pudo confirmar el cierre; puede haberse completado. Comprueba el estado guardado antes de continuar. ${LOCAL_TEXT_COPY_WARNING} Si necesitas enviar una señal urgente, activa esa opción.`)
+        }
+        void closeRequest.then(() => {
+          if (closeActionPendingRef.current === sessionId) closeActionPendingRef.current = null
+          if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId) void rehydrate(false)
+        }, () => {
+          if (closeActionPendingRef.current === sessionId) closeActionPendingRef.current = null
+          if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId) void rehydrate(false)
+        })
+        return
+      }
+      if (closeActionPendingRef.current === sessionId) closeActionPendingRef.current = null
+      if (!isCurrentTransition(operation)) { void rehydrate(false); return }
+      const result = outcome.result
+      closeUncertainRef.current = false
+      setCloseUncertain(false)
+      if (result.closed) { transitionRef.current += 1; completedRecoveryRef.current = null; setExternallyClosed(true); setRecovery(null); setUrgentMode(false) }
       else {
         syncClock(result.timing)
         setCloseNotice(result.reason === 'turn_pending'
@@ -226,10 +413,40 @@ export function ChatView({
           : 'El servidor indica que aún queda tiempo. Puedes continuar o terminar la sesión.')
       }
     } catch {
-      if (isCurrentTransition(operation)) setCloseNotice('No se pudo confirmar el cierre. Tu borrador se conserva; comprueba el estado guardado o vuelve a intentarlo.')
+      if (closeActionPendingRef.current === sessionId) closeActionPendingRef.current = null
+      if (isCurrentTransition(operation)) {
+        closeUncertainRef.current = true
+        setCloseUncertain(true)
+        setCloseNotice(`No se pudo confirmar el cierre; puede haberse completado. Comprueba el estado guardado antes de continuar. ${LOCAL_TEXT_COPY_WARNING}`)
+      }
     } finally {
       if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId) setClosing(false)
     }
+  }
+
+  function interruptForUrgentSignal() {
+    transitionRef.current += 1
+    const transport = activeTransportRef.current
+    const requestId = activeRequestRef.current
+    if (transport !== null) cancelledRequestsRef.current.add(transport)
+    if (requestId) {
+      const submission = localSubmissionsRef.current.find(item => item.requestId === requestId)
+      if (submission) updateLocalSubmission(requestId, { ...submission, state: 'uncertain' })
+      setRecoveryChecking(false)
+      setRecoveryError(false)
+    }
+    void stop()
+    setUrgentMode(true)
+  }
+
+  function checkSavedState() {
+    const submission = localSubmissionsRef.current.find(item => item.state === 'uncertain' || item.state === 'interrupted')
+    const requestId = submission?.requestId ?? (recoveryChecking ? lastAttemptRef.current?.requestId : undefined)
+    if (submission) {
+      setRecoveryChecking(true)
+      setRecoveryError(false)
+    }
+    void rehydrate(true, requestId ? { requestId } : undefined)
   }
 
   useEffect(() => {
@@ -252,43 +469,154 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recovery, clock])
 
+  async function resolveTurn() {
+    if (!recovery || recovery.attempt === undefined || resolvingRef.current || closing || retrying || status === 'submitted' || status === 'streaming') return
+    resolvingRef.current = true
+    const operation = ++transitionRef.current
+    const requestId = recovery.requestId
+    const attempt = recovery.attempt
+    const resolvedRecovery = recovery
+    let resolutionActive = true
+    setResolvingTurn(true); setResolutionNotice('')
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        (async () => {
+          const result = await resolveOwnedChatTurn(sessionId, requestId, attempt)
+          if (!resolutionActive || !isCurrentTransition(operation)) return
+          if (result === 'busy' || result === 'active' || result === 'unknown') {
+            setResolutionNotice('No hemos podido confirmar la resolución. Puedes comprobarla de nuevo.')
+            return
+          }
+          questionnaireRefreshPendingRef.current = true
+          generatingRefreshRef.current = null
+          const completedFallback = result === 'completed' ? { ...resolvedRecovery, status: 'failed' as const, canRetry: true } : undefined
+          if (completedFallback) completedRecoveryRef.current = completedFallback
+          await rehydrate(false, { completedFallback, isValid: () => resolutionActive })
+        })(),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Resolution timed out')), 15_000) }),
+      ])
+    } catch {
+      if (isCurrentTransition(operation)) {
+        resolutionActive = false
+        setResolutionNotice('No hemos podido confirmar la resolución. Puedes comprobarla de nuevo.')
+      }
+    } finally {
+      resolutionActive = false
+      if (timeout) clearTimeout(timeout)
+      resolvingRef.current = false
+      if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId) setResolvingTurn(false)
+    }
+  }
+
   async function retry() {
     if (!recovery?.canRetry || retrying) return
     questionnaireRefreshPendingRef.current = true
     generatingRefreshRef.current = null
     const operation = ++transitionRef.current
     const attempt = recovery
-    activeRequestRef.current = attempt.requestId
     lastAttemptRef.current = attempt
-    failedRef.current = false; setRetrying(true); clearError()
+    failedRef.current = false
+    clearError()
+    const transport = beginTransport(attempt.requestId)
+    retryingTransportRef.current = transport
+    setRetrying(true)
+    let completed = false
     try {
       const existing = messages.find(message => message.id === attempt.userMessageId || message.id === attempt.requestId)
       await sendMessage(existing ? { text: attempt.text, messageId: existing.id } : undefined, { body: { requestId: attempt.requestId, retryText: attempt.text } })
-      if (isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(attempt.requestId)) {
-        // Completion supersedes snapshots captured while this turn was pending.
-        transitionRef.current += 1
-        setRecoveryChecking(true)
-        const snapshot = await rehydrate(false)
-        if (snapshot !== null && isCurrentTransition(snapshot.operation) && recoveryReadRef.current === snapshot.read) setUrgentMode(false)
-      }
+      completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(transport)
+    } catch {
+      failedRef.current = true
     } finally {
-      if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId && activeRequestRef.current === attempt.requestId) setRetrying(false)
+      endTransport(transport)
+      if (retryingTransportRef.current === transport) {
+        retryingTransportRef.current = null
+        if (lifecycleRef.current.mounted && lifecycleRef.current.sessionId === sessionId) setRetrying(false)
+      }
+    }
+    if (completed) {
+      // Completion supersedes snapshots captured while this turn was pending.
+      transitionRef.current += 1
+      completedRecoveryRef.current = null
+      setRecoveryChecking(true)
+      const snapshot = await rehydrate(false, { ignoreCompletedFallback: true })
+      if (snapshot !== null && isCurrentTransition(snapshot.operation) && recoveryReadRef.current === snapshot.read) { completedRecoveryRef.current = null; setUrgentMode(false) }
     }
   }
 
-  async function send(text: string): Promise<boolean> {
-    if (closing || isClosed || ((recovery || isTimeExpired) && !urgentMode)) return false
+  async function send(text: string, replay?: LocalSubmission): Promise<boolean> {
+    const isStoredReplay = replay !== undefined && localSubmissionsRef.current.some(item => item.requestId === replay.requestId && item.text === replay.text)
+    if (closing || isClosed || ((recovery || recoveryChecking || isTimeExpired) && !urgentMode && !isStoredReplay)) return false
     const operation = ++transitionRef.current
+    const messagesBeforeReplay = replay ? messages : null
+    const recoveryBeforeReplay = replay ? recovery : null
+    completedRecoveryRef.current = null
     failedRef.current = false; clearError()
-    const requestId = crypto.randomUUID()
-    activeRequestRef.current = requestId
+    const requestId = replay?.requestId ?? crypto.randomUUID()
+    const urgent = replay?.urgent ?? urgentMode
+    const submission: LocalSubmission = { requestId, userMessageId: replay?.userMessageId, text, urgent, state: 'sending' }
+    updateLocalSubmission(requestId, submission)
+    if (urgent) setUrgentMode(true)
     lastAttemptRef.current = { requestId, userMessageId: requestId, text, status: 'failed', canRetry: true, leaseUntil: new Date().toISOString() }
-    await sendMessage({ id: requestId, role: 'user', parts: [{ type: 'text', text }] })
-    const completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(requestId)
-    if (completed) { transitionRef.current += 1; setRecovery(null); setRecoveryError(false); setRecoveryChecking(false); setRecoveryUnconfirmed(false); setUrgentMode(false) }
-    // Once dispatched, the transcript/retry owns the submitted text even
-    // when transport fails. The composer belongs to the next draft.
+    const transport = beginTransport(requestId)
+    let completed = false
+    try {
+      const existing = messages.find(message => message.id === replay?.userMessageId) ?? messages.find(message => message.id === requestId)
+      const message = existing
+        ? { text, messageId: existing.id }
+        : { id: requestId, role: 'user' as const, parts: [{ type: 'text' as const, text }] }
+      await sendMessage(message, { body: { requestId, retryText: text } })
+      completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(transport)
+    } catch {
+      failedRef.current = true
+    } finally {
+      endTransport(transport)
+    }
+    if (completed) {
+      updateLocalSubmission(requestId, null)
+      transitionRef.current += 1
+      if (replay) {
+        if (messagesBeforeReplay) {
+          const replayAnchor = messagesBeforeReplay.findIndex(message => message.id === replay.userMessageId || message.id === requestId)
+          const preservedTail = replayAnchor >= 0 ? messagesBeforeReplay.slice(replayAnchor + 1) : messagesBeforeReplay
+          const pendingMessage: UIMessage | null = recoveryBeforeReplay && recoveryBeforeReplay.requestId !== requestId
+            ? { id: recoveryBeforeReplay.userMessageId, role: 'user', parts: [{ type: 'text', text: recoveryBeforeReplay.text }] }
+            : null
+          setMessages(current => {
+            const currentIds = new Set(current.map(message => message.id))
+            const restored = [...current]
+            for (const message of [...preservedTail, ...(pendingMessage ? [pendingMessage] : [])]) {
+              if (currentIds.has(message.id)) continue
+              currentIds.add(message.id)
+              restored.push(message)
+            }
+            return restored
+          })
+        }
+        setUrgentMode(false)
+        setRecoveryError(false)
+        setRecoveryChecking(true)
+        const snapshot = await rehydrate(false, { ignoreCompletedFallback: true })
+        if (snapshot !== null && isCurrentTransition(snapshot.operation) && recoveryReadRef.current === snapshot.read) setUrgentMode(false)
+      } else {
+        setRecovery(null); setRecoveryError(false); setRecoveryChecking(false); setRecoveryUnconfirmed(false); setUrgentMode(false)
+      }
+    } else {
+      updateLocalSubmission(requestId, { ...submission, state: 'uncertain' })
+    }
+    // The local copy owns this submitted text until a successful response is
+    // confirmed. The composer remains available for the next draft.
     return true
+  }
+
+  async function copyLocalSubmission(submission: LocalSubmission) {
+    try {
+      await navigator.clipboard.writeText(submission.text)
+      setCopiedSubmissionIds(current => current.includes(submission.requestId) ? current : [...current, submission.requestId])
+    } catch {
+      // The selectable local text remains visible if browser clipboard access is unavailable.
+    }
   }
 
   useEffect(() => {
@@ -319,14 +647,19 @@ export function ChatView({
   // end-of-session banner below has a link to /app when the patient is
   // ready.
   useEffect(() => {
-    if (initialClosed || closeSignal !== 'crisis' || draft.trim()) return
+    if (initialClosed || closeSignal !== 'crisis') return
+    const hasUncopiedSubmission = localSubmissions.some(submission => !copiedSubmissionIds.includes(submission.requestId))
+    if (draft.trim() || hasUncopiedSubmission) {
+      crisisRedirectRef.current = false
+      return
+    }
     if (crisisRedirectRef.current) return
     crisisRedirectRef.current = true
     const timer = setTimeout(() => {
       router.push('/app')
     }, 1800)
     return () => clearTimeout(timer)
-  }, [closeSignal, router, draft, initialClosed])
+  }, [closeSignal, router, draft, initialClosed, localSubmissions, copiedSubmissionIds])
 
   useEffect(() => {
     if (isClosed) return
@@ -352,6 +685,24 @@ export function ChatView({
     }
   }, [messages, status])
 
+  const unresolvedSubmission = localSubmissions.find(submission => submission.state === 'uncertain' || submission.state === 'interrupted')
+  const recoveryStatus = recoveryChecking
+    ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.'
+    : closeUncertain ? 'El cierre no está confirmado. Comprueba el estado guardado antes de continuar; puedes activar el envío urgente si lo necesitas.'
+    : recovery
+      ? recovery.canRetry
+        ? receiptCompleted ? 'Tu turno guardado terminó, pero no podemos confirmar que la respuesta se muestre. Puedes recuperar el mismo mensaje.'
+          : recovery.status === 'generating' || recoveryUnconfirmed ? 'Aún no podemos confirmar cómo terminó el turno. Puedes reintentar el mismo mensaje.'
+          : 'Tu texto guardado está disponible en este turno. Puedes reintentarlo.'
+        : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.'
+          : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.'
+      : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.'
+        : unresolvedSubmission?.state === 'interrupted'
+          ? `${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de continuar.`
+          : unresolvedSubmission ? `No hemos podido confirmar el envío. ${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de continuar.`
+            : status === 'error' ? 'Estamos comprobando cómo terminó el turno.'
+              : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'
+
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div
@@ -373,17 +724,18 @@ export function ChatView({
           {!isClosed && (
               <button
                 type="button"
-                disabled={closing || status === 'submitted' || status === 'streaming'}
+                disabled={closing || closeUncertain || status === 'submitted' || status === 'streaming'}
                 onClick={() => void finishSession()}
                 className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-100"
               >
-                {closing ? 'Confirmando cierre…' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
+                {closing ? 'Confirmando cierre…' : closeUncertain ? 'Cierre sin confirmar' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
               </button>
           )}
         </div>
       </div>
 
       {closeNotice && <p role="status" className="px-3 py-2 text-sm">{closeNotice}</p>}
+      {retrying && <p role="status" className="px-3 py-2 text-sm">Reintentando el mismo turno guardado. Puedes seguir escribiendo mientras esperamos.</p>}
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 ? (
@@ -397,6 +749,30 @@ export function ChatView({
           ))
         )}
       </div>
+
+      {localSubmissions.filter(submission => submission.state !== 'sending' || isClosed).map((submission, index) => (
+        <section key={submission.requestId} role="status" aria-live="polite" className="border-t bg-amber-50 p-3 text-sm text-slate-800">
+          <p className="font-medium">
+            {submission.state === 'sending'
+              ? `Envío pendiente. ${LOCAL_TEXT_COPY_WARNING}`
+              : submission.state === 'interrupted'
+                ? `El turno se interrumpió. ${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de continuar.`
+              : `No hemos podido confirmar el envío. ${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de volver a enviarlo.`}
+          </p>
+          {isClosed
+            ? <textarea aria-label={`Mensaje pendiente ${index + 1}`} value={submission.text} readOnly className="mt-2 block w-full rounded border bg-white p-2" />
+            : <p className="mt-2 whitespace-pre-wrap">{submission.text}</p>}
+          <button type="button" onClick={() => void copyLocalSubmission(submission)} className="mt-2 underline">
+            Copiar texto
+          </button>
+          {copiedSubmissionIds.includes(submission.requestId) && <p role="status" className="mt-1">Texto copiado al portapapeles.</p>}
+          {submission.state === 'uncertain' && !isClosed && (
+            <button type="button" disabled={closing || retrying || resolvingTurn || recoveryChecking || status === 'submitted' || status === 'streaming'} onClick={() => void send(submission.text, submission)} className="mt-2 underline">
+              Reintentar la misma señal guardada
+            </button>
+          )}
+        </section>
+      ))}
 
       {isClosed ? (
         <div className="border-t border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
@@ -413,7 +789,7 @@ export function ChatView({
         </div>
       ) : (
         <>
-          {isTimeExpired && <p role="status" className="border-t bg-slate-50 p-3 text-sm">Tiempo agotado para mensajes nuevos ordinarios. Tu borrador se conserva. Una respuesta ya aceptada puede terminar y puedes reintentar el mismo turno. Confirma el cierre cuando termine. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
+          {isTimeExpired && <p role="status" className="border-t bg-slate-50 p-3 text-sm">Tiempo agotado para mensajes nuevos ordinarios. El borrador pendiente solo sigue en esta pantalla; cópialo antes de recargar o salir. Una respuesta ya aceptada puede terminar y puedes reintentar el mismo turno. Confirma el cierre cuando termine. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
           {!isTimeExpired && activeQuestionnaire &&
             activeQuestionnaire.status !== 'scored' && (
               <QuestionnaireCard
@@ -429,17 +805,19 @@ export function ChatView({
                 }}
               />
             )}
-          {(isTimeExpired || recovery || status === 'error' || status === 'submitted' || status === 'streaming') && <div className="space-y-2 border-t p-3 text-sm">
-            <p role="status" aria-live="polite">{recoveryChecking ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.' : recovery ? recovery.canRetry ? receiptCompleted ? 'Tu turno guardado terminó, pero no podemos confirmar que la respuesta se muestre. Puedes recuperar el mismo mensaje.' : recovery.status === 'generating' || recoveryUnconfirmed ? 'Aún no podemos confirmar cómo terminó el turno. Puedes reintentar el mismo mensaje.' : 'Tu texto se conserva. Puedes reintentar el mismo turno.' : recovery.status === 'generating' ? 'La respuesta sigue pendiente. Puedes escribir mientras esperas.' : 'No se puede reintentar este turno. Puedes recargar o enviar una señal urgente nueva.' : status === 'error' ? 'Estamos comprobando cómo terminó el turno.' : status === 'submitted' || status === 'streaming' ? 'Esperando respuesta. Puedes seguir escribiendo.' : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'}</p>
-            {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
-            <button type="button" onClick={() => { transitionRef.current += 1; if (activeRequestRef.current) cancelledRequestsRef.current.add(activeRequestRef.current); void stop(); setUrgentMode(true) }} className="block underline">Interrumpir espera y enviar una señal urgente</button>
-            <button type="button" onClick={() => void rehydrate()} className="block underline">Comprobar estado guardado</button>
-            {recoveryError && <p role="alert">No se pudo comprobar el estado. Conserva tu texto y vuelve a comprobarlo o recarga.</p>}
+          {(isTimeExpired || closeUncertain || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div className="space-y-2 border-t p-3 text-sm">
+            <p role="status" aria-live="polite">{recoveryStatus}</p>
+            {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || resolvingTurn || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
+            {recovery?.attempt !== undefined && !urgentMode && <><p>Comprobar y resolver puede detener una respuesta pendiente que aún no se haya guardado.</p><button type="button" disabled={resolvingTurn || closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void resolveTurn()} className="block underline">Comprobar y resolver turno pendiente</button></>}
+            {resolutionNotice && <p role="status">{resolutionNotice}</p>}
+            <button type="button" onClick={interruptForUrgentSignal} className="block underline">Interrumpir espera y enviar una señal urgente</button>
+            <button type="button" onClick={checkSavedState} className="block underline">Comprobar estado guardado</button>
+            {recoveryError && <p role="alert">No se pudo comprobar el estado. {LOCAL_TEXT_COPY_WARNING} Vuelve a comprobarlo cuando puedas.</p>}
           </div>}
           {urgentMode && <p role="status" className="px-3 text-sm">Escribe una señal nueva de peligro inmediato para ti, como pensamientos de hacerte daño o quitarte la vida. Solo una señal explícita admitida por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. Si hay peligro inmediato para ti o para otra persona, llama al 112. También puedes llamar al 024.</p>}
           <ChatInput
-            status={recovery && !urgentMode ? 'submitted' : status}
-            disabled={closing || (isTimeExpired && !urgentMode)}
+            status={(recovery || recoveryChecking) && !urgentMode ? 'submitted' : status}
+            disabled={closing || ((isTimeExpired || closeUncertain) && !urgentMode)}
             onSend={send}
             draft={{ value: draft, onChange: setDraft }}
           />

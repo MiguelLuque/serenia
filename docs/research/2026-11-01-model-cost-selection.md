@@ -108,3 +108,9 @@ Sensibilidades reproducibles:
 5. Confirmar versión instalada y parámetros admitidos en el recorrido real; completar los gates del repositorio antes de activar cualquier cambio. Este estudio documental no ejecuta pruebas de aplicación ni acredita producción o aceptación clínica.
 
 La capa gratuita directa de Google no equivale a la de Gateway. Google anuncia Flash 3.8 gratuito con condiciones y señala uso de contenido para mejorar productos en esa capa; Argon no ofrece Free tier. Los límites y la elegibilidad de la cuenta concreta no se verificaron. OpenAI muestra Free no soportado para los modelos 6 consultados. No se presupone que una promoción o acceso gratuito cubra el caso de Serenia. [Google: precios](https://ai.google.dev/gemini-api/docs/pricing), [OpenAI: Terra](https://developers.openai.com/api/docs/models/gpt-6.1-terra).
+
+## Revalidación de tarifas directas — 14 noviembre 2026
+
+La tabla oficial vigente de OpenAI para Standard mantiene GPT-6 Luna en **0,10 USD/M entrada y 0,50 USD/M salida**, GPT-6.1 Sol en **2/10 USD**, y GPT-6.1 Terra en **1/5 USD**. Astra figura en **10/50 USD**. Por el mismo volumen estándar de tokens, Sol cuesta 20 veces Luna y Astra 100 veces Luna; otros tramos de contexto/procesamiento pueden variar. [Precios oficiales de OpenAI](https://developers.openai.com/api/docs/pricing).
+
+La hipótesis operativa sigue siendo Luna para conversación y extracción de alto volumen; Sol sólo para informes si la revisión comparativa demuestra una mejora que justifique su coste. Terra queda como candidato intermedio para comparar. Esta recomendación deriva de tarifa, posición oficial del catálogo y arquitectura; **no** de calidad medida en Serenia. El evaluador offline de la sesión no ejecutó conversaciones de modelo, y la referencia clínica permanece pendiente de aprobación humana.

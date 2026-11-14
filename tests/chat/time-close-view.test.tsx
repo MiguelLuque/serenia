@@ -23,12 +23,39 @@ it('confirms closure explicitly and retains an unsent urgent draft without navig
   expect(f.close).toHaveBeenCalledWith('timed', 'time_limit')
   expect(f.refresh).not.toHaveBeenCalled(); expect(f.push).not.toHaveBeenCalled()
 })
-it('does not claim closure on an action failure and offers another attempt', async () => {
-  f.close.mockRejectedValue(new Error('unavailable')); view()
+it('keeps closure uncertain after an action failure until saved state is checked', async () => {
+  f.close.mockRejectedValue(new Error('unavailable'))
+  f.state.mockResolvedValue({ closed: false, recovery: null, messages: [], timing: { serverNow: now, expiresAt: now } })
+  view()
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }))
   await screen.findByText(/No se pudo confirmar el cierre/)
   expect(screen.queryByText('La sesión ha terminado.')).toBeNull()
+  expect((screen.getByRole('button', { name: 'Cierre sin confirmar' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Comprobar estado guardado' }))
+  await screen.findByText('El estado guardado confirma que la sesión sigue abierta.')
   expect((screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }) as HTMLButtonElement).disabled).toBe(false)
+})
+it('times out a stalled close, leaves urgent composition available, and reconciles a late close', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(now)
+  let finish!: (value: { closed: true }) => void
+  f.close.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  f.state.mockResolvedValue({ closed: true, recovery: null, messages: [] })
+  view()
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }))
+  expect((screen.getByRole('button', { name: 'Confirmando cierre…' }) as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
+  expect(screen.getByText(/No se pudo confirmar el cierre/)).toBeTruthy()
+  expect(screen.queryByText('La sesión ha terminado.')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' }))
+  const input = screen.getByRole('textbox', { name: 'Mensaje para Serenia' }) as HTMLTextAreaElement
+  expect(input.disabled).toBe(false)
+  fireEvent.change(input, { target: { value: 'Señal urgente aún no enviada' } })
+  await act(async () => {
+    finish({ closed: true })
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+  })
+  expect(screen.getAllByText('La sesión ha terminado.').length).toBeGreaterThan(0)
+  expect((screen.getByRole('textbox', { name: 'Borrador sin enviar' }) as HTMLTextAreaElement).value).toBe('Señal urgente aún no enviada')
 })
 it('respects a pending admitted response and a corrected server deadline', async () => {
   f.close.mockResolvedValueOnce({ closed: false, reason: 'turn_pending', timing: { serverNow: now, expiresAt: now } })
