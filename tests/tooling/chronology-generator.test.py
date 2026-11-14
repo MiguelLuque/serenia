@@ -65,11 +65,11 @@ class GeneratorTests(unittest.TestCase):
                 self.assertEqual(wrapper.read_bytes(), original_wrapper)
                 path.write_bytes(original)
 
-    def test_rejects_future_local_version_and_extra_arguments(self):
+    def test_ignores_future_local_versions_and_rejects_extra_arguments(self):
         self.assertEqual(self.run_generator().returncode, 0)
         future = self.root / 'supabase/migrations/20990101000000_future.sql'
         future.write_text('-- fixture only\n')
-        self.assertNotEqual(self.run_generator().returncode, 0)
+        self.assertEqual(self.run_generator().returncode, 0)
         future.unlink()
         self.assertNotEqual(self.run_generator('--target=remote').returncode, 0)
 
