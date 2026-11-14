@@ -12,6 +12,7 @@ NAME = 'serenia-profile-dashboard-' + uuid.uuid4().hex[:12]
 VERSION = '20261102122007'
 PACKET = (ROOT / 'supabase/hosted/profile-atomic.sql').read_text()
 BASELINE = json.loads((ROOT / 'supabase/hosted/profile-baseline-20261101.json').read_text())
+PROFILE_MANIFEST = json.loads((ROOT / 'supabase/hosted/profile-manifest.json').read_text())
 SNAPSHOT = (ROOT / 'supabase/hosted/profile-baseline-query.sql').read_text()
 NEW_OBJECTS_QUERY = (ROOT / 'supabase/hosted/profile-new-objects-query.sql').read_text()
 NEW_OBJECTS = json.loads((ROOT / 'supabase/hosted/profile-new-objects.json').read_text())
@@ -76,7 +77,8 @@ def fixture_setup():
 
 assert sha(PACKET) == '313b31b1c06bbe461313a81af9ff0f18fe0cd0a1882ee66ac8013c2ffc05e04a'
 assert len(PACKET.encode()) == 81693
-assert VERSION > max([x['version'] for x in BASELINE['history']] + [p.name[:14] for p in (ROOT / 'supabase/migrations').glob('*.sql')])
+profile_source_versions = [section['localVersion'] for section in PROFILE_MANIFEST['sections']]
+assert VERSION > max([x['version'] for x in BASELINE['history']] + profile_source_versions)
 assert VERSION not in {x['version'] for x in BASELINE['history']}
 subprocess.run(['rtk', 'proxy', 'node', 'scripts/profile-dashboard-packet.mjs'], cwd=ROOT, check=True, capture_output=True, text=True)
 WRAPPER_PATH = ROOT / 'supabase/hosted/profile-dashboard-20261102.sql'

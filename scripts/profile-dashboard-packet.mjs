@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,14 +15,18 @@ const packetLength = 81693
 if (packetBytes.length !== packetLength || sha256(packetBytes) !== packetSha256 || Buffer.byteLength(packet) !== packetLength) {
   throw new Error('Original profile packet identity changed')
 }
-const original = JSON.parse(read('supabase/hosted/profile-manifest.json'))
+const originalManifestBytes = read('supabase/hosted/profile-manifest.json')
+if (sha256(originalManifestBytes) !== 'ae2d3ece1fe8b9ba528005ffcf1a1477d5e841f56bdc026082f462f8d6047d79') {
+  throw new Error('Original profile manifest identity changed')
+}
+const original = JSON.parse(originalManifestBytes)
 if (original.packetSha256 !== packetSha256 || original.packetBytes !== packetLength || original.status !== 'PREPARED_NOT_APPLIED' || original.canonicalName !== name) {
   throw new Error('Original profile manifest identity changed')
 }
 const history = original.history.map(row => row.version)
-const localVersions = readdirSync(resolve(root, 'supabase/migrations')).filter(file => /^\d{14}_.*\.sql$/.test(file)).map(file => file.slice(0, 14))
-if (version <= [...history, ...localVersions].sort().at(-1) || history.includes(version) || localVersions.includes(version)) {
-  throw new Error('Dashboard version is not new and later than known versions')
+const sourceVersions = original.sections.map(section => section.localVersion)
+if (version <= [...history, ...sourceVersions].sort().at(-1) || history.includes(version) || sourceVersions.includes(version)) {
+  throw new Error('Dashboard version is not later than its captured baseline and source migrations')
 }
 const delimiter = '$serenia_profile_packet_313b31b1$'
 if (packet.includes(delimiter)) throw new Error('Payload delimiter collides with original packet')

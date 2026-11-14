@@ -60,9 +60,12 @@ if delimiter in source or '$chronology_history$' in history or '$chronology_obje
     raise ValueError('SQL delimiter collision')
 if len(baseline['history']) != 43 or manifest['version'] != profile_version or manifest['name'] != profile_name or manifest['packetSha256'] != profile_sha:
     raise ValueError('Unexpected preceding migration identity')
-versions = [p.name[:14] for p in (root / 'supabase/migrations').glob('*.sql') if len(p.name) >= 15 and p.name[:14].isdigit() and p.name[14] == '_']
-if version <= max([profile_version] + versions + [row['version'] for row in baseline['history']]):
-    raise ValueError('Chronology version is not later than the known history')
+profile_source_versions = [section['localVersion'] for section in original_manifest['sections']]
+chronology_source_version = source_path.name[:14]
+captured_versions = [profile_version, chronology_source_version, *profile_source_versions,
+                     *[row['version'] for row in baseline['history']]]
+if version <= max(captured_versions):
+    raise ValueError('Chronology version is not later than its captured baseline and source migrations')
 guard = f"""
 DO $history_guard$
 DECLARE old_history jsonb; profile_row record;

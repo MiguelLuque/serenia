@@ -1,6 +1,8 @@
 # Paquete de cronología: revisión local únicamente
 
-**PREPARED_NOT_APPLIED. NO USAR EN HOSTED.** Este paquete es una propuesta reproducible para revisar, no una migración aplicada ni un permiso para ejecutar SQL remoto. Su versión propuesta `20261102122008` y el historial de 45 filas no son un recibo alojado. El paquete de perfil anterior sigue en espera; la cronología depende de él y del readback completo de 44 filas.
+**PREPARED_NOT_APPLIED. NO USAR EN HOSTED.** Este paquete es una propuesta reproducible para revisar, no una migración aplicada ni un permiso para ejecutar SQL remoto. Su versión propuesta `20261102122008` y el historial de 45 filas no son un recibo alojado. Al preparar el paquete el 2 de noviembre, el perfil anterior seguía pendiente; la cronología dependía de él y del readback completo de 44 filas.
+
+**Estado actualizado 2026-11-14:** el perfil ya figura en hosted bajo `20261114172032`, no bajo la versión propuesta del paquete de perfil. Por tanto, este wrapper, baseline y readback son históricos y no se deben aplicar. Las pruebas locales de atomicidad conservan su escenario sintético de noviembre 2 y comprueban el orden frente al baseline y las fuentes que contiene ese escenario; no los comparan con migraciones añadidas después ni certifican que el wrapper sirva para el estado hosted actual. La divergencia actual y el readback de metadatos están documentados en [reconciliación de historial](2026-11-02-migration-history-reconciliation.md).
 
 Desde la raíz de una copia aislada del proyecto:
 
