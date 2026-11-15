@@ -70,39 +70,42 @@ export function detectCrisis(text: string): CrisisDetection {
 }
 
 const SUICIDE = /suicid|quitar(me|se)\s+la\s+vida|matar(me|se)|no\s+(quiero|merezco)\s+vivir|mejor\s+no\s+estar|acabar\s+con\s+todo|desaparecer\s+para\s+siempre|tirarme\s+(desde|por)/i
-const SELF_HARM = /hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse)?|cortarme/i
+const SELF_HARM = /hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse)?|cortarme|\bme\s+(?:estoy\s+)?cortando\b|\bme\s+corto\b|\bme\s+hice\s+dan[oó]\b/i
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const normalized = normalize(text)
-  const suicide = SUICIDE.test(normalized)
-  const selfHarm = SELF_HARM.test(normalized)
-  if (!suicide && !selfHarm) return { disposition: 'none', riskType: null }
-
-  const personalCurrent = /\b(yo|me|mi|estoy|tengo|quiero|pienso|pensando|siento|voy)\b/i.test(normalized) &&
-    /\b(ahora|hoy|actualmente|estoy|tengo|quiero|pienso|pensando|siento|voy|me)\b/i.test(normalized)
-  const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|guia|articulo|amigo|amiga|hermano|hermana|dijo|dice|cita|personaje|hace anos|antes|cuando era)\b/i.test(normalized)
-  const denial = /\b(no|nunca|jamás|jamas)\b/i.test(normalized)
-  const directCurrent = /\b(ahora|hoy|actualmente)\b/i.test(normalized) && /\b(yo|me|estoy|tengo|quiero|pienso|pensando|siento)\b/i.test(normalized)
-  if (directCurrent && (suicide || selfHarm)) {
-    return { disposition: 'explicit_current', riskType: suicide ? 'suicidal_ideation' : 'self_harm' }
-  }
-  if (personalCurrent && !/\b(pero|aunque|sin embargo)\b/i.test(normalized) && !context && !denial && !/\b(a veces|a menudo|hace anos|en el pasado)\b/i.test(normalized)) {
-    return { disposition: 'explicit_current', riskType: suicide ? 'suicidal_ideation' : 'self_harm' }
-  }
-  if (context || denial || /\b(hace años|antes|en el pasado|cuando era)\b/i.test(normalized)) {
-    // A direct current clause takes precedence over contextual or negated clauses.
-    if (personalCurrent && /\b(pero|aunque|sin embargo)\b/i.test(normalized) && /\b(ahora|hoy|actualmente)\b/i.test(normalized)) {
-      return { disposition: 'explicit_current', riskType: suicide ? 'suicidal_ideation' : 'self_harm' }
-    }
-    return { disposition: 'contextual', riskType: suicide ? 'suicidal_ideation' : 'self_harm' }
-  }
-  return { disposition: 'ambiguous', riskType: suicide ? 'suicidal_ideation' : 'self_harm' }
+  const clauses = normalized.split(/[;,]|\s+(?:y|pero|aunque|sin embargo)\s+/).map(part => part.trim())
+  const results = clauses.flatMap(clause => {
+    const suicide = SUICIDE.test(clause)
+    const selfHarm = SELF_HARM.test(clause)
+    if (!suicide && !selfHarm) return []
+    const riskType = selfHarm ? 'self_harm' : 'suicidal_ideation'
+    const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|vimos|guia|articulo|amigo|amiga|hermano|hermana|dijo|dice|hablo|cita|personaje|antes|cuando era)\b/i.test(clause)
+    const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
+    const denial = /\b(no|nunca|jamas)\b/i.test(clause)
+    const uncertainNegation = /\b(no puedo dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
+    const clearDenial = denial && /\b(no quiero|no pienso|no estoy pensando|no tengo)\b/i.test(clause) && !uncertainNegation
+    const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
+    const explicit = !context && !past && !uncertainNegation && !clearDenial && (
+      (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
+      (!/\b(me hice dano hoy)\b/i.test(clause) && /\b(ahora|hoy|actualmente)\b/i.test(clause) && /\b(yo|me|estoy|tengo|quiero|pienso|pensando|siento)\b/i.test(clause)) ||
+      (!denial && /\b(quiero|estoy pensando|pienso|me estoy)\b/i.test(clause) && !/\b(a veces|a menudo)\b/i.test(clause))
+    )
+    const disposition = explicit ? 'explicit_current' : (context || past || clearDenial ? 'contextual' : 'ambiguous')
+    return [{ disposition, riskType }]
+  })
+  if (!results.length) return { disposition: 'none', riskType: null }
+  const explicit = results.find(result => result.disposition === 'explicit_current')
+  if (explicit) return explicit
+  if (results.some(result => result.disposition === 'ambiguous')) return { disposition: 'ambiguous', riskType: results[0].riskType }
+  return results[0]
 }
 
 export function classifySafetyClarificationReply(text: string): SafetyClarificationReply {
   const value = normalize(text).trim().replace(/[.!?¿¡]+$/g, '')
   if (/^(cambiemos de tema|cambiar de tema|prefiero hablar de otra cosa|pasemos a otra cosa|skip|saltar)$/.test(value)) return 'skip'
+  if (/^no,? no estoy pensando en eso$/.test(value)) return 'negative'
   if (/^(si|sí|no|no lo se|no se|no estoy seguro|no estoy segura|quizas|quizá)$/.test(value)) {
     if (value === 'si' || value === 'sí') return 'affirmative'
     if (value === 'no') return 'negative'

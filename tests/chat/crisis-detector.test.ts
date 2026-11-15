@@ -135,6 +135,33 @@ describe('classifyCrisisSignal — conversation routing', () => {
   it('marks uncertain first-person cues ambiguous', () => {
     expect(classifyCrisisSignal('A veces pienso en desaparecer para siempre').disposition).toBe('ambiguous')
   })
+
+  it('keeps a topic clause contextual without hiding personal current disclosure in another clause', () => {
+    expect(classifyCrisisSignal('Hoy tengo clase sobre suicidio').disposition).toBe('contextual')
+    expect(classifyCrisisSignal('Mi amigo habló de suicidio y yo estoy pensando en suicidarme').disposition).toBe('explicit_current')
+  })
+
+  it.each(['me corto ahora', 'me estoy cortando'])('recognizes current first-person cutting: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'self_harm' })
+  })
+
+  it('does not infer intentionality from a general statement of having been hurt', () => {
+    expect(classifyCrisisSignal('me hice daño hoy').disposition).toBe('ambiguous')
+  })
+
+  it.each(['No puedo dejar de pensar en suicidarme', 'No sé si quiero suicidarme'])('treats conflicted suicidal thoughts as ambiguous: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('treats a clear denial as contextual', () => {
+    expect(classifyCrisisSignal('No quiero suicidarme').disposition).toBe('contextual')
+  })
+
+  it('returns the personal current topic when another clause is contextual', () => {
+    expect(classifyCrisisSignal('Quiero hacerme daño ahora; hoy vimos suicidio en clase')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {
@@ -143,5 +170,8 @@ describe('classifySafetyClarificationReply', () => {
   )
   it.each(['maybe', 'sí y no', 'sí, pero no estoy seguro'])('leaves unsupported or compound reply unclear: %s', text => {
     expect(classifySafetyClarificationReply(text)).toBe('unclear')
+  })
+  it('recognizes a negated safety clarification as negative', () => {
+    expect(classifySafetyClarificationReply('No, no estoy pensando en eso')).toBe('negative')
   })
 })
