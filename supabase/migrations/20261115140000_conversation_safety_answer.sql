@@ -73,6 +73,23 @@ comment on column public.chat_turns.safety_answer_risk_type is
 
 -- Prevent duplicate turn-linked safety events even if a future retry path is
 -- changed. Existing unrelated conversation events remain unaffected.
+do $safety_event_index_preflight$
+begin
+  if exists (
+    select 1
+    from public.risk_events
+    where source_type='conversation'
+      and session_id is not null
+      and payload_json->>'request_id' is not null
+      and payload_json->>'signal' in ('textual_crisis','safety_clarification_affirmative')
+    group by session_id,payload_json->>'request_id',payload_json->>'signal'
+    having count(*)>1
+  ) then
+    raise exception 'Duplicate conversation safety events before unique index';
+  end if;
+end
+$safety_event_index_preflight$;
+
 create unique index risk_events_chat_safety_request_unique
   on public.risk_events (
     session_id,

@@ -315,6 +315,29 @@ try:
                     if query("select to_regprocedure('public.close_session_from_chat_view(uuid,text,boolean)') is null;").splitlines()[2].strip() != 't':
                         raise RuntimeError(f'Atomic chat-view close {label} left an unexpected overload behind')
                 print('PASS atomic chat-view close rejects close-function drift and unexpected overloads atomically')
+            if 'conversation_safety_answer' in path.name:
+                safety_source = path.read_text()
+                duplicate_rows = """insert into auth.users(id) values('90000000-0000-0000-0000-000000000001');
+                insert into conversations(id,user_id,status) values('10000000-0000-0000-0000-000000000001','90000000-0000-0000-0000-000000000001','active');
+                insert into clinical_sessions(id,conversation_id,user_id,status) values('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','90000000-0000-0000-0000-000000000001','open');
+                insert into risk_events(user_id,conversation_id,session_id,source_type,risk_type,severity,payload_json)
+                values
+                  ('90000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','conversation','self_harm','moderate','{\"request_id\":\"duplicate-guard\",\"signal\":\"textual_crisis\"}'),
+                  ('90000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','conversation','self_harm','moderate','{\"request_id\":\"duplicate-guard\",\"signal\":\"textual_crisis\"}');"""
+                try:
+                    query('BEGIN;\n' + duplicate_rows + '\n' + safety_source + '\nROLLBACK;')
+                except RuntimeError as error:
+                    if 'Duplicate conversation safety events before unique index' not in str(error):
+                        raise RuntimeError(f'Safety-event duplicate preflight returned unexpected error: {error}') from error
+                else:
+                    raise RuntimeError('Conversation safety migration accepted duplicate indexed events')
+                if query("select to_regclass('public.risk_events_chat_safety_request_unique') is null;").splitlines()[2].strip() != 't':
+                    raise RuntimeError('Safety-event duplicate rejection left the index behind')
+                if query("select count(*) from information_schema.columns where table_schema='public' and table_name='chat_turns' and column_name in ('safety_answer','safety_answer_risk_type');").splitlines()[2].strip() != '0':
+                    raise RuntimeError('Safety-event duplicate rejection left columns behind')
+                if query("select count(*) from risk_events where user_id='90000000-0000-0000-0000-000000000001';").splitlines()[2].strip() != '0':
+                    raise RuntimeError('Safety-event duplicate rejection left fixture rows behind')
+                print('PASS conversation safety migration rejects duplicate index keys atomically')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
             if 'chat_turn_lease_fencing' in path.name and query(lease_contract) != lease_before_metadata:
                 raise RuntimeError('Chat lease fencing changed routine metadata or grants')
