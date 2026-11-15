@@ -76,9 +76,9 @@ try:
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
         if ('chat_turn_lease_fencing' in path.name or 'resolve_expired_chat_turn' in path.name) and (args.baseline_security or args.baseline_chat or args.baseline_flows):
             continue
-        if args.baseline_flows and 'patient_flows_acceptance' in path.name:
+        if 'conversation_safety_answer' in path.name and args.baseline_chat:
             continue
-        if args.baseline_chat and 'robust_chat_questionnaires_recovery' in path.name:
+        if args.baseline_flows and 'patient_flows_acceptance' in path.name:
             continue
         if args.baseline_security and (path.name.startswith('202610') or path.name.startswith('20260502000004') or path.name.startswith('20260502000005')):
             continue
@@ -365,6 +365,8 @@ try:
     print('PASS concurrent confirm/modify and duplicate modify retry')
     query((ROOT / 'supabase/tests/chat-questionnaire-recovery.sql').read_text())
     print('PASS atomic questionnaire validation/retry/rollback, CSSRS priority, chat consent/leases and durable recovery')
+    query((ROOT / 'supabase/tests/conversation-safety-routing.sql').read_text())
+    print('PASS prompt-bound safety answer validation, replay, typed provisional events and RPC grants')
     run_chat_view_close_concurrency(query, open_query_session, finish_query_session)
     print('PASS concurrent chat-view close/admission in both lock acquisition orders')
     if not (args.baseline_security or args.baseline_chat or args.baseline_flows):
