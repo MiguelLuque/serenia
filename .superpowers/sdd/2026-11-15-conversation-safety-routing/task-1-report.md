@@ -134,3 +134,4 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for `me dijo mi amigo` and `me contó mi pareja` following a quoted clause; both failed before the update. Existing positive coordinated first-person intent remains covered.
 - The postposed attribution lead now allows an immediate indirect-object `me` before the reporting verb while still requiring a following third-party subject.
 - Focused suite: 128 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow update.
+- Expanded follow-up verification covered adjacent `dijo/dice`, `contó/cuenta`, and `comentó/comenta` in both attribution orders, with and without `me`, including quote wrappers. A later incidental reporting verb still preserves direct intent. Final focused suite: 141 tests passed; typecheck and diff check passed.

@@ -146,4 +146,5 @@ No internal contradiction found. Existing branch was clean at base before adding
 
 - Added RED cases for quoted intent followed by `me dijo mi amigo` / `me contó mi pareja`; both failed pre-fix. Existing coordinated first-person intent cases remain green.
 - Postposed attribution now allows an immediate `me` before the reporting verb, still requiring a third-party subject. Focused 128/128, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+- Expanded verification covers adjacent `dijo/dice`, `contó/cuenta`, `comentó/comenta`, pre/postposed forms, optional `me`, and quotation wrappers. A later incidental report verb does not suppress direct intent. Final focused 141/141, typecheck and diff check pass.
 

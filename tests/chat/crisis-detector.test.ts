@@ -390,6 +390,29 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
   })
 
+  it.each([
+    'Mi amigo dijo “quiero matarme”',
+    'Mi amiga dice “quiero matarme”',
+    'Mi pareja me contó “quiero suicidarme”',
+    'Mi compañero cuenta “quiero matarme”',
+    'Mi madre comentó “quiero suicidarme”',
+    'Mi hermano comenta “quiero matarme”',
+    '“Quiero matarme”, dijo mi amigo',
+    '“Quiero matarme”, me dice mi amiga',
+    '«Quiero suicidarme», contó mi pareja',
+    '«Quiero matarme», me cuenta mi compañero',
+    '«Quiero suicidarme», comentó mi madre',
+    '«Quiero matarme», me comenta mi hermano',
+  ])('recognizes only adjacent reporting-verb attribution forms: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it('does not treat a later incidental reporting verb as quote attribution', () => {
+    expect(classifyCrisisSignal('Quiero suicidarme porque mi amigo comentó que exagero')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
   it('keeps later direct personal intent after a postposed quote attribution', () => {
     expect(classifyCrisisSignal('«Quiero matarme», dijo mi amigo, y yo también quiero suicidarme')).toEqual({
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
