@@ -63,6 +63,13 @@
 - Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 90 tests. `rtk npm run typecheck` passed.
 - Full suite: 99 files passed, 1 failed; 1,354 passed and 4 failed in dependency integration. Child processes fail binding localhost with exact error `listen EPERM: operation not permitted 127.0.0.1`.
 
+## Task 1 follow-up: scoped negation and self-harm direct signals
+
+- Added RED cases for `no dejo de`, `no me atrevo`, `no solo quiero`, direct self-harm ideation/plan, and mixed explicit suicidal/self-harm clauses; 7 cases failed before the change.
+- Replaced broad negation suppression with specific clear-denial patterns. Other negative constructions remain ambiguous; `no solo quiero` is read as direct affirmative desire. Added direct self-harm ideation, intent and plan phrases. Explicit suicidal ideation takes precedence over self-harm when both clauses are explicit, independent of order.
+- Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 98 tests. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,362 passed and 4 failed in dependency integration. Child Node listeners are blocked with `listen EPERM: operation not permitted 127.0.0.1`.
+
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.

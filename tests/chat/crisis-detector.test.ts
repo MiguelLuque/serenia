@@ -275,6 +275,26 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
     })
   })
+
+  it.each(['No dejo de pensar en suicidarme', 'No me atrevo a suicidarme'])('keeps non-denial negation ambiguous: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('does not treat "no solo quiero" as a clear denial', () => {
+    expect(classifyCrisisSignal('No solo quiero suicidarme').disposition).toBe('explicit_current')
+  })
+
+  it.each([
+    ['Estoy pensando en hacerme daño', 'self_harm'],
+    ['Voy a autolesionarme', 'self_harm'],
+    ['Tengo un plan para autolesionarme', 'self_harm'],
+  ] as const)('recognizes direct self-harm intent: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it.each(['Quiero hacerme daño y matarme', 'Quiero matarme y hacerme daño'])('prioritizes explicit suicide topic across mixed direct signals: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

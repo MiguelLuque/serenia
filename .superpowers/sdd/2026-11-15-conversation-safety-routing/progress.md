@@ -90,3 +90,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Explicit routing requires a direct affirmative intent, plan or current behavior pattern. Direct negations cannot elevate; a separate positive clause still retains priority. Added common first-person Spanish variants for suicide and self-harm plans/behavior.
 - Focused suite passes 90/90; typecheck passes. Full suite: 99 files pass, 1 fails; 1,354 pass and 4 fail because dependency integration child servers receive `listen EPERM: operation not permitted 127.0.0.1`. See Task 1 report.
 
+### Task 1 follow-up: scoped negation and direct self-harm signals
+
+- Added RED tests for non-denial negatives, `no solo quiero`, three direct self-harm intent/plan phrases, and mixed explicit suicidal/self-harm clauses; 7 assertions failed before implementation.
+- Negation now uses narrowly scoped clear-denial patterns. Uncertain/other negatives remain ambiguous; positive clause wins after denial. Added direct self-harm ideation and plan wording; explicit suicidal topic wins when both risk types are present.
+- Focused suite passes 98/98; typecheck passes. Full suite: 99 files pass, 1 fails; 1,362 pass and 4 fail due `listen EPERM: operation not permitted 127.0.0.1` in dependency integration. Details in Task 1 report.
+
