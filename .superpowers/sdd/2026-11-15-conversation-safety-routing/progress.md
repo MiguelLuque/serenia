@@ -107,3 +107,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added regression preserving direct `No solo quiero suicidarme` and making `No solo quiero hablar de suicidio` contextual; RED reproduced the false explicit classification.
 - Limited that explicit pattern to direct self-directed actions and recognized ordinary suicide discussion as contextual. Focused suite 104/104, typecheck and diff check pass. Full suite not rerun for this narrow follow-up; details in the report.
 
+### Task 1 follow-up: conversation topic and attributed statements
+
+- Added RED cases for personal intent during discussion of suicide, ordinary topic discussion, and third-party quoted speech; both personal-intent contextual cases failed before the fix.
+- Topic context no longer suppresses direct personal intent; attributed third-party speech remains contextual. Focused suite 107/107, typecheck and diff check pass. Full suite not rerun for this narrow follow-up; see report.
+

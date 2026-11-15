@@ -288,6 +288,16 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal('No solo quiero hablar de suicidio').disposition).toBe('contextual')
   })
 
+  it.each(['Estoy pensando en suicidarme al hablar de suicidio', 'Estoy pensando en suicidarme en clase mientras hablamos de suicidio'])('does not let topic context hide personal intent: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it('keeps a quoted third-party statement contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo "quiero matarme"')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
   it.each([
     ['Estoy pensando en hacerme daño', 'self_harm'],
     ['Voy a autolesionarme', 'self_harm'],

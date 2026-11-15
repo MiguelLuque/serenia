@@ -86,3 +86,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added regression coverage preserving `No solo quiero suicidarme` as explicit while routing `No solo quiero hablar de suicidio` as contextual conversation content. RED reproduced the second case as incorrectly explicit.
 - Narrowed the `no solo quiero` direct-intent alternative to recognized self-directed acts and marked ordinary discussion about suicide as contextual.
 - Focused suite: 104 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. The full suite was not rerun for this regex-only follow-up.
+
+## Task 1 follow-up: conversation topic vs personal intent
+
+- Added RED coverage for direct suicidal ideation embedded in a conversational-topic phrase, ordinary talk about suicide, and an attributed third-party quote. The two personal-intent cases failed before the fix.
+- Split broad conversational context from third-party attribution. Topic mentions no longer suppress a separate direct personal intent in the same clause; explicit attribution to another person still routes contextually.
+- Focused suite: 107 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. The full suite was not rerun for this narrow classifier follow-up.
