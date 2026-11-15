@@ -196,3 +196,16 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Removed the unused `denial` assignment from the classifier without behavior changes.
 - `rtk npm run lint` passed with zero warnings; `rtk npm run typecheck` passed. Full suite was not run.
 
+### Task 3 full-verify behavioral follow-up
+
+- Reproduced review regressions before fixes: focused RED was 5 failing files / 2 passing files, 6 failed tests / 226 passing. Failures covered `Voy a matarme esta noche`, private-context degradation, and deadline closure after context/generation errors.
+- Added direct `voy a matarme` recognition while retaining direct denial and attributed-quote behavior; optional patient context now degrades to ordinary chat; deadline errors recheck expiry and close by `time_limit`; corrected completed ordinary replay expectation to prevent duplicate profile extraction.
+- Focused GREEN: 5 files / 232 tests passed. Typecheck, lint, and diff check passed. Full suite/verify deferred as requested for parent rerun. Detailed evidence in `task-3-report.md`.
+
+
+
+### Task 3 full-verify behavioral follow-up
+
+- Reproduced review regressions before fixes: focused RED was 5 failing files / 2 passing files, 6 failed tests / 226 passing. Failures covered , private-context degradation, and deadline closure after context/generation errors.
+- Added direct  recognition while retaining direct denial and attributed quote behavior; optional patient context now degrades to ordinary chat; deadline errors recheck expiry and close by ; corrected completed ordinary replay expectation to prevent duplicate profile extraction.
+- Focused GREEN: 5 files / 232 tests passed. Typecheck, lint, and diff check passed. Full suite/verify deferred as requested for parent rerun. Detailed evidence in .

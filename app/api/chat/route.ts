@@ -189,9 +189,8 @@ export async function POST(req: Request) {
         const pieces = assemblePlan6ContextPieces(ctx)
         ;({ patientContextBlock, riskOpeningNotice, intakeBlock, protocolPhaseBlock } = pieces)
         void logContextInjection({ userId: user.id, sessionId, ...pieces.telemetry }).catch(() => console.error('[context-telemetry] failed'))
-      } catch (error) {
+      } catch {
         console.error('[patient-context] unavailable')
-        throw error
       }
     }
     const timeNotice = buildSessionTimeNotice(session.opened_at)
@@ -364,7 +363,7 @@ export async function POST(req: Request) {
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
     return replay(chunks)
   } catch (error) {
-    if (awaitingGeneration && generationTimeExpired) {
+    if ((awaitingGeneration && generationTimeExpired) || isSessionExpired(session)) {
       awaitingGeneration = false
       try { return await finishStaticReply('time_limit', directSignal ? `${timeClosureText}\n\n${crisisResourcesText}` : timeClosureText) }
       catch { /* Ambiguous persistence follows the same fenced recovery path. */ }

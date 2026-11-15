@@ -11,7 +11,7 @@ describe('chat admission and isolated profile context', () => {
     expect(harness.authClient.rpc.mock.calls.flat()).not.toContain('get_profile_memory')
     expect(harness.state.profileAfter).toHaveLength(0)
   })
-  it('schedules only after durable admission, without waiting for extraction, including replay', async () => {
+  it('schedules only after durable admission, without waiting for extraction or replaying dispatch', async () => {
     vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
     const harness = await chatHarness()
     const response = await harness.post()
@@ -22,7 +22,8 @@ describe('chat admission and isolated profile context', () => {
     await harness.state.profileAfter[0]()
     expect(harness.enqueueProfileExtraction).toHaveBeenCalledWith('user-1', 1)
     expect((await harness.post()).status).toBe(200)
-    expect(harness.state.profileAfter).toHaveLength(2)
+    expect(harness.state.profileAfter).toHaveLength(1)
+    expect(harness.enqueueProfileExtraction).toHaveBeenCalledTimes(1)
   })
   it('never schedules extraction for unauthorized or conflicting admission', async () => {
     vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')

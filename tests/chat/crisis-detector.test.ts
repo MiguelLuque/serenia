@@ -241,6 +241,7 @@ describe('classifyCrisisSignal — conversation routing', () => {
   it.each([
     ['Tengo un plan para quitarme la vida', 'suicidal_ideation'],
     ['Voy a suicidarme esta noche', 'suicidal_ideation'],
+    ['Voy a matarme esta noche', 'suicidal_ideation'],
     ['Voy a cortarme ahora', 'self_harm'],
     ['Me estoy haciendo daño', 'self_harm'],
     ['Me estoy autolesionando', 'self_harm'],
@@ -255,6 +256,7 @@ describe('classifyCrisisSignal — conversation routing', () => {
     'No me corto ahora',
     'No me quiero suicidar',
     'No me voy a suicidar',
+    'No voy a matarme esta noche',
   ])('does not treat a direct negation as explicit current: %s', text => {
     expect(classifyCrisisSignal(text).disposition).not.toBe('explicit_current')
   })
@@ -294,6 +296,12 @@ describe('classifyCrisisSignal — conversation routing', () => {
 
   it('keeps a quoted third-party statement contextual', () => {
     expect(classifyCrisisSignal('Mi amigo dijo "quiero matarme"')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps an attributed voy-a-matarme quote contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo "voy a matarme esta noche"')).toEqual({
       disposition: 'contextual', riskType: 'suicidal_ideation',
     })
   })

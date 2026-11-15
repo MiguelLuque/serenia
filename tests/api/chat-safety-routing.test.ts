@@ -16,6 +16,15 @@ describe('conversation safety routing', () => {
     expect(h.state.captured[0].system).not.toContain('AVISO DE SEGURIDAD')
   })
 
+  it('fails closed when the structured session safety state cannot be read', async () => {
+    const h = await chatHarness()
+    h.state.safetyFailure = true
+    const response = await h.post('Hoy tengo clase sobre suicidio')
+    expect(response.status).toBe(503)
+    expect(h.state.captured).toHaveLength(0)
+    expect(h.state.session.status).toBe('open')
+  })
+
   it('records direct suicidal intent with its type and returns deterministic text without generation or crisis closure', async () => {
     const h = await chatHarness()
     const response = await h.post('Voy a suicidarme esta noche')

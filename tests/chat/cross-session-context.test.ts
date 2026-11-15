@@ -378,7 +378,7 @@ describe('private context degradation',()=>{
       const {chatHarness}=await import('../helpers/chat-harness')
       vi.doMock('@/lib/server/patient-context/builder',()=>({buildPatientContext:vi.fn().mockRejectedValue(new Error('synthetic failure'))}))
       const h=await chatHarness()
-      const response=await h.post('Voy a matarme')
+      const response=await h.post('Voy a matarme esta noche')
       expect(response.status).toBe(200)
       const text=await response.text(); expect(text).toContain('024'); expect(text).toContain('112')
       expect(h.state.captured).toHaveLength(0)
