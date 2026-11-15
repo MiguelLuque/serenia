@@ -191,3 +191,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Safety answers now count as safety turns for inactivity admission; contextual turns retain ordinary inactivity handling. Hard-time answers retain category acknowledgment and relevant resources while closing only as `time_limit`. Natural `Quiero hablar del trabajo` is `skip`, with direct explicit signals protected. Completed same-request turns reach the idempotent replay before checking the prior marker; new IDs retain marker validation.
 - Focused GREEN: 7 files / 247 tests passed. `rtk npm run typecheck` and `rtk git diff --check` pass. Full verify intentionally not run; see Task 3 report.
 
+### Task 3 lint follow-up
+
+- Removed the unused `denial` assignment from the classifier without behavior changes.
+- `rtk npm run lint` passed with zero warnings; `rtk npm run typecheck` passed. Full suite was not run.
+

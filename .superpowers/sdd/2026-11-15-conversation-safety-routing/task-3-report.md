@@ -43,3 +43,10 @@ Applied four independent review findings with regression-first TDD:
 ## Files
 
 Route: `app/api/chat/route.ts`; request boundary and client reference: `lib/server/chat/request-boundary.ts`, `lib/shared/chat/safety-prompt.ts`, `components/chat/chat-view.tsx`; classifier skip refinement: `lib/shared/chat/crisis-detector.ts`; tests/harness: `tests/api/chat-safety-routing.test.ts`, `tests/api/chat-route.test.ts`, `tests/chat/clinical-pilot.test.ts`, `tests/chat/close-session-tools.test.ts`, `tests/chat/crisis-detector.test.ts`, `tests/chat/request-boundary.test.ts`, `tests/chat/safety-flow.test.ts`, `tests/helpers/chat-harness.ts`; protocol: `docs/agents/protocols/crisis.md`.
+
+## Lint follow-up — 2026-11-15
+
+- Removed the unused local `denial` assignment from `lib/shared/chat/crisis-detector.ts`; no classifier behavior changed.
+- `rtk npm run lint` — passed with zero warnings.
+- `rtk npm run typecheck` — passed.
+- Full suite was not run.
