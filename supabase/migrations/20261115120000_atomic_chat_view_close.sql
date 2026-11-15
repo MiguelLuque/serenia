@@ -1,3 +1,36 @@
+-- Fail closed unless this migration is replacing the exact reviewed hosted
+-- implementation. In particular, do not silently revoke or replace an
+-- unexpected SECURITY DEFINER routine or discard a new PostgREST overload.
+do $preflight$
+declare
+  close_id oid := to_regprocedure('public.close_session_atomic(uuid,uuid,text)');
+  p pg_proc%rowtype;
+begin
+  if close_id is null
+    or (select count(*) from pg_proc where pronamespace='public'::regnamespace and proname='close_session_atomic')<>1 then
+    raise exception 'Unexpected close-session baseline';
+  end if;
+
+  select * into p from pg_proc where oid=close_id;
+  if pg_get_userbyid(p.proowner)<>'postgres'
+    or p.proacl is distinct from array['postgres=X/postgres','authenticated=X/postgres','service_role=X/postgres']::aclitem[]
+    or p.prosecdef is distinct from true
+    or p.provolatile<>'v'
+    or p.prolang <> (select oid from pg_language where lanname='plpgsql')
+    or p.prorettype <> 'void'::regtype
+    or p.proargnames is distinct from array['p_session_id','p_user_id','p_reason']::text[]
+    or p.pronargdefaults<>0
+    or p.proconfig is distinct from array['search_path=public, pg_temp']::text[]
+    or md5(p.prosrc)<>'382ab2a18a7528ba6bce8ae1ed2eb38e'
+    or has_function_privilege('anon',close_id,'EXECUTE')
+    or not has_function_privilege('authenticated',close_id,'EXECUTE')
+    or not has_function_privilege('service_role',close_id,'EXECUTE')
+    or exists(select 1 from pg_proc where pronamespace='public'::regnamespace and proname='close_session_from_chat_view') then
+    raise exception 'Unexpected close-session baseline';
+  end if;
+end
+$preflight$;
+
 -- Serialize view-driven session closure with accepted turn admission. A
 -- browser-side recovery read is useful for display but cannot be the close
 -- authorization check because a turn may be admitted immediately afterward.

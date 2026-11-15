@@ -273,6 +273,48 @@ try:
                 if query("select to_regprocedure('public.resolve_expired_chat_turn(uuid,text,integer)') is null;").splitlines()[2].strip() != 't':
                     raise RuntimeError('Recovery readback failure left function behind')
                 print('PASS resolution prerequisite rejects drift and rolls back')
+            if 'atomic_chat_view_close' in path.name:
+                close_contract = """select jsonb_build_object(
+                  'owner',pg_get_userbyid(p.proowner),
+                  'acl',p.proacl::text,
+                  'securityDefiner',p.prosecdef,
+                  'config',p.proconfig,
+                  'argNames',p.proargnames,
+                  'argTypes',pg_get_function_identity_arguments(p.oid),
+                  'defaults',p.pronargdefaults,
+                  'returnType',pg_get_function_result(p.oid),
+                  'language',l.lanname,
+                  'volatility',p.provolatile,
+                  'bodyMd5',md5(p.prosrc))::text
+                  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                  join pg_language l on l.oid=p.prolang
+                  where n.nspname='public' and p.oid='public.close_session_atomic(uuid,uuid,text)'::regprocedure;"""
+                close_before = query(close_contract)
+                close_source = path.read_text()
+                close_view_drifts = (
+                    ('unexpected close function ACL', "grant execute on function public.close_session_atomic(uuid,uuid,text) to anon;"),
+                    ('changed close function body', """create or replace function public.close_session_atomic(
+                      p_session_id uuid,p_user_id uuid,p_reason text)
+                      returns void language plpgsql security definer set search_path=public,pg_temp
+                      as $drift$ begin null; end $drift$;"""),
+                    ('unexpected legacy close overload', """create function public.close_session_from_chat_view(uuid,text,boolean)
+                      returns integer language sql as $drift$ select 1 $drift$;"""),
+                )
+                for label, drift in close_view_drifts:
+                    try:
+                        query('BEGIN;\n' + drift + '\n' + close_source + '\nROLLBACK;')
+                    except RuntimeError as error:
+                        if 'Unexpected close-session baseline' not in str(error):
+                            raise RuntimeError(f'Unexpected close-session {label} guard failure: {error}') from error
+                    else:
+                        raise RuntimeError(f'Atomic chat-view close accepted {label}')
+                    if query(close_contract) != close_before:
+                        raise RuntimeError(f'Atomic chat-view close {label} left function changes after rejection')
+                    if query("select to_regprocedure('public.close_session_from_chat_view(uuid,text,text,integer)') is null;").splitlines()[2].strip() != 't':
+                        raise RuntimeError(f'Atomic chat-view close {label} left its replacement behind')
+                    if query("select to_regprocedure('public.close_session_from_chat_view(uuid,text,boolean)') is null;").splitlines()[2].strip() != 't':
+                        raise RuntimeError(f'Atomic chat-view close {label} left an unexpected overload behind')
+                print('PASS atomic chat-view close rejects close-function drift and unexpected overloads atomically')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
             if 'chat_turn_lease_fencing' in path.name and query(lease_contract) != lease_before_metadata:
                 raise RuntimeError('Chat lease fencing changed routine metadata or grants')
