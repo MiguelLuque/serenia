@@ -93,6 +93,37 @@ describe('conversation safety routing', () => {
     expect(h.state.rows.at(-1)?.parts).not.toContainEqual(expect.objectContaining({ type: 'data-safety-prompt' }))
   })
 
+  it('admits a marker-bound answer before applying the ordinary inactivity close', async () => {
+    const h = await chatHarness()
+    h.state.session.last_activity_at = new Date(Date.now() - 31 * 60_000).toISOString()
+    h.state.rows.push({ id: 'assistant-prompt-turn', role: 'assistant', parts: [marker('suicidal_ideation')] })
+    h.state.turns.set('prompt-turn', { request_id: 'prompt-turn', status: 'completed', response_parts: h.state.rows.at(-1).parts })
+    h.state.previousRequest = 'prompt-turn'
+    const response = await h.post('Sí', 'inactive-answer', { safetyPromptRequestId: 'prompt-turn' })
+    expect(response.status).toBe(200)
+    expect(h.state.writes.some(write => write.name === 'begin_chat_turn' && write.args.p_safety_answer === 'affirmative')).toBe(true)
+    expect(h.state.session.status).toBe('open')
+  })
+
+  it.each([
+    ['Sí', '024', 'Gracias por contármelo'],
+    ['No lo sé', '024', 'No puedo determinar'],
+  ] as const)('retains the %s acknowledgment and resources when the answer reaches the hard time limit', async (text, resource, acknowledgment) => {
+    const h = await chatHarness()
+    h.state.session.opened_at = new Date(Date.now() - 61 * 60_000).toISOString()
+    h.state.rows.push({ id: 'assistant-prompt-turn', role: 'assistant', parts: [marker('self_harm')] })
+    h.state.turns.set('prompt-turn', { request_id: 'prompt-turn', status: 'completed', response_parts: h.state.rows.at(-1).parts })
+    h.state.previousRequest = 'prompt-turn'
+    const response = await h.post(text, 'expired-answer', { safetyPromptRequestId: 'prompt-turn' })
+    const body = await response.text()
+    expect(response.status).toBe(200)
+    expect(body).toContain('límite de tiempo')
+    expect(body).toContain(resource)
+    expect(body).toContain(acknowledgment)
+    expect(h.state.writes.find(write => write.name === 'finish_chat_turn')?.args.p_close_reason).toBe('time_limit')
+    expect(body).not.toContain('crisis_detected')
+  })
+
   it('consumes skip and follows the new topic with generation without profile extraction', async () => {
     const h = await chatHarness()
     h.state.rows.push({ id: 'assistant-prompt-turn', role: 'assistant', parts: [marker('self_harm')] })
@@ -134,6 +165,18 @@ describe('conversation safety routing', () => {
     expect(h.state.writes.filter(write => write.name === 'begin_chat_turn')).toHaveLength(2)
     expect(h.state.writes.filter(write => write.name === 'begin_chat_turn').map(write => [write.args.p_safety_answer, write.args.p_safety_answer_prompt_request_id])).toEqual([['affirmative', 'prompt-turn'], ['affirmative', 'prompt-turn']])
     expect(await (await h.post('Sí', 'answer-turn', { safetyPromptRequestId: 'prompt-turn' })).text()).toBe(body)
+  })
+
+  it('replays a completed ambiguous prompt by request id even when the retry omits its prompt reference', async () => {
+    const h = await chatHarness()
+    const first = await h.post('No sé si quiero suicidarme', 'ambiguous-turn')
+    const firstBody = await first.text()
+    expect(first.status).toBe(200)
+    const replay = await h.post('No sé si quiero suicidarme', 'ambiguous-turn')
+    expect(replay.status).toBe(200)
+    expect(await replay.text()).toBe(firstBody)
+    expect(h.state.rows.filter(row => row.role === 'assistant')).toHaveLength(1)
+    expect(h.state.captured).toHaveLength(0)
   })
 
   it('reuses the stored answer on an admitted retry even if the text would classify directly now', async () => {

@@ -185,3 +185,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Affirmative/negative/unclear answers return deterministic outcomes; skip consumes the marker and generates against the changed topic. Profile extraction is skipped for direct, ambiguous, and marker-answer turns. Removed the generative `close_session_crisis` tool and replaced obsolete protocol/model wording.
 - Focused suite: 7 files / 242 tests passed. `rtk npm run typecheck` and `rtk git diff --check` pass. Full suite and repository verification remain for Task 4; no DB/hosted/provider/runtime/clinical gates were run. Detailed evidence: `task-3-report.md`.
 
+### Task 3 review follow-up: inactivity, time-bound answers, natural skip, replay
+
+- Added four regressions before implementation. RED: `rtk npx vitest run tests/chat/crisis-detector.test.ts tests/api/chat-safety-routing.test.ts` reported 5 failed / 185 passed: inactive marker answer rejected, expired affirmative/unclear answer lost acknowledgments/resources, natural topic request classified unclear, and completed ambiguous replay rejected without its marker reference.
+- Safety answers now count as safety turns for inactivity admission; contextual turns retain ordinary inactivity handling. Hard-time answers retain category acknowledgment and relevant resources while closing only as `time_limit`. Natural `Quiero hablar del trabajo` is `skip`, with direct explicit signals protected. Completed same-request turns reach the idempotent replay before checking the prior marker; new IDs retain marker validation.
+- Focused GREEN: 7 files / 247 tests passed. `rtk npm run typecheck` and `rtk git diff --check` pass. Full verify intentionally not run; see Task 3 report.
+

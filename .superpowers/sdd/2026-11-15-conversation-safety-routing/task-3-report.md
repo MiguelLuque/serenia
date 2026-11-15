@@ -26,6 +26,20 @@
 - No database replay/type generation or local Supabase stack command was run. SQL/migrations were not modified; RPC lock behavior remains subject to Task 4's local database verification.
 - No hosted Supabase, Vercel, provider/model call, deployment, clinical review, or pilot validation was performed.
 
+## Review follow-up — 2026-11-15
+
+Applied four independent review findings with regression-first TDD:
+
+1. A valid marker-bound answer now counts as a safety turn in the inactivity guard, so it reaches admission before ordinary inactivity closure. Contextual ordinary turns still follow the prior inactivity path.
+2. If a valid affirmative, negative, or unclear answer reaches the hard time limit, the static response keeps the category acknowledgment; affirmative and unclear also retain resources. Closure remains `time_limit`.
+3. Natural new-topic requests such as `Quiero hablar del trabajo` classify as `skip`. The helper avoids returning skip for a direct current safety statement.
+4. A completed same-request replay bypasses current-marker validation and goes through the idempotent RPC replay; a new request ID still requires the current server marker and cannot use a stale reference.
+
+- RED: `rtk npx vitest run tests/chat/crisis-detector.test.ts tests/api/chat-safety-routing.test.ts` — **5 failed, 185 passed**, matching all four findings (affirmative and unclear are separate cases).
+- GREEN focused run: `rtk npx vitest run tests/chat/request-boundary.test.ts tests/chat/crisis-detector.test.ts tests/api/chat-safety-routing.test.ts tests/api/chat-route.test.ts tests/chat/safety-flow.test.ts tests/chat/clinical-pilot.test.ts tests/chat/close-session-tools.test.ts` — **7 files, 247 tests passed**.
+- `rtk npm run typecheck` and `rtk git diff --check` — passed.
+- Full suite/repository verification remain unrun per Task 3 follow-up scope; no hosted/database/provider/runtime/clinical gates were run.
+
 ## Files
 
 Route: `app/api/chat/route.ts`; request boundary and client reference: `lib/server/chat/request-boundary.ts`, `lib/shared/chat/safety-prompt.ts`, `components/chat/chat-view.tsx`; classifier skip refinement: `lib/shared/chat/crisis-detector.ts`; tests/harness: `tests/api/chat-safety-routing.test.ts`, `tests/api/chat-route.test.ts`, `tests/chat/clinical-pilot.test.ts`, `tests/chat/close-session-tools.test.ts`, `tests/chat/crisis-detector.test.ts`, `tests/chat/request-boundary.test.ts`, `tests/chat/safety-flow.test.ts`, `tests/helpers/chat-harness.ts`; protocol: `docs/agents/protocols/crisis.md`.

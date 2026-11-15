@@ -213,6 +213,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
 export function classifySafetyClarificationReply(text: string): SafetyClarificationReply {
   const value = normalize(text).trim().replace(/[.!?¿¡]+$/g, '')
   if (/^(?:cambiemos de tema|cambiar de tema|prefiero hablar de otra cosa|pasemos a otra cosa)(?:$|[,;.!?:]\s+)|^(?:skip|saltar)$/.test(value)) return 'skip'
+  if (classifyCrisisSignal(value).disposition !== 'explicit_current' && /^(?:(?:quiero|prefiero|me gustaria)\s+hablar\s+(?:de|del|sobre)|(?:quiero|prefiero)\s+conversar\s+(?:de|sobre)|hablemos\s+(?:de|sobre)|podemos hablar\s+(?:de|sobre))\s+.+$/.test(value)) return 'skip'
   if (/^no,? no estoy pensando en eso$/.test(value)) return 'negative'
   if (/^(si|sí|no|no lo se|no se|no estoy seguro|no estoy segura|quizas|quizá)$/.test(value)) {
     if (value === 'si' || value === 'sí') return 'affirmative'

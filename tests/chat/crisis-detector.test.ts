@@ -574,4 +574,8 @@ describe('classifySafetyClarificationReply', () => {
   it('classifies an explicit topic change with a new topic as skip', () => {
     expect(classifySafetyClarificationReply('Cambiemos de tema; quiero hablar del trabajo')).toBe('skip')
   })
+  it('classifies a natural new-topic request as skip but not a direct safety statement', () => {
+    expect(classifySafetyClarificationReply('Quiero hablar del trabajo')).toBe('skip')
+    expect(classifySafetyClarificationReply('Quiero suicidarme')).not.toBe('skip')
+  })
 })

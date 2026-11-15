@@ -73,7 +73,7 @@ export async function POST(req: Request) {
   const directSignal = !retryCandidate && classification.disposition === 'explicit_current'
   const directRiskType = directSignal ? classification.riskType : null
   let promptMarker: { requestId: string; riskType: Exclude<CrisisRiskType, null> } | null = null
-  if (!directSignal && !retryCandidate) {
+  if (!directSignal && !retryCandidate && existingTurn?.status !== 'completed') {
     const { data: priorTurn, error: priorTurnError } = await service.from('chat_turns').select('request_id,status,response_parts').eq('session_id', sessionId).eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (priorTurnError) return Response.json({ error: 'No se pudo comprobar la pregunta de seguridad. Conserva el texto y reintenta.', requestId }, { status: 503 })
     const parts = priorTurn?.status === 'completed' && Array.isArray(priorTurn.response_parts) ? priorTurn.response_parts as Array<{ type?: unknown; data?: unknown }> : []
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
   const isSafetyTurn = directSignal || classification.disposition === 'ambiguous' || safetyAnswer !== null
   // Resolve only NEW ordinary idle turns. Existing IDs must retain replay and
   // recovery, and safety signals must be recorded before any temporal closure.
-  if (session.status === 'open' && !directSignal && !isSessionExpired(session) && isSessionInactive(session)) {
+  if (session.status === 'open' && !isSafetyTurn && !isSessionExpired(session) && isSessionInactive(session)) {
     const { data: prior, error: priorError } = await service.from('chat_turns').select('request_id').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
     if (priorError) return Response.json({ error: 'No se pudo comprobar el turno. Conserva el texto y reintenta.' }, { status: 503 })
     if (!prior) {
@@ -132,6 +132,8 @@ export async function POST(req: Request) {
   let closeReason: string | null = null
   const crisisResourcesText = `Gracias por contármelo. Esta aplicación no puede evaluar tu situación. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. La señal se conserva como provisional para revisión profesional; no es un diagnóstico.`
   const timeClosureText = 'Se ha alcanzado el límite de tiempo y la sesión ha terminado. El cierre queda registrado; cualquier informe que se genere requiere revisión clínica.'
+  const unclearAnswerText = `No puedo determinar desde aquí si existe peligro actual. Puedes llamar a ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}) o al ${SAFETY_RESOURCES.emergency.phone} si hay peligro inmediato. No insistiré con la pregunta; puedes cambiar de tema.`
+  const negativeAnswerText = 'Gracias por aclararlo. No repetiré la pregunta ahora. ¿Sobre qué te gustaría hablar?'
   const markClosed = (parts: UIMessage['parts'], chunks: UIMessageChunk[], reason: string) => {
     const part = { type: 'data-session-closed' as const, data: { closed: true, reason } }
     parts.push(part)
@@ -142,7 +144,7 @@ export async function POST(req: Request) {
     // shared finalizer so fallback success cannot leave an expired turn open.
     if (!closeReason && isSessionExpired(session)) closeReason = 'time_limit'
     let text = textOverride ?? (closeReason === 'time_limit' ? timeClosureText : '')
-    if (directSignal && closeReason === 'time_limit' && !text.startsWith(timeClosureText)) text = `${timeClosureText}\n\n${text || crisisResourcesText}`
+    if (closeReason === 'time_limit' && !text.startsWith(timeClosureText)) text = `${timeClosureText}\n\n${text || (directSignal ? crisisResourcesText : '')}`
     const response = staticReply(`assistant-${requestId}`, text, marker)
     if (createdQuestionnaire) {
       // The RPC already committed this instance. Preserve that real tool
@@ -210,7 +212,16 @@ export async function POST(req: Request) {
   try {
     // Direct and unclear signals use deterministic responses for every cohort.
     if (isSessionExpired(session)) {
-      const timeText = directSignal ? `${timeClosureText}\n\n${crisisResourcesText}` : timeClosureText
+      const timeResponse = directSignal
+        ? crisisResourcesText
+        : safetyAnswer?.category === 'affirmative'
+          ? crisisResourcesText
+          : safetyAnswer?.category === 'unclear'
+            ? unclearAnswerText
+            : safetyAnswer?.category === 'negative'
+              ? negativeAnswerText
+              : ''
+      const timeText = timeResponse ? `${timeClosureText}\n\n${timeResponse}` : timeClosureText
       return await finishStaticReply('time_limit', timeText)
     }
     if (directSignal) return await finishStaticReply(null, crisisResourcesText)
@@ -224,8 +235,8 @@ export async function POST(req: Request) {
       const text = safetyAnswer.category === 'affirmative'
         ? crisisResourcesText
         : safetyAnswer.category === 'negative'
-          ? 'Gracias por aclararlo. No repetiré la pregunta ahora. ¿Sobre qué te gustaría hablar?'
-          : `No puedo determinar desde aquí si existe peligro actual. Puedes llamar a ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}) o al ${SAFETY_RESOURCES.emergency.phone} si hay peligro inmediato. No insistiré con la pregunta; puedes cambiar de tema.`
+          ? negativeAnswerText
+          : unclearAnswerText
       return await finishStaticReply(null, text)
     }
     let context: Awaited<ReturnType<typeof prepareContext>>
