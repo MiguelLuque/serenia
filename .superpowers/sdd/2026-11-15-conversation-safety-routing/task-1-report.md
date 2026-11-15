@@ -104,3 +104,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED tests for quotes introduced by `mi amigo me dijo` / `mi madre dijo`, plus direct intent followed by a friend's belief about the speaker. All three assertions failed before the fix.
 - Quote attribution now requires a third-party subject at clause start followed by a reporting verb, including a first-person recipient (`me dijo`). Belief attribution only applies when it leads the clause. A later attribution about another matter no longer suppresses direct intent.
 - Focused suite: 114 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite was not rerun for this bounded change.
+
+## Task 1 follow-up: broader reported-speech subjects
+
+- Added RED cases for `un amigo`, `mi pareja`, and `mi compañero` reporting a quoted statement; all three initially routed explicit.
+- Expanded only the clause-leading attribution grammar with these subject forms and reporting verbs. Incidental later third-party mentions remain outside the attribution rule, preserving direct personal intent.
+- Focused suite: 117 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow fix.

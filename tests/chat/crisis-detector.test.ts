@@ -341,6 +341,14 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
   })
 
+  it.each([
+    'Un amigo me dijo "quiero matarme"',
+    'Mi pareja me contó "quiero suicidarme"',
+    'Mi compañero me comentó "quiero matarme"',
+  ])('recognizes reported speech from additional third parties: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
   it('does not let attribution about someone else suppress the speaker direct intent', () => {
     expect(classifyCrisisSignal('Quiero suicidarme porque mi amigo cree que exagero')).toEqual({
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
