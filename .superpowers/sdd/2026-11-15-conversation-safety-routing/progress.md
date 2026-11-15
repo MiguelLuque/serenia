@@ -127,3 +127,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED cases for `un amigo`, `mi pareja`, and `mi compañero` quotes; all three failed pre-fix.
 - Extended the anchored third-party reporting structure with those subject nouns and verbs. Incidental later mentions still do not suppress direct intent. Focused 117/117, typecheck and diff check pass; full suite not rerun. See Task 1 report.
 
+### Task 1 follow-up: punctuated quoted attribution
+
+- Added RED cases for quotes wrapped in typographic quotation marks and reporting clauses followed by a colon; both failed pre-fix. Added a quote-followed-by-personal-disclosure regression.
+- Attribution matching trims only surrounding quote marks before testing the anchored lead. Later personal clauses remain explicit. Focused 120/120, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+

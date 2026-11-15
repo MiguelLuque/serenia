@@ -110,3 +110,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for `un amigo`, `mi pareja`, and `mi compañero` reporting a quoted statement; all three initially routed explicit.
 - Expanded only the clause-leading attribution grammar with these subject forms and reporting verbs. Incidental later third-party mentions remain outside the attribution rule, preserving direct personal intent.
 - Focused suite: 117 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow fix.
+
+## Task 1 follow-up: quoted punctuation in attribution
+
+- Added RED cases for third-party quotes wrapped in Spanish/typographic quotation marks and introduced with a colon; both initially classified as explicit.
+- Attribution matching now trims only surrounding quotation marks before checking the clause-leading subject/reporting verb. A direct personal clause after the quote remains explicit.
+- Focused suite: 120 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow adjustment.

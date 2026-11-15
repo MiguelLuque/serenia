@@ -349,6 +349,19 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
   })
 
+  it.each([
+    '«Mi amigo me dijo: “quiero matarme”»',
+    '“Mi madre dijo: ‘quiero suicidarme’”',
+  ])('keeps punctuated typographic third-party quotes contextual: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it('still routes a direct personal clause after an attributed quote', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme”», y yo quiero suicidarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
   it('does not let attribution about someone else suppress the speaker direct intent', () => {
     expect(classifyCrisisSignal('Quiero suicidarme porque mi amigo cree que exagero')).toEqual({
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
