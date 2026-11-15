@@ -49,6 +49,13 @@
 - Focused suite: 70 tests passed. `rtk npm run typecheck` passed.
 - Full suite: 99 files passed, 1 failed; 1,334 passed and 4 failed. All four are in `tests/tooling/dependency-integration.test.ts` due child Node servers receiving `listen EPERM: operation not permitted 127.0.0.1`.
 
+## Task 1 follow-up: explicit intent and behavior boundary
+
+- Added RED coverage for temporal broad expressions and explicit plan, intent, and behavior phrases. Seven cases failed before the update.
+- Temporal words no longer elevate broad/figurative `desaparecer` or `acabar con todo` language. Added direct patterns for stated plan, imminent intent, current cutting, current intentional harm, and current self-injury while preserving `me hice daño hoy` as ambiguous.
+- Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 77 tests. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,341 passed and 4 failed in `tests/tooling/dependency-integration.test.ts`. All failures report `listen EPERM: operation not permitted 127.0.0.1` for child Node servers.
+
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.

@@ -78,3 +78,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Broad “quiero desaparecer/acabar con todo” expressions are ambiguous alone. Direct personal statements already accepted remain explicit, including coordinated positive `quiero` + `quitarme la vida`/`matarme`.
 - Focused tests pass 70/70; typecheck passes. Full suite: 99 files pass, 1 fails; 1,334 pass and 4 fail due dependency integration child server `listen EPERM` on 127.0.0.1. See `task-1-report.md`.
 
+### Task 1 follow-up: explicit plan, intent and behavior
+
+- Added RED cases for temporal broad expressions and explicit plan/intent/behavior; 7 cases failed before the change.
+- Temporal markers alone no longer elevate broad figurative expressions. Explicit current plan, intent, cutting, harm and self-injury phrases route to their topic; `me hice daño hoy` remains ambiguous.
+- Focused tests pass 77/77 and typecheck passes. Full suite: 99 files pass, 1 fails; 1,341 pass and 4 fail due dependency integration child Node binds denied with `listen EPERM: operation not permitted 127.0.0.1`. Details in Task 1 report.
+

@@ -233,6 +233,20 @@ describe('classifyCrisisSignal — conversation routing', () => {
   it.each(['Estoy pensando en suicidarme ahora', 'Quiero hacerme daño ahora', 'quiero matarme', 'Quiero cortarme las venas'])('retains accepted direct personal signals: %s', text => {
     expect(classifyCrisisSignal(text).disposition).toBe('explicit_current')
   })
+
+  it.each(['Hoy quiero desaparecer para siempre', 'Ahora quiero acabar con todo'])('does not let temporal words elevate a broad expression: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'ambiguous', riskType: 'suicidal_ideation' })
+  })
+
+  it.each([
+    ['Tengo un plan para quitarme la vida', 'suicidal_ideation'],
+    ['Voy a suicidarme esta noche', 'suicidal_ideation'],
+    ['Voy a cortarme ahora', 'self_harm'],
+    ['Me estoy haciendo daño', 'self_harm'],
+    ['Me estoy autolesionando', 'self_harm'],
+  ] as const)('recognizes explicit intent, plan, or behavior: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {
