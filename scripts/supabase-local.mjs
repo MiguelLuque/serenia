@@ -19,6 +19,7 @@ const commandOptions = {
   'db reset': { '--local': true },
   'db lint': { '--local': true, '--schema': ['public'], '--level': ['warning', 'error'], '--fail-on': ['warning'] },
   'db advisors': { '--local': true, '--type': ['all'], '--level': ['info', 'warn', 'error'], '--fail-on': ['warn'] },
+  'migration up': { '--local': true },
   'gen types': { '--local': true, '--lang': ['typescript'], '--schema': ['public'] },
   'migration new': {}, 'migration list': { '--local': true },
 }
@@ -50,7 +51,7 @@ export function validateArguments(args) {
   if (command === 'migration new') {
     if (positionals.length !== (seen.has('--help') ? 0 : 1) || positionals.some(value => !/^[a-z][a-z0-9_]{0,79}$/.test(value))) throw new Error('Expected one local migration name')
   } else if (positionals.length) throw new Error('Unexpected CLI positional argument')
-  if (!seen.has('--help') && ['db reset', 'db lint', 'db advisors', 'gen types', 'migration list'].includes(command) && !seen.has('--local')) throw new Error('This command requires --local')
+  if (!seen.has('--help') && ['db reset', 'db lint', 'db advisors', 'gen types', 'migration list', 'migration up'].includes(command) && !seen.has('--local')) throw new Error('This command requires --local')
 }
 export function runSupabase(args, options = {}) {
   validateArguments(args)

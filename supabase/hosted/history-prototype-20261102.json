@@ -1,0 +1,704 @@
+{
+  "basis": "recorded 2026-11-01 hosted baseline; no fresh readback",
+  "baselineSha256": "a93732427101c87e737a2c48a1c553941c2f19c3c300e209434c084e49553dda",
+  "candidateStatus": "SYNTHETIC_REPLAY_ONLY_NOT_HOSTED_EQUIVALENCE",
+  "knownBlockingDifferences": [
+    "four May version-and-content differences",
+    "two same-version May content differences",
+    "hosted profile not recorded applied",
+    "chronology hosted version unknown"
+  ],
+  "recordedHostedVersions": [
+    "20260419000001",
+    "20260419000002",
+    "20260419000003",
+    "20260419000004",
+    "20260419000005",
+    "20260419000006",
+    "20260419000007",
+    "20260419000008",
+    "20260419000009",
+    "20260419000010",
+    "20260420000001",
+    "20260420000002",
+    "20260420000003",
+    "20260421000001",
+    "20260421000002",
+    "20260421000003",
+    "20260421000004",
+    "20260422000001",
+    "20260422000002",
+    "20260422000003",
+    "20260422000004",
+    "20260423000001",
+    "20260423000002",
+    "20260423000003",
+    "20260424000001",
+    "20260424000002",
+    "20260424000003",
+    "20260424000004",
+    "20260426000001",
+    "20260502000001",
+    "20260502000002",
+    "20260502000003",
+    "20260502000004",
+    "20260502000005",
+    "20260502000006",
+    "20260502000007",
+    "20260503204403",
+    "20260516175534",
+    "20260517151619",
+    "20260517153400",
+    "20261024092459",
+    "20261024092547",
+    "20261024203657"
+  ],
+  "migrations": [
+    {
+      "hostedVersion": "20260419000001",
+      "candidate": "candidate/supabase/migrations/20260419000001_enums.sql",
+      "candidateSha256": "9e3ca8546349e7340d373f53876c5d8c8f89abfc69139d9a0982c37e91dfa49b",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000001_enums.sql",
+          "sha256": "9e3ca8546349e7340d373f53876c5d8c8f89abfc69139d9a0982c37e91dfa49b",
+          "bytes": 1387
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000002",
+      "candidate": "candidate/supabase/migrations/20260419000002_user_tables.sql",
+      "candidateSha256": "16410380deae2a6dcf1d58b8612876e3f47d387bef643fc88a77ecaa101ec770",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000002_user_tables.sql",
+          "sha256": "16410380deae2a6dcf1d58b8612876e3f47d387bef643fc88a77ecaa101ec770",
+          "bytes": 1172
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000003",
+      "candidate": "candidate/supabase/migrations/20260419000003_conversation_tables.sql",
+      "candidateSha256": "fc02ebc2ff6a7b6778047471901af3743b86e4248e95af20d85b9a381e59ed88",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000003_conversation_tables.sql",
+          "sha256": "fc02ebc2ff6a7b6778047471901af3743b86e4248e95af20d85b9a381e59ed88",
+          "bytes": 2501
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000004",
+      "candidate": "candidate/supabase/migrations/20260419000004_questionnaire_tables.sql",
+      "candidateSha256": "19222fec76fabef91c1850bc35a134f88840d4f99a218705400b7d20dbd6e965",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000004_questionnaire_tables.sql",
+          "sha256": "19222fec76fabef91c1850bc35a134f88840d4f99a218705400b7d20dbd6e965",
+          "bytes": 3220
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000005",
+      "candidate": "candidate/supabase/migrations/20260419000005_clinical_tables.sql",
+      "candidateSha256": "db84e0ee23ff9d5daa27f4a599e12deb17f308e6e71c2a1f23d2661be63e2115",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000005_clinical_tables.sql",
+          "sha256": "db84e0ee23ff9d5daa27f4a599e12deb17f308e6e71c2a1f23d2661be63e2115",
+          "bytes": 2402
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000006",
+      "candidate": "candidate/supabase/migrations/20260419000006_v15_stubs.sql",
+      "candidateSha256": "d29e29b61217fb08a0e1930e40b4227c3c72ab3d606d94bde1256f34e6caa837",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000006_v15_stubs.sql",
+          "sha256": "d29e29b61217fb08a0e1930e40b4227c3c72ab3d606d94bde1256f34e6caa837",
+          "bytes": 2128
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000007",
+      "candidate": "candidate/supabase/migrations/20260419000007_updated_at_trigger.sql",
+      "candidateSha256": "47f3ea622d4037c0fd8111553e483023f51c78be40c90e3a75f652579132aaaa",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000007_updated_at_trigger.sql",
+          "sha256": "47f3ea622d4037c0fd8111553e483023f51c78be40c90e3a75f652579132aaaa",
+          "bytes": 986
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000008",
+      "candidate": "candidate/supabase/migrations/20260419000008_rls_owner_only.sql",
+      "candidateSha256": "225835c1d7a71144f04b37be28a5746f4b51ec1cd4c14fda6070a32436a80ef5",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000008_rls_owner_only.sql",
+          "sha256": "225835c1d7a71144f04b37be28a5746f4b51ec1cd4c14fda6070a32436a80ef5",
+          "bytes": 3096
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000009",
+      "candidate": "candidate/supabase/migrations/20260419000009_rls_public_and_restricted.sql",
+      "candidateSha256": "25c6f9190229838b787750f69d1b8bb50eaed7772da45bb9bd7d58bb6c183dfb",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000009_rls_public_and_restricted.sql",
+          "sha256": "25c6f9190229838b787750f69d1b8bb50eaed7772da45bb9bd7d58bb6c183dfb",
+          "bytes": 1245
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260419000010",
+      "candidate": "candidate/supabase/migrations/20260419000010_gdpr_erase.sql",
+      "candidateSha256": "dfa6064c0d6546634ad1bbeea90f40ab8590890efc646e74f9dfe1edf635b3cb",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260419000010_gdpr_erase.sql",
+          "sha256": "dfa6064c0d6546634ad1bbeea90f40ab8590890efc646e74f9dfe1edf635b3cb",
+          "bytes": 961
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260420000001",
+      "candidate": "candidate/supabase/migrations/20260420000001_user_profiles_extend.sql",
+      "candidateSha256": "d448d7ef92ecb8f3d497a3e97cece16def9b3c94ed75b3fcdb2e65efc0c167f3",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260420000001_user_profiles_extend.sql",
+          "sha256": "d448d7ef92ecb8f3d497a3e97cece16def9b3c94ed75b3fcdb2e65efc0c167f3",
+          "bytes": 1010
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260420000002",
+      "candidate": "candidate/supabase/migrations/20260420000002_user_profile_trigger.sql",
+      "candidateSha256": "355602981279e2c81d35275ba92ba2fa1754f6bcd61fd7a3692c4b3dc213ea3d",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260420000002_user_profile_trigger.sql",
+          "sha256": "355602981279e2c81d35275ba92ba2fa1754f6bcd61fd7a3692c4b3dc213ea3d",
+          "bytes": 393
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260420000003",
+      "candidate": "candidate/supabase/migrations/20260420000003_rls_clinician_read.sql",
+      "candidateSha256": "b393aff3be1ea9f46a0b6e6fb1101d4b3de2da2d3d5d92a47cb146392f1f5bf8",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260420000003_rls_clinician_read.sql",
+          "sha256": "b393aff3be1ea9f46a0b6e6fb1101d4b3de2da2d3d5d92a47cb146392f1f5bf8",
+          "bytes": 460
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260421000001",
+      "candidate": "candidate/supabase/migrations/20260421000001_clinical_sessions_extend.sql",
+      "candidateSha256": "7a4f81329998b903a85d884c6edc16c0fcc6e9300442bd8888fa0588fdced3b6",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260421000001_clinical_sessions_extend.sql",
+          "sha256": "7a4f81329998b903a85d884c6edc16c0fcc6e9300442bd8888fa0588fdced3b6",
+          "bytes": 495
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260421000002",
+      "candidate": "candidate/supabase/migrations/20260421000002_close_stale_sessions.sql",
+      "candidateSha256": "f0045fd53a7354034c224fb564fadc02d60ab946b846c450f53c31f441cd64ee",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260421000002_close_stale_sessions.sql",
+          "sha256": "f0045fd53a7354034c224fb564fadc02d60ab946b846c450f53c31f441cd64ee",
+          "bytes": 900
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260421000003",
+      "candidate": "candidate/supabase/migrations/20260421000003_messages_insert_own.sql",
+      "candidateSha256": "35fd59e2f66fcc3c6a36f54bc440bf037bdd575d4d8fdf5664f65b25b09a1cce",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260421000003_messages_insert_own.sql",
+          "sha256": "35fd59e2f66fcc3c6a36f54bc440bf037bdd575d4d8fdf5664f65b25b09a1cce",
+          "bytes": 460
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260421000004",
+      "candidate": "candidate/supabase/migrations/20260421000004_clinical_sessions_single_open.sql",
+      "candidateSha256": "284d5748ec3d3b4eccea2fe48b05ca6a169dd1959eddf4ec357ad684581b8e9b",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260421000004_clinical_sessions_single_open.sql",
+          "sha256": "284d5748ec3d3b4eccea2fe48b05ca6a169dd1959eddf4ec357ad684581b8e9b",
+          "bytes": 439
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260422000001",
+      "candidate": "candidate/supabase/migrations/20260422000001_seed_questionnaires.sql",
+      "candidateSha256": "e3651e1ef5c077ad1a3739ef7f3ea9b16854bdce891ad5c46caf05d873b9d776",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260422000001_seed_questionnaires.sql",
+          "sha256": "e3651e1ef5c077ad1a3739ef7f3ea9b16854bdce891ad5c46caf05d873b9d776",
+          "bytes": 6189
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260422000002",
+      "candidate": "candidate/supabase/migrations/20260422000002_questionnaire_answers_insert.sql",
+      "candidateSha256": "0e5a3fa94350cfbb828fa434fb7fb9e3108950cd37b703255865ec80b1d45ea6",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260422000002_questionnaire_answers_insert.sql",
+          "sha256": "0e5a3fa94350cfbb828fa434fb7fb9e3108950cd37b703255865ec80b1d45ea6",
+          "bytes": 261
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260422000003",
+      "candidate": "candidate/supabase/migrations/20260422000003_questionnaire_results_risk_events_insert.sql",
+      "candidateSha256": "4a2e80ace14a54dce37972b6de18953793e111a0f4031290ad532983ad240dce",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260422000003_questionnaire_results_risk_events_insert.sql",
+          "sha256": "4a2e80ace14a54dce37972b6de18953793e111a0f4031290ad532983ad240dce",
+          "bytes": 267
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260422000004",
+      "candidate": "candidate/supabase/migrations/20260422000004_assessments_insert_own.sql",
+      "candidateSha256": "c305e283b7ab3603ced659823deb9f7210a70900ef394c8d1babfcb86f94ec21",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260422000004_assessments_insert_own.sql",
+          "sha256": "c305e283b7ab3603ced659823deb9f7210a70900ef394c8d1babfcb86f94ec21",
+          "bytes": 100
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260423000001",
+      "candidate": "candidate/supabase/migrations/20260423000001_rls_clinician_write.sql",
+      "candidateSha256": "24575832c7a1c790f0e6fd0edcdc47ca4ba9a660a9e5c21b5910fe27552575a3",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260423000001_rls_clinician_write.sql",
+          "sha256": "24575832c7a1c790f0e6fd0edcdc47ca4ba9a660a9e5c21b5910fe27552575a3",
+          "bytes": 2833
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260423000002",
+      "candidate": "candidate/supabase/migrations/20260423000002_assessments_rejection_reason.sql",
+      "candidateSha256": "628b1ad1aba09418bc21ed04b6c0a52a73a7a141ebd83b67fa520ffaeed2a57e",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260423000002_assessments_rejection_reason.sql",
+          "sha256": "628b1ad1aba09418bc21ed04b6c0a52a73a7a141ebd83b67fa520ffaeed2a57e",
+          "bytes": 411
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260423000003",
+      "candidate": "candidate/supabase/migrations/20260423000003_assessments_reviewed_by_auth_users.sql",
+      "candidateSha256": "0fb140c4491b418f83768535f3c7af8cb33d7085fc8971095c6e8a9d00a96700",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260423000003_assessments_reviewed_by_auth_users.sql",
+          "sha256": "0fb140c4491b418f83768535f3c7af8cb33d7085fc8971095c6e8a9d00a96700",
+          "bytes": 637
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260424000001",
+      "candidate": "candidate/supabase/migrations/20260424000001_patient_tasks.sql",
+      "candidateSha256": "ab031f3eac9db26914ec10960c89871ce347d7318dca056c4e599eff64fe0854",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260424000001_patient_tasks.sql",
+          "sha256": "ab031f3eac9db26914ec10960c89871ce347d7318dca056c4e599eff64fe0854",
+          "bytes": 3196
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260424000002",
+      "candidate": "candidate/supabase/migrations/20260424000002_indexes_patient_context.sql",
+      "candidateSha256": "beb755fc9b1ed975365d8ebc0043f25578530121964486db25cb7b93f18cbe26",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260424000002_indexes_patient_context.sql",
+          "sha256": "beb755fc9b1ed975365d8ebc0043f25578530121964486db25cb7b93f18cbe26",
+          "bytes": 937
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260424000003",
+      "candidate": "candidate/supabase/migrations/20260424000003_patient_context_injections.sql",
+      "candidateSha256": "ec8848dcb9ffa2c382d6d1ecd4b9e93f829951bebff82b6bdcc3d781229ec683",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260424000003_patient_context_injections.sql",
+          "sha256": "ec8848dcb9ffa2c382d6d1ecd4b9e93f829951bebff82b6bdcc3d781229ec683",
+          "bytes": 1820
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260424000004",
+      "candidate": "candidate/supabase/migrations/20260424000004_assessment_requires_manual_review.sql",
+      "candidateSha256": "96e27bda7d377c023a38162d0d4cd363d360ae3bc9d8d6047490d8980fa012a5",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260424000004_assessment_requires_manual_review.sql",
+          "sha256": "96e27bda7d377c023a38162d0d4cd363d360ae3bc9d8d6047490d8980fa012a5",
+          "bytes": 2451
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260426000001",
+      "candidate": "candidate/supabase/migrations/20260426000001_assessments_clinical_notes.sql",
+      "candidateSha256": "b940a5ac2abf81b7d16649deecedf11c1382122cdb7db39e1e9d43cae7e1e09a",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260426000001_assessments_clinical_notes.sql",
+          "sha256": "b940a5ac2abf81b7d16649deecedf11c1382122cdb7db39e1e9d43cae7e1e09a",
+          "bytes": 1588
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000001",
+      "candidate": "candidate/supabase/migrations/20260502000001_questionnaires_clinician_rated.sql",
+      "candidateSha256": "52402bd7a8765bf0883ab18fd4507a08b7b1b971281cb2f3edfb8bd90d4ca153",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000001_questionnaires_clinician_rated.sql",
+          "sha256": "52402bd7a8765bf0883ab18fd4507a08b7b1b971281cb2f3edfb8bd90d4ca153",
+          "bytes": 1628
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000002",
+      "candidate": "candidate/supabase/migrations/20260502000002_clinical_sessions_protocol_phase.sql",
+      "candidateSha256": "465af2775b91cda503d360b1b78d3fc1a8c5323a37be8d40186780ad8f97298e",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000002_clinical_sessions_protocol_phase.sql",
+          "sha256": "465af2775b91cda503d360b1b78d3fc1a8c5323a37be8d40186780ad8f97298e",
+          "bytes": 891
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000003",
+      "candidate": "candidate/supabase/migrations/20260502000003_user_profiles_intake_clinico.sql",
+      "candidateSha256": "f30b8c22ccddba0931205a7f09238ff1b62d7b378c711f812b7af60cfabcadd8",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000003_user_profiles_intake_clinico.sql",
+          "sha256": "f30b8c22ccddba0931205a7f09238ff1b62d7b378c711f812b7af60cfabcadd8",
+          "bytes": 2350
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000004",
+      "candidate": "candidate/supabase/migrations/20260502000004_wipe_legacy_test_data.sql",
+      "candidateSha256": "12fa0696a98825c023975a90d0565e9ff4c92b1bfcb9417b8d23b165aa1f4488",
+      "status": "SAME_VERSION_SOURCE_COPY_NOT_CONTENT_PROOF",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000004_wipe_legacy_test_data.sql",
+          "sha256": "12fa0696a98825c023975a90d0565e9ff4c92b1bfcb9417b8d23b165aa1f4488",
+          "bytes": 402
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000005",
+      "candidate": "candidate/supabase/migrations/20260502000005_restore_preserved_profiles.sql",
+      "candidateSha256": "9af34ea26d447726902edb209b086f429673efcf1533cbd624651459aea69b18",
+      "status": "SAME_VERSION_SOURCE_COPY_NOT_CONTENT_PROOF",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000005_restore_preserved_profiles.sql",
+          "sha256": "9af34ea26d447726902edb209b086f429673efcf1533cbd624651459aea69b18",
+          "bytes": 377
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000006",
+      "candidate": "candidate/supabase/migrations/20260502000006_close_session_rpc.sql",
+      "candidateSha256": "b7907dc5b569e938d2a951a2a6fae3d0f3b421bfc1364029e4ea8ef4f9d8e993",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000006_close_session_rpc.sql",
+          "sha256": "b7907dc5b569e938d2a951a2a6fae3d0f3b421bfc1364029e4ea8ef4f9d8e993",
+          "bytes": 2382
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260502000007",
+      "candidate": "candidate/supabase/migrations/20260502000007_hot_path_indices.sql",
+      "candidateSha256": "4831986833ab7e4d45ef7fe837f75d835df247413405b494827eb4ae82c01907",
+      "status": "SAME_VERSION_SOURCE_COPY",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260502000007_hot_path_indices.sql",
+          "sha256": "4831986833ab7e4d45ef7fe837f75d835df247413405b494827eb4ae82c01907",
+          "bytes": 1645
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260503204403",
+      "candidate": "candidate/supabase/migrations/20260503204403_seed_bdi2.sql",
+      "candidateSha256": "0e9b4a652da95ac2d50909ca75ea0f25b7af0e4d496c46d13e8a2ae501620578",
+      "status": "UNVERIFIED_MAY_SUBSTITUTION_CONTENT_DIFFERS",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260503000001_seed_bdi2.sql",
+          "sha256": "0e9b4a652da95ac2d50909ca75ea0f25b7af0e4d496c46d13e8a2ae501620578",
+          "bytes": 10654
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260516175534",
+      "candidate": "candidate/supabase/migrations/20260516175534_seed_bai.sql",
+      "candidateSha256": "a98091b4f4dee2a07e8d713514d3c7b46d5c498d70364f3358d0639f62b3cc0c",
+      "status": "UNVERIFIED_MAY_SUBSTITUTION_CONTENT_DIFFERS",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260503000002_seed_bai.sql",
+          "sha256": "a98091b4f4dee2a07e8d713514d3c7b46d5c498d70364f3358d0639f62b3cc0c",
+          "bytes": 3067
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260517151619",
+      "candidate": "candidate/supabase/migrations/20260517151619_seed_cssrs.sql",
+      "candidateSha256": "f1cec56c78bb593b7e09878ac3ee6060daf3b4a1a793be6c461fd6c386d28d26",
+      "status": "UNVERIFIED_MAY_SUBSTITUTION_CONTENT_DIFFERS",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260517000001_seed_cssrs.sql",
+          "sha256": "f1cec56c78bb593b7e09878ac3ee6060daf3b4a1a793be6c461fd6c386d28d26",
+          "bytes": 4484
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20260517153400",
+      "candidate": "candidate/supabase/migrations/20260517153400_drop_asq.sql",
+      "candidateSha256": "f5cd32db145243de52abbcb31512ea9b43a434f01f4d8d4e432bcb253ba079a0",
+      "status": "UNVERIFIED_MAY_SUBSTITUTION_CONTENT_DIFFERS",
+      "storedHostedStatementsSha256": null,
+      "sources": [
+        {
+          "file": "20260517000002_drop_asq.sql",
+          "sha256": "f5cd32db145243de52abbcb31512ea9b43a434f01f4d8d4e432bcb253ba079a0",
+          "bytes": 612
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20261024092459",
+      "candidate": "candidate/supabase/migrations/20261024092459_composed_local_sources.sql",
+      "candidateSha256": "e5f4c8cb2655cbd0f78fd8d9d388f03a1e1839c53be33fa230c6a22c9095a6fa",
+      "status": "SOURCE_COMPOSITION_REPLAY_CANDIDATE",
+      "storedHostedStatementsSha256": "6f0037fc74e115455e379795cdcb1c5318e4a9f65660d048f8ca5d7af30069b0",
+      "sources": [
+        {
+          "file": "20261010075359_robust_authorization_review.sql",
+          "sha256": "91e1840c6a8d2c1f0ea086b3ffe7742859a49b5c55860dcb6401aeeac23e0c82",
+          "bytes": 16791
+        },
+        {
+          "file": "20261010123627_robust_chat_questionnaires_recovery.sql",
+          "sha256": "11d7b8d3b913624c4e6afd8720875bb9f1575848306af6d8f8746330a97c16ea",
+          "bytes": 32261
+        },
+        {
+          "file": "20261010231957_patient_flows_acceptance_private_reports.sql",
+          "sha256": "e3676f8e38a54ace7ee0f7177963849582cce6316c6b90383107ee0bae37663b",
+          "bytes": 18212
+        },
+        {
+          "file": "20261012083833_acceptance_strict_function_lint.sql",
+          "sha256": "d662ac2e2e188a76350d7a0656fa20696632240d4257f36ca159ddd58ea37bba",
+          "bytes": 1898
+        },
+        {
+          "file": "20261012084307_acceptance_strict_rls_advisors.sql",
+          "sha256": "465eb192ef1595c046f3d392139a476ff740355de3f80680a17b5b5a9760e358",
+          "bytes": 8611
+        },
+        {
+          "file": "20261013073246_hosted_trigger_acl.sql",
+          "sha256": "565fa459d6ed2588ac601bdbcd079888aca9b2fb51e5a28ba29f2553f6f6a9b4",
+          "bytes": 3625
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20261024092547",
+      "candidate": "candidate/supabase/migrations/20261024092547_final_inbox_pending_review.sql",
+      "candidateSha256": "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+      "status": "SOURCE_COPY_REPLAY_CANDIDATE",
+      "storedHostedStatementsSha256": "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+      "sources": [
+        {
+          "file": "20261013213559_final_inbox_pending_review.sql",
+          "sha256": "d9604a9e62468d2ecd3e1ae300fa074a7262ccb711ecd1d257d4865c2b39c7c9",
+          "bytes": 5172
+        }
+      ]
+    },
+    {
+      "hostedVersion": "20261024203657",
+      "candidate": "candidate/supabase/migrations/20261024203657_review_questionnaire_facts_immutable.sql",
+      "candidateSha256": "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504",
+      "status": "SOURCE_COPY_REPLAY_CANDIDATE",
+      "storedHostedStatementsSha256": "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504",
+      "sources": [
+        {
+          "file": "20261024145433_review_questionnaire_facts_immutable.sql",
+          "sha256": "86a461682776f9453a85ae338e38dbcab287ebbbaf97981850906bf809929504",
+          "bytes": 8191
+        }
+      ]
+    }
+  ],
+  "pendingProfilePreview": {
+    "status": "PROPOSED_VERSION_NOT_OBSERVED_APPLIED",
+    "version": "20261102122007",
+    "candidateSha256": "59ff8abb560124b1b46fdd5136727eb2c41b22c210f2f2d9befabb795a2f6c78",
+    "storedPacketSha256": "313b31b1c06bbe461313a81af9ff0f18fe0cd0a1882ee66ac8013c2ffc05e04a",
+    "sourceVersions": [
+      "20261028081958",
+      "20261028180058",
+      "20261028185351",
+      "20261030152754"
+    ]
+  },
+  "deferredLocalSources": [
+    "20261028081958_progressive_profile.sql",
+    "20261028180058_profile_review_rejected_target.sql",
+    "20261028185351_profile_nonretryable_conflicts.sql",
+    "20261030152754_profile_memory_history_page.sql",
+    "20261101104931_assessment_observed_chronology.sql"
+  ]
+}

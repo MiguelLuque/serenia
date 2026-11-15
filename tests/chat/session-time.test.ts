@@ -67,14 +67,18 @@ describe('authoritative session deadline', () => {
     clock(); const h = await chatHarness(); vi.setSystemTime(start + 31 * 60_000)
     const response = await h.post('Voy a matarme esta noche')
     expect(response.status).toBe(200); expect(await response.text()).toContain('024')
+    expect(h.state.writes.find(write => write.name === 'begin_chat_turn')?.args).toMatchObject({ p_crisis: true, p_direct_risk_type: 'suicidal_ideation', p_urgent: true })
+    expect(h.state.captured).toHaveLength(0)
     expect(h.state.rows[0].role).toBe('user'); expect(h.state.session.status).toBe('open')
   })
-  it('keeps deterministic resources if a contextual safety response finishes past the deadline', async () => {
+  it('generates a contextual mention, then closes by time if generation crosses the deadline', async () => {
     clock(); pilot(); const h = await chatHarness()
     h.state.hook = async () => { vi.setSystemTime(start + 60 * 60_000) }
-    const response = await h.post('Voy a matarme esta noche'); const body = await response.text()
-    expect(body).toContain('Respuesta sintética'); expect(body).toContain('024'); expect(body).toContain('112')
-    expect(h.state.writes.find(w => w.name === 'finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+    const response = await h.post('Estoy leyendo un artículo sobre suicidio'); const body = await response.text()
+    expect(body).toContain('Respuesta sintética'); expect(body).toContain('límite de tiempo')
+    expect(body).not.toContain('024'); expect(body).not.toContain('crisis_detected')
+    expect(h.state.writes.find(w => w.name === 'begin_chat_turn')?.args.p_crisis).toBe(false)
+    expect(h.state.writes.find(w => w.name === 'finish_chat_turn').args.p_close_reason).toBe('time_limit')
   })
   it('replays a completed request after inactivity without closing or duplicating it', async () => {
     clock(); const h = await chatHarness(); const original = await (await h.post()).text()
@@ -83,7 +87,7 @@ describe('authoritative session deadline', () => {
     expect(h.state.captured).toHaveLength(1); expect(h.state.rows).toHaveLength(2)
     expect(h.state.session.status).toBe('open')
   })
-  it.each(['context', 'model'])('still enforces the deadline when %s fails after an admitted safety turn', async failure => {
+  it.each(['context', 'model'])('still enforces the deadline when an ordinary %s turn fails during context or generation', async failure => {
     clock(); pilot(); const h = await chatHarness(); vi.setSystemTime(start + 59 * 60_000 + 59_000)
     h.state.session.last_activity_at = new Date().toISOString()
     if (failure === 'context') {
@@ -93,9 +97,12 @@ describe('authoritative session deadline', () => {
       h.state.generationFailure = true
       h.state.hook = async () => { vi.setSystemTime(start + 60 * 60_000 + 2000) }
     }
-    const response = await h.post('Voy a matarme esta noche')
-    expect(response.status).toBe(200); expect(await response.text()).toContain('024')
-    expect(h.state.writes.find(w => w.name === 'finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+    const response = await h.post('Estoy leyendo un artículo sobre suicidio')
+    const body = await response.text()
+    expect(response.status).toBe(200); expect(body).toContain('límite de tiempo')
+    expect(body).not.toContain('024'); expect(body).not.toContain('crisis_detected')
+    expect(h.state.writes.find(w => w.name === 'begin_chat_turn')?.args.p_crisis).toBe(false)
+    expect(h.state.writes.find(w => w.name === 'finish_chat_turn').args.p_close_reason).toBe('time_limit')
     expect(h.state.session.status).toBe('closed')
   })
 })

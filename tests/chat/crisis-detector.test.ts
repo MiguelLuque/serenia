@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
+import { classifyCrisisSignal, classifySafetyClarificationReply, detectCrisis } from '@/lib/shared/chat/crisis-detector'
 
 describe('detectCrisis — positive cases', () => {
   it('detects "suicidio" stem', () => {
@@ -102,5 +102,494 @@ describe('detectCrisis — known trade-offs', () => {
     const result = detectCrisis("La película se llama 'Suicide Squad'")
     // This IS detected — document it as expected behavior, not a bug.
     expect(result.detected).toBe(true)
+  })
+})
+
+describe('classifyCrisisSignal — conversation routing', () => {
+  it.each([
+    'La película se llama Suicide Squad',
+    'En clase estudiamos la prevención del suicidio',
+    'Mi amigo dijo "quiero matarme"',
+    'Mi hermana se autolesionó el año pasado',
+    'No tengo pensamientos de suicidio',
+    'Hace años pensé en suicidarme',
+  ])('keeps contextual mention ordinary: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it.each([
+    ['Estoy pensando en suicidarme ahora', 'suicidal_ideation'],
+    ['Quiero hacerme daño ahora', 'self_harm'],
+  ] as const)('routes direct current personal disclosure: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it('does not let context mask a separate current personal disclosure', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo que quiere matarse, y yo estoy pensando en suicidarme ahora.').disposition).toBe('explicit_current')
+  })
+
+  it('does not let a denial mask a contradictory current statement', () => {
+    expect(classifyCrisisSignal('No quiero hacerme daño, pero ahora estoy pensando en cortarme.').disposition).toBe('explicit_current')
+  })
+
+  it('marks uncertain first-person cues ambiguous', () => {
+    expect(classifyCrisisSignal('A veces pienso en desaparecer para siempre').disposition).toBe('ambiguous')
+  })
+
+  it('keeps a topic clause contextual without hiding personal current disclosure in another clause', () => {
+    expect(classifyCrisisSignal('Hoy tengo clase sobre suicidio').disposition).toBe('contextual')
+    expect(classifyCrisisSignal('Mi amigo habló de suicidio y yo estoy pensando en suicidarme').disposition).toBe('explicit_current')
+  })
+
+  it.each(['me corto ahora', 'me estoy cortando'])('recognizes current first-person cutting: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'self_harm' })
+  })
+
+  it('does not infer intentionality from a general statement of having been hurt', () => {
+    expect(classifyCrisisSignal('me hice daño hoy').disposition).toBe('ambiguous')
+  })
+
+  it.each(['No puedo dejar de pensar en suicidarme', 'No sé si quiero suicidarme'])('treats conflicted suicidal thoughts as ambiguous: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('treats a clear denial as contextual', () => {
+    expect(classifyCrisisSignal('No quiero suicidarme').disposition).toBe('contextual')
+  })
+
+  it('returns the personal current topic when another clause is contextual', () => {
+    expect(classifyCrisisSignal('Quiero hacerme daño ahora; hoy vimos suicidio en clase')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
+  it.each([
+    'Quiero cortarme el pelo',
+    'Me corto el pelo',
+    'Me corto las uñas',
+  ])('does not route ordinary grooming as safety signal: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
+  })
+
+  it.each(['Me estoy cortando el pelo', 'Me estoy cortando las uñas'])('does not route ongoing grooming as current self-harm: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
+  })
+
+  it('uses the ambiguous clause topic when earlier context mentioned another topic', () => {
+    expect(classifyCrisisSignal('Mi hermano habló de suicidio y no sé si autolesionarme')).toEqual({
+      disposition: 'ambiguous', riskType: 'self_harm',
+    })
+  })
+
+  it('treats not wanting to live as ambiguous rather than a clear denial', () => {
+    expect(classifyCrisisSignal('No quiero vivir')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['No quiero suicidarme', 'No estoy pensando en suicidarme'])('retains unequivocal denial: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it.each(['No quiero dejar de pensar en suicidarme', 'No quiero dejar de autolesionarme'])('keeps risk when negation scopes over stopping the thought: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it.each(['No voy a suicidarme', 'No voy a autolesionarme'])('treats a clear future denial as contextual: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it('carries shared querer scope into the next coordinated clause', () => {
+    expect(classifyCrisisSignal('Quiero cortarme el pelo y quitarme la vida')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each([
+    'No quiero cortarme el pelo y quitarme la vida',
+    'No quiero cortarme el pelo y matarme',
+  ])('does not propagate positive intent from a negated coordination: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).not.toBe('explicit_current')
+  })
+
+  it.each(['No voy a dejar de pensar en suicidarme', 'No voy a dejar de autolesionarme'])('treats negation over stopping as ambiguous: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it.each(['Quiero desaparecer para siempre', 'Quiero acabar con todo'])('keeps broad expressions ambiguous without a direct current signal: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('propagates a positive querer only across clear y coordination', () => {
+    for (const text of ['Quiero cortarme el pelo y quitarme la vida', 'Quiero cortarme el pelo y matarme']) {
+      expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+    }
+  })
+
+  it('does not propagate querer across punctuation', () => {
+    expect(classifyCrisisSignal('Quiero cortarme el pelo; suicidarme es un tema complejo').disposition).not.toBe('explicit_current')
+  })
+
+  it.each(['Estoy pensando en suicidarme ahora', 'Quiero hacerme daño ahora', 'quiero matarme', 'Quiero cortarme las venas'])('retains accepted direct personal signals: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('explicit_current')
+  })
+
+  it.each(['Hoy quiero desaparecer para siempre', 'Ahora quiero acabar con todo'])('does not let temporal words elevate a broad expression: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'ambiguous', riskType: 'suicidal_ideation' })
+  })
+
+  it.each([
+    ['Tengo un plan para quitarme la vida', 'suicidal_ideation'],
+    ['Voy a suicidarme esta noche', 'suicidal_ideation'],
+    ['Voy a matarme esta noche', 'suicidal_ideation'],
+    ['Voy a cortarme ahora', 'self_harm'],
+    ['Me estoy haciendo daño', 'self_harm'],
+    ['Me estoy autolesionando', 'self_harm'],
+  ] as const)('recognizes explicit intent, plan, or behavior: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it.each([
+    'No me estoy haciendo daño',
+    'No me estoy autolesionando',
+    'No me estoy cortando',
+    'No me corto ahora',
+    'No me quiero suicidar',
+    'No me voy a suicidar',
+    'No voy a matarme esta noche',
+  ])('does not treat a direct negation as explicit current: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).not.toBe('explicit_current')
+  })
+
+  it.each([
+    ['Me quiero suicidar', 'suicidal_ideation'],
+    ['Me voy a suicidar', 'suicidal_ideation'],
+    ['Voy a quitarme la vida', 'suicidal_ideation'],
+    ['Voy a hacerme daño esta noche', 'self_harm'],
+    ['Tengo un plan para hacerme daño', 'self_harm'],
+    ['Tengo un plan para cortarme', 'self_harm'],
+  ] as const)('recognizes explicit personal intent or plan: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it('lets a positive clause retain priority after a separate direct denial', () => {
+    expect(classifyCrisisSignal('No me quiero suicidar, pero me voy a suicidar')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['No dejo de pensar en suicidarme', 'No me atrevo a suicidarme'])('keeps non-denial negation ambiguous: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('does not treat "no solo quiero" as a clear denial', () => {
+    expect(classifyCrisisSignal('No solo quiero suicidarme').disposition).toBe('explicit_current')
+  })
+
+  it('does not treat a general wish to talk about suicide as direct intent', () => {
+    expect(classifyCrisisSignal('No solo quiero hablar de suicidio').disposition).toBe('contextual')
+  })
+
+  it.each(['Estoy pensando en suicidarme al hablar de suicidio', 'Estoy pensando en suicidarme en clase mientras hablamos de suicidio'])('does not let topic context hide personal intent: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it('keeps a quoted third-party statement contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo "quiero matarme"')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps an attributed voy-a-matarme quote contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo "voy a matarme esta noche"')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each([
+    ['Estoy pensando en hacerme daño', 'self_harm'],
+    ['Voy a autolesionarme', 'self_harm'],
+    ['Tengo un plan para autolesionarme', 'self_harm'],
+  ] as const)('recognizes direct self-harm intent: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it.each(['Quiero hacerme daño y matarme', 'Quiero matarme y hacerme daño'])('prioritizes explicit suicide topic across mixed direct signals: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it.each(['Nunca me voy a suicidar', 'Jamás quiero autolesionarme'])('recognizes scoped categorical denial: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it('leaves uncertain negation ambiguous', () => {
+    expect(classifyCrisisSignal('No creo que quiera suicidarme').disposition).toBe('ambiguous')
+  })
+
+  it('keeps uncertain voy-a negation ambiguous rather than treating it as direct intent', () => {
+    expect(classifyCrisisSignal('No creo que voy a matarme esta noche')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each([
+    'Estoy pensando en hacerme daño o suicidarme',
+    'Estoy pensando en suicidarme o hacerme daño',
+  ])('prefers suicidal ideation when a single clause contains both topics: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it.each(['Quiero suicidarme con mi amigo', 'Mi amigo está conmigo, quiero suicidarme'])('does not let a companion mention suppress personal intent: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it('keeps a direct third-party quote contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo "quiero matarme"').disposition).toBe('contextual')
+  })
+
+  it('does not resolve a third-party attribution about the user as explicit or contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo cree que quiero suicidarme').disposition).toBe('ambiguous')
+  })
+
+  it.each(['Mi amigo me dijo "quiero matarme"', 'Mi madre dijo "quiero suicidarme"'])('keeps quoted third-party intent contextual: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it.each([
+    'Un amigo me dijo "quiero matarme"',
+    'Mi pareja me contó "quiero suicidarme"',
+    'Mi compañero me comentó "quiero matarme"',
+  ])('recognizes reported speech from additional third parties: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it.each([
+    '«Mi amigo me dijo: “quiero matarme”»',
+    '“Mi madre dijo: ‘quiero suicidarme’”',
+  ])('keeps punctuated typographic third-party quotes contextual: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it('still routes a direct personal clause after an attributed quote', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme”», y yo quiero suicidarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not let attribution about someone else suppress the speaker direct intent', () => {
+    expect(classifyCrisisSignal('Quiero suicidarme porque mi amigo cree que exagero')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not propagate a quoted speaker intention into a coordinated topic', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme y autolesionarme”»').disposition).toBe('contextual')
+  })
+
+  it('does not propagate intention from a quote into the next clause', () => {
+    expect(classifyCrisisSignal('Mi amigo me dijo: “quiero matarme” y autolesionarme me da miedo').disposition).not.toBe('explicit_current')
+  })
+
+  it('retains speaker intention across coordinated self-harm topics', () => {
+    expect(classifyCrisisSignal('Quiero suicidarme y autolesionarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['«Quiero matarme», dijo mi amigo', '“Quiero suicidarme”, contó mi pareja'])('links a following attribution to the preceding quote: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it.each(['«Quiero matarme», me dijo mi amigo', '«Quiero suicidarme», me contó mi pareja'])('links a following indirect-object attribution: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it.each([
+    'Mi amigo dijo “quiero matarme”',
+    'Mi amiga dice “quiero matarme”',
+    'Mi pareja me contó “quiero suicidarme”',
+    'Mi compañero cuenta “quiero matarme”',
+    'Mi madre comentó “quiero suicidarme”',
+    'Mi hermano comenta “quiero matarme”',
+    '“Quiero matarme”, dijo mi amigo',
+    '“Quiero matarme”, me dice mi amiga',
+    '«Quiero suicidarme», contó mi pareja',
+    '«Quiero matarme», me cuenta mi compañero',
+    '«Quiero suicidarme», comentó mi madre',
+    '«Quiero matarme», me comenta mi hermano',
+  ])('recognizes only adjacent reporting-verb attribution forms: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it('does not treat a later incidental reporting verb as quote attribution', () => {
+    expect(classifyCrisisSignal('Quiero suicidarme porque mi amigo comentó que exagero')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not let quote attribution suppress a separate intent after porque', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme” porque yo también quiero matarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps the attributed quote contextual when porque adds no personal intent', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme” porque está preocupado')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['«Quiero matarme», dijo ella', '«Quiero suicidarme», dijo él'])('recognizes postposed third-person pronoun attribution: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it('keeps later direct personal intent after a postposed quote attribution', () => {
+    expect(classifyCrisisSignal('«Quiero matarme», dijo mi amigo, y yo también quiero suicidarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['Hoy mi amigo dijo “quiero matarme”', 'Mi amigo dijo, “quiero matarme”'])('attributes reported speech with introductory context or pause: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it('preserves direct intent in a new sentence after quoted third-party speech', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme”. Ahora quiero suicidarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not pass a quoted speaker desire into the next clause', () => {
+    expect(classifyCrisisSignal('Hoy mi amigo dijo “quiero descansar” y matarme me da miedo').disposition).not.toBe('explicit_current')
+  })
+
+  it('does not pass a topic-discussion desire into a separate risk cue', () => {
+    expect(classifyCrisisSignal('Quiero hablar de suicidio y matarme me da miedo').disposition).not.toBe('explicit_current')
+  })
+
+  it('keeps the speaker risk type separate from an attributed quote', () => {
+    expect(classifyCrisisSignal('Quiero hacerme daño desde que mi amigo dijo “quiero matarme”')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
+  it('treats an unattributed risk quote as ambiguous', () => {
+    expect(classifyCrisisSignal('«Quiero suicidarme»')).toEqual({ disposition: 'ambiguous', riskType: 'suicidal_ideation' })
+  })
+
+  it('evaluates a direct affirmative thought frame with its quoted content', () => {
+    expect(classifyCrisisSignal('Estoy pensando: “voy a suicidarme esta noche”')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each([
+    'No estoy pensando: “voy a suicidarme”',
+    'Mi amigo cree que estoy pensando: “voy a suicidarme”',
+  ])('does not treat a negative or third-party thought frame as explicit: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('keeps a nested quote attributed to a third party contextual', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme”»')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not carry a remote media mention across punctuation', () => {
+    expect(classifyCrisisSignal('Tengo un libro y “me estoy cortando”')).toEqual({
+      disposition: 'ambiguous', riskType: 'self_harm',
+    })
+  })
+
+  it('keeps affirmative own-thought framing explicit after a media clause', () => {
+    expect(classifyCrisisSignal('Tengo un libro; estoy pensando: “voy a suicidarme esta noche”')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps a negated own-thought frame ambiguous', () => {
+    expect(classifyCrisisSignal('No pienso: “voy a suicidarme”')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps reported thinking introduced by dice que ambiguous', () => {
+    expect(classifyCrisisSignal('Mi amigo dice que estoy pensando: “voy a suicidarme”')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('handles an unclosed quote after a third-party reporting lead', () => {
+    expect(classifyCrisisSignal('Hoy mi amigo dijo: “quiero matarme')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('recognizes a root intention frame after the quoted sentence', () => {
+    expect(classifyCrisisSignal('“Voy a suicidarme esta noche” es mi intención')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not assign third-party provenance from an outer quote around nested speech', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme”, pero yo me estoy haciendo daño»')).toEqual({
+      disposition: 'ambiguous', riskType: 'self_harm',
+    })
+  })
+
+  it('preserves speaker self-harm when third-party speech is quoted without an outer wrapper', () => {
+    expect(classifyCrisisSignal('Mi amigo me dijo: “quiero matarme”, pero yo me estoy haciendo daño')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
+  it('keeps uncertain outer quotes and their own suicidal topic evidence', () => {
+    expect(classifyCrisisSignal('«Quiero suicidarme»')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps direct attributed speech contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme”')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('preserves direct self-harm after postposed attribution', () => {
+    expect(classifyCrisisSignal('“Quiero matarme”, dijo mi amigo; yo me estoy haciendo daño')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
+  it('does not treat a speaker statement inside a third-party quote as endorsed', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo: «quiero matarme, pero yo me estoy haciendo daño»')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('recognizes a thought frame around an attributed-style quote as the speaker own', () => {
+    expect(classifyCrisisSignal('Estoy pensando: «quiero suicidarme»')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+})
+
+describe('classifySafetyClarificationReply', () => {
+  it.each([['sí', 'affirmative'], ['No', 'negative'], ['no lo sé', 'unclear'], ['cambiemos de tema', 'skip']] as const)(
+    'classifies %s as %s', (text, category) => expect(classifySafetyClarificationReply(text)).toBe(category),
+  )
+  it.each(['maybe', 'sí y no', 'sí, pero no estoy seguro'])('leaves unsupported or compound reply unclear: %s', text => {
+    expect(classifySafetyClarificationReply(text)).toBe('unclear')
+  })
+  it('recognizes a negated safety clarification as negative', () => {
+    expect(classifySafetyClarificationReply('No, no estoy pensando en eso')).toBe('negative')
+  })
+  it('classifies an explicit topic change with a new topic as skip', () => {
+    expect(classifySafetyClarificationReply('Cambiemos de tema; quiero hablar del trabajo')).toBe('skip')
+  })
+  it('classifies a natural new-topic request as skip but not a direct safety statement', () => {
+    expect(classifySafetyClarificationReply('Quiero hablar del trabajo')).toBe('skip')
+    expect(classifySafetyClarificationReply('Quiero suicidarme')).not.toBe('skip')
   })
 })

@@ -1,15 +1,17 @@
 import { convertToModelMessages, createUIMessageStreamResponse, stepCountIs, streamText, tool, type UIMessage, type UIMessageChunk } from 'ai'
 import { z } from 'zod'
+import { after } from 'next/server'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { requireOwnedSession } from '@/lib/server/sessions/authorization'
-import { llm } from '@/lib/shared/llm/models'
+import { resolveTaskPolicy } from '@/lib/shared/llm/task-policy'
+import { resolveTaskModel } from '@/lib/server/llm/model-resolver'
 import { getSessionTherapistPrompt } from '@/lib/server/llm/prompts'
 import { getOrResolveActiveSession, isSessionExpired } from '@/lib/server/sessions/service'
 import { isSessionInactive } from '@/lib/shared/chat/session-time'
 import { buildSessionTimeNotice } from '@/lib/server/chat/session-time-notice'
-import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
+import { classifyCrisisSignal, classifySafetyClarificationReply, type CrisisRiskType, type SafetyClarificationReply } from '@/lib/shared/chat/crisis-detector'
 import { getSessionSafetyState } from '@/lib/server/chat/safety-state'
-import { buildCrisisNotice, hasHighSignalTerm } from '@/lib/shared/chat/crisis-notice'
+import { buildCrisisNotice } from '@/lib/shared/chat/crisis-notice'
 import { createInstance, getActiveInstanceForSession } from '@/lib/server/questionnaires/service'
 import { listPatientCodes, type QuestionnaireCode } from '@/lib/shared/questionnaires/registry'
 import { buildPatientContext } from '@/lib/server/patient-context/builder'
@@ -22,19 +24,28 @@ import type { Json } from '@/lib/shared/supabase/types'
 import type { ProtocolPhase } from '@/lib/shared/protocol/render-phase'
 import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
 import { clinicalPilotEnabled } from '@/lib/server/llm/clinical-pilot'
-import { buildPilotSafetyNotice } from '@/lib/shared/chat/pilot-safety-notice'
 import { loadQuestionnaireFacts } from '@/lib/server/assessments/questionnaire-facts'
 import { renderPilotQuestionnaireFacts } from '@/lib/server/chat/pilot-questionnaire-context'
 import { modelHistoryParts } from '@/lib/server/chat/tool-feedback'
+import { progressiveProfileEnabled } from '@/lib/server/profile/config'
+import { loadProfileContext } from '@/lib/server/profile/context'
+import { enqueueProfileExtraction } from '@/lib/server/profile/dispatch'
 
 export const maxDuration = 60
-const MAX_OUTPUT_TOKENS = 2500
 
 function replay(chunks: UIMessageChunk[]) {
   return createUIMessageStreamResponse({ stream: new ReadableStream({ start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } }), headers: { 'Cache-Control': 'no-store' } })
 }
-function staticReply(id: string, text: string): { parts: UIMessage['parts']; chunks: UIMessageChunk[] } {
-  return { parts: [{ type: 'text', text }], chunks: [{ type: 'start', messageId: id }, { type: 'text-start', id: 'text' }, { type: 'text-delta', id: 'text', delta: text }, { type: 'text-end', id: 'text' }, { type: 'finish', finishReason: 'stop' }] }
+function staticReply(id: string, text: string, marker?: { version: '1'; riskType: Exclude<CrisisRiskType, null>; requestId: string }): { parts: UIMessage['parts']; chunks: UIMessageChunk[] } {
+  const parts: UIMessage['parts'] = [{ type: 'text', text }]
+  const chunks: UIMessageChunk[] = [{ type: 'start', messageId: id }, { type: 'text-start', id: 'text' }, { type: 'text-delta', id: 'text', delta: text }, { type: 'text-end', id: 'text' }]
+  if (marker) {
+    const data = { version: marker.version, riskType: marker.riskType, requestId: marker.requestId }
+    parts.push({ type: 'data-safety-prompt', data })
+    chunks.push({ type: 'data-safety-prompt', data })
+  }
+  chunks.push({ type: 'finish', finishReason: 'stop' })
+  return { parts, chunks }
 }
 
 export async function POST(req: Request) {
@@ -53,11 +64,43 @@ export async function POST(req: Request) {
   const { data: ready, error: readinessError } = await supabase.rpc('get_onboarding_ready')
   if (readinessError || ready !== true) return Response.json({ error: 'Completa los datos y la aceptación vigente', onboardingRequired: true }, { status: 403 })
   const pilot = clinicalPilotEnabled(process.env, user.id)
-  const crisis = detectCrisis(lastUserText)
-  const highSignalCrisis = crisis.detected && hasHighSignalTerm(crisis.matchedTerms)
+  const { data: existingTurn, error: existingTurnError } = await service.from('chat_turns').select('request_id,status,response_chunks,response_parts,safety_answer,safety_answer_risk_type,previous_request_id').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
+  if (existingTurnError) return Response.json({ error: 'No se pudo comprobar el turno. Conserva el texto y reintenta.', requestId }, { status: 503 })
+  const retryCandidate = existingTurn?.safety_answer && existingTurn?.safety_answer_risk_type
+    ? { category: existingTurn.safety_answer as SafetyClarificationReply, riskType: existingTurn.safety_answer_risk_type as Exclude<CrisisRiskType, null>, promptRequestId: existingTurn.previous_request_id as string | null }
+    : null
+  const classification = retryCandidate ? { disposition: 'none' as const, riskType: null } : classifyCrisisSignal(lastUserText)
+  const directSignal = !retryCandidate && classification.disposition === 'explicit_current'
+  const directRiskType = directSignal ? classification.riskType : null
+  let promptMarker: { requestId: string; riskType: Exclude<CrisisRiskType, null> } | null = null
+  if (!directSignal && !retryCandidate && existingTurn?.status !== 'completed') {
+    const { data: priorTurn, error: priorTurnError } = await service.from('chat_turns').select('request_id,status,response_parts').eq('session_id', sessionId).eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (priorTurnError) return Response.json({ error: 'No se pudo comprobar la pregunta de seguridad. Conserva el texto y reintenta.', requestId }, { status: 503 })
+    const parts = priorTurn?.status === 'completed' && Array.isArray(priorTurn.response_parts) ? priorTurn.response_parts as Array<{ type?: unknown; data?: unknown }> : []
+    const markers = parts.filter(part => part.type === 'data-safety-prompt')
+    if (markers.length) {
+      const data = markers[0].data as Record<string, unknown> | null
+      if (markers.length !== 1 || !data || data.version !== '1' || !['suicidal_ideation', 'self_harm', 'crisis_other'].includes(String(data.riskType)) || data.requestId !== priorTurn?.request_id) {
+        return Response.json({ error: 'La pregunta de seguridad anterior no se pudo validar. Conserva el texto y recarga.', requestId }, { status: 422 })
+      }
+      promptMarker = { requestId: priorTurn!.request_id, riskType: data.riskType as Exclude<CrisisRiskType, null> }
+    }
+    if (promptMarker && body.safetyPromptRequestId !== promptMarker.requestId) {
+      return Response.json({ error: 'La referencia a la pregunta anterior no coincide. Conserva el texto y vuelve a intentarlo.', requestId }, { status: 422 })
+    }
+    if (!promptMarker && body.safetyPromptRequestId) {
+      return Response.json({ error: 'La pregunta de seguridad ya no está pendiente. Conserva el texto y vuelve a intentarlo.', requestId }, { status: 422 })
+    }
+  }
+  const safetyAnswer = directSignal ? null : retryCandidate ?? (promptMarker ? {
+    category: classifySafetyClarificationReply(lastUserText),
+    riskType: promptMarker.riskType,
+    promptRequestId: promptMarker.requestId,
+  } : null)
+  const isSafetyTurn = directSignal || classification.disposition === 'ambiguous' || safetyAnswer !== null
   // Resolve only NEW ordinary idle turns. Existing IDs must retain replay and
   // recovery, and safety signals must be recorded before any temporal closure.
-  if (session.status === 'open' && !crisis.detected && !isSessionExpired(session) && isSessionInactive(session)) {
+  if (session.status === 'open' && !isSafetyTurn && !isSessionExpired(session) && isSessionInactive(session)) {
     const { data: prior, error: priorError } = await service.from('chat_turns').select('request_id').eq('session_id', sessionId).eq('user_id', user.id).eq('request_id', requestId).maybeSingle()
     if (priorError) return Response.json({ error: 'No se pudo comprobar el turno. Conserva el texto y reintenta.' }, { status: 503 })
     if (!prior) {
@@ -67,27 +110,43 @@ export async function POST(req: Request) {
       } catch { return Response.json({ error: 'No se pudo comprobar la sesión. Conserva el texto y reintenta.' }, { status: 503 }) }
     }
   }
-  const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', { p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText, p_crisis: crisis.detected, p_urgent: highSignalCrisis })
+  const { data: claim, error: claimError } = await service.rpc('begin_chat_turn', {
+    p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_text: lastUserText,
+    p_crisis: directSignal, p_direct_risk_type: directSignal ? directRiskType ?? undefined : undefined, p_urgent: directSignal,
+    p_safety_answer: safetyAnswer?.category ?? undefined,
+    p_safety_answer_risk_type: safetyAnswer?.riskType ?? undefined,
+    p_safety_answer_required: safetyAnswer !== null,
+    p_safety_answer_prompt_request_id: safetyAnswer?.promptRequestId ?? undefined,
+  })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
-  const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string }
+  const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string; safetyAnswer?: SafetyClarificationReply; safetyAnswerRiskType?: CrisisRiskType }
   if (turn.replay) return replay(turn.chunks ?? [])
+  if (!isSafetyTurn && progressiveProfileEnabled(process.env, user.id)) {
+    after(async () => {
+      try { await enqueueProfileExtraction(user.id, 1) } catch { /* Admission already persisted; the durable queue remains recoverable. */ }
+    })
+  }
   const token = turn.token
+  let finalWriteStarted = false
   let createdQuestionnaire: { code: QuestionnaireCode; reason: string; instanceId: string } | null = null
   let closureClarification: string | null = null
   let closeReason: string | null = null
-  const crisisResourcesText = `Lo que cuentas necesita apoyo inmediato. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. No esperes a completar un cuestionario para pedir ayuda. La señal queda registrada para revisión clínica.`
+  const crisisResourcesText = `Gracias por contármelo. Esta aplicación no puede evaluar tu situación. Puedes llamar a la ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}). Si estás en peligro inmediato, llama al ${SAFETY_RESOURCES.emergency.phone}. La señal se conserva como provisional para revisión profesional; no es un diagnóstico.`
   const timeClosureText = 'Se ha alcanzado el límite de tiempo y la sesión ha terminado. El cierre queda registrado; cualquier informe que se genere requiere revisión clínica.'
+  const unclearAnswerText = `No puedo determinar desde aquí si existe peligro actual. Puedes llamar a ${SAFETY_RESOURCES.suicide.name} (${SAFETY_RESOURCES.suicide.description}) o al ${SAFETY_RESOURCES.emergency.phone} si hay peligro inmediato. No insistiré con la pregunta; puedes cambiar de tema.`
+  const negativeAnswerText = 'Gracias por aclararlo. No repetiré la pregunta ahora. ¿Sobre qué te gustaría hablar?'
   const markClosed = (parts: UIMessage['parts'], chunks: UIMessageChunk[], reason: string) => {
     const part = { type: 'data-session-closed' as const, data: { closed: true, reason } }
     parts.push(part)
     chunks.splice(chunks.length - 1, 0, part)
   }
-  const finishStaticReply = async (closeReason: 'crisis_detected' | 'time_limit' | null) => {
+  const finishStaticReply = async (closeReason: 'time_limit' | null, textOverride?: string, marker?: { version: '1'; riskType: Exclude<CrisisRiskType, null>; requestId: string }) => {
     // Context/model failures can cross the deadline too. Revalidate at the
     // shared finalizer so fallback success cannot leave an expired turn open.
-    if (!closeReason && isSessionExpired(session)) closeReason = crisis.detected ? 'crisis_detected' : 'time_limit'
-    const text = crisis.detected ? crisisResourcesText : timeClosureText
-    const response = staticReply(`assistant-${requestId}`, text)
+    if (!closeReason && isSessionExpired(session)) closeReason = 'time_limit'
+    let text = textOverride ?? (closeReason === 'time_limit' ? timeClosureText : '')
+    if (closeReason === 'time_limit' && !text.startsWith(timeClosureText)) text = `${timeClosureText}\n\n${text || (directSignal ? crisisResourcesText : '')}`
+    const response = staticReply(`assistant-${requestId}`, text, marker)
     if (createdQuestionnaire) {
       // The RPC already committed this instance. Preserve that real tool
       // outcome even if the provider failed after executing it, so the client
@@ -101,6 +160,7 @@ export async function POST(req: Request) {
         { type: 'tool-output-available', toolCallId, output })
     }
     if (closeReason) markClosed(response.parts, response.chunks, closeReason)
+    finalWriteStarted = true
     const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: response.parts as Json, p_chunks: response.chunks as unknown as Json, p_close_reason: closeReason ?? undefined })
     if (error) throw error
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
@@ -118,7 +178,7 @@ export async function POST(req: Request) {
     }).filter(message => message.parts.length > 0)
     checkContextBudget(messages)
     const safetyState = await getSessionSafetyState(supabase, sessionId, session.opened_at, { strict: pilot })
-    const crisisNotice = pilot ? buildPilotSafetyNotice({ safetyState, crisis }) : buildCrisisNotice({ safetyState, crisis })
+    const crisisNotice = buildCrisisNotice({ safetyState, crisis: { detected: false, matchedTerms: [] } })
     const questionnaireNotice = pilot
       ? renderPilotQuestionnaireFacts(await loadQuestionnaireFacts(supabase, sessionId, user.id))
       : await buildQuestionnaireResultNotice(supabase, sessionId, session.opened_at, session.conversation_id)
@@ -131,32 +191,61 @@ export async function POST(req: Request) {
         const pieces = assemblePlan6ContextPieces(ctx)
         ;({ patientContextBlock, riskOpeningNotice, intakeBlock, protocolPhaseBlock } = pieces)
         void logContextInjection({ userId: user.id, sessionId, ...pieces.telemetry }).catch(() => console.error('[context-telemetry] failed'))
-      } catch (error) {
+      } catch {
         console.error('[patient-context] unavailable')
-        if (crisis.detected) throw error
       }
     }
     const timeNotice = buildSessionTimeNotice(session.opened_at)
-    const systemPrompt = buildChatSystemPrompt({ basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock })
-    checkContextBudget([systemPrompt, ...messages])
+    const profileContextBlock = await loadProfileContext(supabase, lastUserText, user.id)
+    const promptPieces = { basePrompt: getSessionTherapistPrompt(user.id), riskOpeningNotice, crisisNotice, questionnaireNotice, timeNotice, intakeBlock, patientContextBlock, protocolPhaseBlock }
+    let systemPrompt = buildChatSystemPrompt({ ...promptPieces, profileContextBlock })
+    try { checkContextBudget([systemPrompt, ...messages]) }
+    catch (error) {
+      if (!profileContextBlock) throw error
+      // Optional memory cannot break an otherwise admissible conversation.
+      systemPrompt = buildChatSystemPrompt(promptPieces)
+      checkContextBudget([systemPrompt, ...messages])
+    }
     return { messages, systemPrompt, timeNotice }
   }
   let awaitingGeneration = false
   let generationTimeExpired = false
   try {
-    // Accepted text/risk already committed. RPC interruptions/time limits never
-    // depend on context. Only the supervised pilot contextualizes ordinary
-    // lexical signals; the reference response remains deterministic.
-    if (isSessionExpired(session) || turn.urgent || (!pilot && highSignalCrisis)) return await finishStaticReply(isSessionExpired(session) ? crisis.detected ? 'crisis_detected' : 'time_limit' : null)
+    // Direct and unclear signals use deterministic responses for every cohort.
+    if (isSessionExpired(session)) {
+      const timeResponse = directSignal
+        ? crisisResourcesText
+        : safetyAnswer?.category === 'affirmative'
+          ? crisisResourcesText
+          : safetyAnswer?.category === 'unclear'
+            ? unclearAnswerText
+            : safetyAnswer?.category === 'negative'
+              ? negativeAnswerText
+              : ''
+      const timeText = timeResponse ? `${timeClosureText}\n\n${timeResponse}` : timeClosureText
+      return await finishStaticReply('time_limit', timeText)
+    }
+    if (directSignal) return await finishStaticReply(null, crisisResourcesText)
+    if (classification.disposition === 'ambiguous' && !safetyAnswer) {
+      const question = classification.riskType === 'self_harm'
+        ? '¿Estás pensando en hacerte daño intencionalmente ahora? Puedes responder «sí», «no», «no lo sé» o cambiar de tema.'
+        : '¿Estás pensando en suicidarte ahora? Puedes responder «sí», «no», «no lo sé» o cambiar de tema.'
+      return await finishStaticReply(null, question, { version: '1', riskType: classification.riskType ?? 'crisis_other', requestId })
+    }
+    if (safetyAnswer && safetyAnswer.category !== 'skip') {
+      const text = safetyAnswer.category === 'affirmative'
+        ? crisisResourcesText
+        : safetyAnswer.category === 'negative'
+          ? negativeAnswerText
+          : unclearAnswerText
+      return await finishStaticReply(null, text)
+    }
     let context: Awaited<ReturnType<typeof prepareContext>>
     try { context = await prepareContext() }
     catch (error) {
-      if (!crisis.detected) throw error
-      // Preserve the existing budget fallback closure criterion. A context
-      // outage alone does not introduce a new reason to close the session.
-      return await finishStaticReply(error instanceof Error && error.message === 'context_limit' ? 'crisis_detected' : null)
+      throw error
     }
-    if (isSessionExpired(session)) return await finishStaticReply(crisis.detected ? 'crisis_detected' : 'time_limit')
+    if (isSessionExpired(session)) return await finishStaticReply('time_limit')
     const { messages, systemPrompt, timeNotice } = context
     const patientCodes = listPatientCodes()
     let proposal: string | null = null
@@ -183,11 +272,12 @@ export async function POST(req: Request) {
       closeReason = reason
       return { closed: true, reason }
     }
+    const policy = resolveTaskPolicy('conversation')
     awaitingGeneration = true
     const result = streamText({
-      model: llm.conversational(), system: systemPrompt,
+      model: resolveTaskModel(policy), system: systemPrompt,
       messages: await convertToModelMessages(messages),
-      maxOutputTokens: MAX_OUTPUT_TOKENS, maxRetries: 0, abortSignal: AbortSignal.timeout(45_000),
+      maxOutputTokens: policy.maxOutputTokens, maxRetries: policy.maxRetries, abortSignal: AbortSignal.timeout(policy.timeoutMs),
       stopWhen: stepCountIs(pilot ? 2 : 1),
       prepareStep: ({ stepNumber, messages: stepMessages, steps }) => {
         if (isSessionExpired(session)) { generationTimeExpired = true; throw new Error('session_time_limit') }
@@ -197,7 +287,7 @@ export async function POST(req: Request) {
         modelStep = stepNumber
         checkContextBudget([systemPrompt, ...stepMessages])
         if (stepNumber > 0) {
-          let remaining = MAX_OUTPUT_TOKENS
+          let remaining = policy.maxOutputTokens
           for (const step of steps) {
             const used = step.usage.outputTokens
             if (typeof used !== 'number' || !Number.isSafeInteger(used) || used < 0) throw new Error('response_limit')
@@ -229,7 +319,6 @@ export async function POST(req: Request) {
             : 'La sesión sigue abierta. Si quieres terminar, podemos volver a proponer el cierre y confirmarlo en el siguiente turno.'
           return { closed: false, reason: 'confirmation_required', proposalRenewed }
         }) }),
-        close_session_crisis: tool({ description: 'Cierra por señal de crisis registrada, sin pedir aceptación. Da primero los recursos de seguridad.', inputSchema: z.object({}), execute: async () => runToolAction(async () => close('crisis_detected')) }),
         propose_questionnaire: tool({ description: 'Propone PHQ9 o GAD7 para screening y BDI2/BAI para profundización tras primario moderado. C-SSRS (CSSRS) tiene prioridad ante señal suicida/autolesión. Los cuestionarios scored no bloquean otros; como máximo un cuestionario pendiente. Anuncia por texto y espera consentimiento, excepto la atención urgente a seguridad.', inputSchema: z.object({ code: z.enum(patientCodes as [QuestionnaireCode,...QuestionnaireCode[]]), reason: z.string().min(10).max(300) }), execute: async ({ code, reason }) => runToolAction(async () => {
           if (isSessionExpired(session)) return { skipped: true, reason: 'time_limit' }
           if (code !== 'CSSRS' && await getActiveInstanceForSession(supabase, sessionId)) return { skipped: true, reason: 'already_active' }
@@ -255,7 +344,7 @@ export async function POST(req: Request) {
     }
     if (!responseMessage?.parts.length || (toolContinuationRequired && !validToolContinuation)) throw new Error('empty_response')
     const expiredOnCompletion = isSessionExpired(session)
-    if (!closeReason && expiredOnCompletion) { closeReason = crisis.detected ? 'crisis_detected' : 'time_limit'; proposal = null }
+    if (!closeReason && expiredOnCompletion) { closeReason = 'time_limit'; proposal = null }
     if (closureClarification && !closeReason) {
       const text = `\n\n${closureClarification}`
       const id = `server-close-clarification-${requestId}`
@@ -264,32 +353,30 @@ export async function POST(req: Request) {
     }
     if (closeReason) {
       if (closeReason === 'time_limit' || expiredOnCompletion) {
-        const text = `\n\n${timeClosureText}${closeReason === 'crisis_detected' ? `\n\n${crisisResourcesText}` : ''}`, id = `server-time-close-${requestId}`
+        const text = `\n\n${timeClosureText}`, id = `server-time-close-${requestId}`
         responseMessage.parts.push({ type: 'text', text })
         chunks.splice(chunks.length - 1, 0, { type: 'text-start', id }, { type: 'text-delta', id, delta: text }, { type: 'text-end', id })
       }
       markClosed(responseMessage.parts, chunks, closeReason)
     }
     awaitingGeneration = false
+    finalWriteStarted = true
     const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: responseMessage.parts as Json, p_chunks: chunks as unknown as Json, p_proposal: proposal ?? undefined, p_close_reason: closeReason ?? undefined })
     if (error) throw error
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
     return replay(chunks)
   } catch (error) {
-    if (awaitingGeneration && generationTimeExpired) {
+    if (!finalWriteStarted && ((awaitingGeneration && generationTimeExpired) || isSessionExpired(session))) {
       awaitingGeneration = false
-      try { return await finishStaticReply(closeReason === 'crisis_detected' || crisis.detected ? 'crisis_detected' : 'time_limit') }
+      try { return await finishStaticReply('time_limit', directSignal ? `${timeClosureText}\n\n${crisisResourcesText}` : timeClosureText) }
       catch { /* Ambiguous persistence follows the same fenced recovery path. */ }
     }
     // Only a model-generation failure may use this fallback. A failed/ambiguous
     // final write must keep the existing retry contract, never replace a
     // possibly committed contextual response with different text.
-    if (pilot && crisis.detected && awaitingGeneration) {
-      try { return await finishStaticReply(null) }
-      catch { /* Record failed persistence using the normal fenced path below. */ }
-    }
     const { error: persistenceError } = await service.rpc('fail_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_error: error instanceof Error && error.message === 'context_limit' ? 'context_limit' : 'turn_failed' })
-    console.error('[chat] turn failed', { requestId, failureRecorded: !persistenceError })
+    // A successful void RPC does not prove that a matching row was updated.
+    console.error('[chat] turn failed', { requestId, failureRpcSucceeded: !persistenceError })
     return Response.json({ error: 'No se pudo completar el turno. Reintenta el mismo mensaje o recarga.', requestId }, { status: 503 })
   }
 }
@@ -344,8 +431,8 @@ async function buildQuestionnaireResultNotice(
   const acute = flags.some((f) => f.reason === 'acute_risk')
 
   if (def.code === 'CSSRS' && acute) {
-    return `[RESULTADO DE CUESTIONARIO — C-SSRS — RIESGO AGUDO]
-El cribado C-SSRS registra una señal de riesgo agudo. Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session_crisis si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal. NUNCA confirmes un cierre por crisis: es single-step.
+    return `[RESULTADO DE CUESTIONARIO — C-SSRS — SEÑAL REGISTRADA]
+El resultado estructurado contiene una señal que requiere interpretación profesional. No diagnostiques, no afirmes una valoración automática de urgencia y no cierres la sesión por este resultado. Reconoce que se conserva para revisión profesional según el flujo de la aplicación. Ofrece recursos de apoyo con neutralidad si la persona los solicita o comunica peligro inmediato, y continúa respetando su decisión.
 
 ---
 

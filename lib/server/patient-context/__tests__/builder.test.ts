@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildPatientContext } from '@/lib/server/patient-context/builder'
+import { assemblePlan6ContextPieces } from '@/lib/server/chat/assemble-plan6-prompt'
 
 const NOW = new Date('2026-04-22T12:00:00Z')
 
@@ -32,10 +33,16 @@ type TableResponse = { data: unknown; error: unknown; count?: number | null }
 type TableFactory = (table: string) => TableResponse
 
 function makeChain(response: TableResponse) {
+  // Older fixtures observed/reviewed the same day; include the actual joined shape.
+  if (response.data && typeof response.data === 'object' && 'reviewed_at' in response.data) {
+    const row = response.data as { reviewed_at: string; observed_session?: unknown }
+    response = { ...response, data: { ...row, observed_session: row.observed_session ?? { status: 'closed', closed_at: row.reviewed_at, user_id: 'user-1' } } }
+  }
   const chain: Record<string, unknown> = {}
   const terminal = () => Promise.resolve(response)
   const self = () => chain
 
+  chain.not = vi.fn(self)
   chain.select = vi.fn(self)
   chain.in = vi.fn(self)
   chain.eq = vi.fn(self)
@@ -72,7 +79,7 @@ describe('buildPatientContext', () => {
     const row = {
       status,
       summary_json: { ...baseSummary, chief_complaint: 'Interpretación que el clínico rechazó' },
-      clinical_sessions: { closed_at: daysAgo(1), status: 'closed' },
+      observed_session: { closed_at: daysAgo(1), status: 'closed' },
     }
     const supabase = { from: vi.fn((table: string) => {
       if (table !== 'assessments') return makeChain(table === 'clinical_sessions'
@@ -126,7 +133,7 @@ describe('buildPatientContext', () => {
     const sessionClosedAt = daysAgo(7)
     const draftAssessmentRow = {
       summary_json: baseSummary,
-      clinical_sessions: { closed_at: sessionClosedAt, status: 'closed' },
+      observed_session: { closed_at: sessionClosedAt, status: 'closed' },
     }
 
     // assessments is queried twice: validated (Q1) returns null, draft (Q2) returns row
@@ -204,7 +211,7 @@ describe('buildPatientContext', () => {
     const validatedRow = { id: 'a-v', reviewed_at: reviewedAt, summary_json: baseSummary }
     const draftRow = {
       summary_json: baseSummary,
-      clinical_sessions: { closed_at: daysAgo(1), status: 'closed' },
+      observed_session: { closed_at: daysAgo(1), status: 'closed' },
     }
 
     let assessmentsCallCount = 0
@@ -292,6 +299,24 @@ describe('buildPatientContext', () => {
     expect(ctx.riskState).toBe('acute')
   })
 
+  it('includes contextualized watch instructions for a synthetic current high event in a first session', async () => {
+    const riskRow = { risk_type: 'suicidal_ideation', severity: 'high', created_at: NOW.toISOString() }
+    let riskQuery = 0
+    const supabase = makeSupabase((table) => {
+      if (table === 'risk_events') return riskQuery++ === 0 ? ok([riskRow]) : noRows()
+      if (table === 'clinical_sessions') return { data: null, error: null, count: 0 }
+      return noRows()
+    })
+    // Read responses are synthetic. This exercises the real builder and prompt
+    // assembly, not the detector, admission RPC, actual SQL or a real model.
+    const ctx = await buildPatientContext({ supabase: supabase as never, userId: 'user-1', sessionId: 'session-test', protocolPhase: 1, now: NOW })
+    const { riskOpeningNotice } = assemblePlan6ContextPieces(ctx, NOW)
+    expect(ctx.previousSession).toBeNull()
+    expect(ctx.riskState).toBe('watch')
+    expect(riskOpeningNotice).toContain('ante antecedentes o preocupaciones actuales pertinentes')
+    expect(riskOpeningNotice).not.toMatch(/sesi[oó]n\s*\/\s*informe anterior|señales leves/i)
+  })
+
   // 8. Crisis-closure previous session + tier-A suicidality=none after it → riskState=none
   it('case 8: crisis-closure session + tier-A suicidality=none (reviewed after crisis) → riskState=none', async () => {
     const crisisClosedAt = daysAgo(10)
@@ -332,7 +357,7 @@ describe('buildPatientContext', () => {
     const closedAt = daysAgo(3)
     const draftRow = {
       summary_json: baseSummary,
-      clinical_sessions: { closed_at: closedAt, status: 'closed' },
+      observed_session: { closed_at: closedAt, status: 'closed' },
     }
 
     let assessmentsCallCount = 0

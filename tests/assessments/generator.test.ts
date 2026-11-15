@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { retryableGateway } from '@/tests/helpers/retryable-gateway'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { generateObjectMock } = vi.hoisted(() => ({
   generateObjectMock: vi.fn(),
@@ -8,9 +9,6 @@ vi.mock('ai', () => ({
   generateObject: generateObjectMock,
 }))
 
-vi.mock('@/lib/shared/llm/models', () => ({
-  llm: { structured: () => 'openai/gpt-5.4' },
-}))
 
 vi.mock('@/lib/server/llm/prompts/loader', () => ({
   loadPromptFromMarkdown: () => 'SYSTEM PROMPT',
@@ -120,11 +118,45 @@ const summaryResult = {
   patient_facing_summary: 'Gracias por compartir esto hoy.',
 }
 
+afterEach(() => vi.unstubAllEnvs())
 beforeEach(() => {
+  vi.stubEnv('LLM_STRUCTURED_PROVIDER', 'openai')
+  vi.stubEnv('LLM_STRUCTURED_MODEL', 'legacy-report')
+  vi.stubEnv('LLM_CLOSURE_REPORT_PROVIDER', 'synthetic')
+  vi.stubEnv('LLM_CLOSURE_REPORT_MODEL', 'report-only')
   generateObjectMock.mockReset()
 })
 
 describe('generateAssessment', () => {
+  it('keeps sensitive SDK error text and causes outside the report boundary', async () => {
+    const marker = 'SENSITIVE_SYNTHETIC_SDK_PAYLOAD'
+    generateObjectMock.mockRejectedValue(new Error(marker, { cause: new Error(marker) }))
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+      messages: { rows: makeMessages(4) }, questionnaire_instances: { rows: [] }, risk_events: { rows: [] },
+    })
+    const error = await generateAssessment(supabase as unknown as Parameters<typeof generateAssessment>[0], 'session-1').catch(error => error)
+    expect(error.message).toBe('assessment_generation_failed')
+    expect(error.cause).toBeUndefined()
+  })
+  it('makes one real SDK transport attempt on retryable 503 with the report policy', async () => {
+    const { gateway, requests } = retryableGateway()
+    const sdk = await vi.importActual<typeof import('ai')>('ai')
+    generateObjectMock.mockImplementationOnce(options => sdk.generateObject({ ...options, model: gateway(options.model) }))
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    const supabase = makeSupabase({
+      clinical_sessions: { rows: makeSession() },
+      messages: { rows: makeMessages(4) },
+      questionnaire_instances: { rows: [] }, risk_events: { rows: [] },
+      assessments: { rows: null },
+    })
+    await expect(generateAssessment(supabase as unknown as Parameters<typeof generateAssessment>[0], 'session-1')).rejects.toThrow()
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe('https://synthetic.invalid/v1/ai/language-model')
+    expect(JSON.parse(requests[0].body)).toMatchObject({ maxOutputTokens: 6000 })
+    expect(timeout).toHaveBeenCalledWith(45_000)
+    timeout.mockRestore()
+  }, 15_000)
   it('skips with session_too_short when <3 user messages', async () => {
     const supabase = makeSupabase({
       clinical_sessions: { rows: makeSession() },
@@ -167,6 +199,7 @@ describe('generateAssessment', () => {
     )
 
     expect(generateObjectMock).toHaveBeenCalledOnce()
+    expect(generateObjectMock.mock.calls[0][0]).toMatchObject({ model: 'synthetic/report-only', maxOutputTokens: 6000, maxRetries: 0, abortSignal: expect.any(AbortSignal) })
     expect(result.id).toBe('assessment-1')
     expect(result.status).toBe('draft_ai')
     expect(result.assessment_type).toBe('closure')

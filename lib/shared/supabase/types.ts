@@ -99,14 +99,14 @@ isOneToOne: false
                   ]
                 },"chat_turns": {
                   Row: {
-                    "attempts": number,"created_at": string,"error_code": string | null,"lease_until": string,"previous_request_id": string | null,"request_id": string,"response_chunks": Json | null,"response_parts": Json | null,"session_id": string,"status": string,"text": string,"token": string,"urgent_response": boolean,"user_id": string,"user_message_id": string
+                    "attempts": number,"created_at": string,"error_code": string | null,"lease_until": string,"previous_request_id": string | null,"request_id": string,"response_chunks": Json | null,"response_parts": Json | null,"safety_answer": string | null,"safety_answer_risk_type": Database["public"]['Enums']["risk_type"] | null,"session_id": string,"status": string,"text": string,"token": string,"urgent_response": boolean,"user_id": string,"user_message_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attempts"?: number,"created_at"?: string,"error_code"?: string | null,"lease_until": string,"previous_request_id"?: string | null,"request_id": string,"response_chunks"?: Json | null,"response_parts"?: Json | null,"session_id": string,"status": string,"text": string,"token"?: string,"urgent_response"?: boolean,"user_id": string,"user_message_id": string
+                    "attempts"?: number,"created_at"?: string,"error_code"?: string | null,"lease_until": string,"previous_request_id"?: string | null,"request_id": string,"response_chunks"?: Json | null,"response_parts"?: Json | null,"safety_answer"?: string | null,"safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"] | null,"session_id": string,"status": string,"text": string,"token"?: string,"urgent_response"?: boolean,"user_id": string,"user_message_id": string
                   }
                   Update: {
-                    "attempts"?: number,"created_at"?: string,"error_code"?: string | null,"lease_until"?: string,"previous_request_id"?: string | null,"request_id"?: string,"response_chunks"?: Json | null,"response_parts"?: Json | null,"session_id"?: string,"status"?: string,"text"?: string,"token"?: string,"urgent_response"?: boolean,"user_id"?: string,"user_message_id"?: string
+                    "attempts"?: number,"created_at"?: string,"error_code"?: string | null,"lease_until"?: string,"previous_request_id"?: string | null,"request_id"?: string,"response_chunks"?: Json | null,"response_parts"?: Json | null,"safety_answer"?: string | null,"safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"] | null,"session_id"?: string,"status"?: string,"text"?: string,"token"?: string,"urgent_response"?: boolean,"user_id"?: string,"user_message_id"?: string
                   }
                   Relationships: [
                     {
@@ -348,6 +348,78 @@ isOneToOne: false
       referencedRelation: "assessments"
       referencedColumns: ["id","user_id"]
     }
+                  ]
+                },"profile_extraction_jobs": {
+                  Row: {
+                    "attempts": number,"available_at": string,"consent_epoch": number,"conversation_id": string,"created_at": string,"error_code": string | null,"extractor_version": string,"id": string,"lease_until": string | null,"model_id": string | null,"run_id": string | null,"session_id": string,"source_created_at": string,"source_message_id": string,"status": string,"token": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"available_at"?: string,"consent_epoch": number,"conversation_id": string,"created_at"?: string,"error_code"?: string | null,"extractor_version"?: string,"id"?: string,"lease_until"?: string | null,"model_id"?: string | null,"run_id"?: string | null,"session_id": string,"source_created_at": string,"source_message_id": string,"status"?: string,"token"?: string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "attempts"?: number,"available_at"?: string,"consent_epoch"?: number,"conversation_id"?: string,"created_at"?: string,"error_code"?: string | null,"extractor_version"?: string,"id"?: string,"lease_until"?: string | null,"model_id"?: string | null,"run_id"?: string | null,"session_id"?: string,"source_created_at"?: string,"source_message_id"?: string,"status"?: string,"token"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profile_job_conversation_owner"
+      columns: ["conversation_id","user_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "profile_job_session_owner"
+      columns: ["session_id","user_id"]
+isOneToOne: false
+      referencedRelation: "clinical_sessions"
+      referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "profile_job_source"
+      columns: ["source_message_id","session_id","conversation_id","source_created_at"]
+isOneToOne: false
+      referencedRelation: "messages"
+      referencedColumns: ["id","session_id","conversation_id","created_at"]
+    }
+                  ]
+                },"profile_observations": {
+                  Row: {
+                    "category": string,"created_at": string,"id": string,"job_id": string,"quote": string,"source_created_at": string,"source_message_id": string,"status": string,"supersedes_id": string | null,"time_scope": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category": string,"created_at"?: string,"id"?: string,"job_id": string,"quote": string,"source_created_at": string,"source_message_id": string,"status"?: string,"supersedes_id"?: string | null,"time_scope": string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "category"?: string,"created_at"?: string,"id"?: string,"job_id"?: string,"quote"?: string,"source_created_at"?: string,"source_message_id"?: string,"status"?: string,"supersedes_id"?: string | null,"time_scope"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profile_observation_source"
+      columns: ["job_id","user_id","source_message_id","source_created_at"]
+isOneToOne: false
+      referencedRelation: "profile_extraction_jobs"
+      referencedColumns: ["id","user_id","source_message_id","source_created_at"]
+    },{
+      foreignKeyName: "profile_observation_target"
+      columns: ["supersedes_id","user_id"]
+isOneToOne: false
+      referencedRelation: "profile_observations"
+      referencedColumns: ["id","user_id"]
+    }
+                  ]
+                },"profile_settings": {
+                  Row: {
+                    "consent_epoch": number,"enabled": boolean,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "consent_epoch"?: number,"enabled"?: boolean,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "consent_epoch"?: number,"enabled"?: boolean,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
                   ]
                 },"questionnaire_answers": {
                   Row: {
@@ -631,10 +703,10 @@ isOneToOne: false
 { Args: { "doc": Json }; Returns: boolean
                            },
 "begin_chat_turn":
-{ Args: { "p_crisis"?: boolean,"p_request_id": string,"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
+{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
                            },
 "begin_chat_turn_after_onboarding":
-{ Args: { "p_crisis"?: boolean,"p_request_id": string,"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
+{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
                            },
 "claim_assessment_jobs":
 { Args: { "p_limit"?: number,"p_session_id"?: string }; Returns: {
@@ -655,11 +727,41 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"claim_profile_jobs":
+{ Args: { "p_limit"?: number,"p_user_id"?: string }; Returns: {
+              "attempts": number,
+"available_at": string,
+"consent_epoch": number,
+"conversation_id": string,
+"created_at": string,
+"error_code": string | null,
+"extractor_version": string,
+"id": string,
+"lease_until": string | null,
+"model_id": string | null,
+"run_id": string | null,
+"session_id": string,
+"source_created_at": string,
+"source_message_id": string,
+"status": string,
+"token": string,
+"updated_at": string,
+"user_id": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "profile_extraction_jobs"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "close_chat_turn":
 { Args: { "p_reason": string,"p_request_id": string,"p_session_id": string,"p_token": string }; Returns: boolean
                            },
 "close_session_atomic":
 { Args: { "p_reason": string,"p_session_id": string,"p_user_id": string }; Returns: undefined
+                           },
+"close_session_from_chat_view":
+{ Args: { "p_confirm_attempt"?: number,"p_confirm_request_id"?: string,"p_reason": string,"p_session_id": string }; Returns: Json
                            },
 "close_stale_sessions":
 { Args: { "threshold_minutes"?: number }; Returns: number
@@ -745,6 +847,9 @@ isOneToOne: false
 "finish_chat_turn":
 { Args: { "p_chunks": Json,"p_close_reason"?: string,"p_parts": Json,"p_proposal"?: string,"p_request_id": string,"p_session_id": string,"p_token": string }; Returns: undefined
                            },
+"finish_profile_job":
+{ Args: { "p_job_id": string,"p_model_id": string,"p_observations": Json,"p_token": string }; Returns: undefined
+                           },
 "gdpr_erase_user":
 { Args: { "target_user_id": string }; Returns: undefined
                            },
@@ -760,11 +865,47 @@ isOneToOne: false
 "get_patient_session_reports":
 { Args: { "p_session_ids": (string)[] }; Returns: Json
                            },
+"get_profile_memory":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"get_profile_memory_page":
+{ Args: { "p_before_created_at"?: string,"p_before_id"?: string }; Returns: Json
+                           },
 "is_clinician":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"lock_profile_job":
+{ Args: { "p_job_id": string,"p_token": string }; Returns: {
+              "attempts": number,
+"available_at": string,
+"consent_epoch": number,
+"conversation_id": string,
+"created_at": string,
+"error_code": string | null,
+"extractor_version": string,
+"id": string,
+"lease_until": string | null,
+"model_id": string | null,
+"run_id": string | null,
+"session_id": string,
+"source_created_at": string,
+"source_message_id": string,
+"status": string,
+"token": string,
+"updated_at": string,
+"user_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "profile_extraction_jobs"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "patient_onboarding_ready":
 { Args: { "p_user_id": string }; Returns: boolean
+                           },
+"profile_message_text":
+{ Args: { "p_parts": Json }; Returns: string
                            },
 "recover_assessment_jobs":
 { Args: { "p_limit"?: number }; Returns: number
@@ -772,8 +913,20 @@ isOneToOne: false
 "regenerate_assessment_atomic":
 { Args: { "p_assessment_id": string,"p_expected_status": string,"p_restore"?: boolean }; Returns: boolean
                            },
+"resolve_expired_chat_turn":
+{ Args: { "p_expected_attempt": number,"p_request_id": string,"p_session_id": string }; Returns: string
+                           },
 "review_assessment_atomic":
 { Args: { "p_action": string,"p_assessment_id": string,"p_inherited_updates"?: Json,"p_notes"?: string,"p_reason"?: string,"p_session_id": string,"p_summary"?: Json }; Returns: string
+                           },
+"review_profile_observation":
+{ Args: { "p_action": string,"p_expected_updated_at": string,"p_observation_id": string }; Returns: undefined
+                           },
+"set_profile_enabled":
+{ Args: { "p_enabled": boolean }; Returns: undefined
+                           },
+"start_profile_job":
+{ Args: { "p_job_id": string,"p_token": string }; Returns: boolean
                            },
 "start_questionnaire_atomic":
 { Args: { "p_instance_id": string,"p_user_id": string }; Returns: undefined
@@ -786,6 +939,9 @@ isOneToOne: false
                            },
 "update_assessment_job":
 { Args: { "p_action": string,"p_run_id"?: string,"p_session_id": string,"p_token": string }; Returns: boolean
+                           },
+"update_profile_job":
+{ Args: { "p_action": string,"p_job_id": string,"p_run_id"?: string,"p_token": string }; Returns: undefined
                            }
           }
           Enums: {

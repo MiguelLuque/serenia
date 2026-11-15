@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import type { SafetyState } from '@/lib/shared/chat/safety-state'
 import type { LanguageModel } from 'ai'
 export const SESSION_ID = '11111111-1111-4111-8111-111111111111'
-export async function chatHarness(configuration: { model?: LanguageModel } = {}) {
+export async function chatHarness(configuration: { model?: LanguageModel; directOpenAI?: boolean } = {}) {
   vi.resetModules()
   const state = {
     session: { id: SESSION_ID, user_id: 'user-1', conversation_id: 'conv-1', status: 'open', opened_at: new Date().toISOString(), last_activity_at: new Date().toISOString(), protocol_phase: 1 },
@@ -16,11 +16,12 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     safetyOptions: [] as Array<{ strict?: boolean } | undefined>,
     captured: [] as any[], writes: [] as any[],
     activeQuestionnaire: false, questionnaireCreations: [] as any[],
-    persistFailures: 0, generationFailure: false, urgentReply: false, criticalQuestionnaireEvidence: false,
+    persistFailures: 0, persistAfterCommitFailures: 0, generationFailure: false, urgentReply: false, criticalQuestionnaireEvidence: false, markerReadFailure: false,
     prompt: 'Active prompt', promptFailure: false, historyFailure: false, safetyFailure: false, omitAdmittedMessage: false,
     hook: async (_options: any) => { void _options },
     contextHook: async () => {},
     questionnaireHook: async () => {},
+    profileAfter: [] as Array<() => Promise<void>>,
   }
   const chain = (table: string) => {
     const q: any = {}
@@ -29,31 +30,36 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     for (const method of ['select','eq','gt','gte','in','order','limit','single','maybeSingle']) q[method] = vi.fn(() => q)
     q.limit = vi.fn((limit: number) => { rowLimit = limit; return q })
     q.eq = vi.fn((key: string, value: string) => { if (key === 'request_id') requestId = value; return q })
-    q.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'clinical_sessions' ? state.session : table === 'chat_turns' ? state.turns.get(requestId ?? '') ?? null : table === 'conversations' ? { id: 'conv-1', user_id: state.conversationOwner } : table === 'session_close_proposals' ? state.proposal : table === 'messages' ? state.rows.filter(row => !state.omitAdmittedMessage || !row.id.startsWith('user-turn')).slice(0, rowLimit) : null, error: table === 'messages' && state.historyFailure ? new Error('history unavailable') : null, count: 0 }).then(resolve, reject)
+    q.then = (resolve: any, reject: any) => Promise.resolve({ data: table === 'clinical_sessions' ? state.session : table === 'chat_turns' ? requestId ? state.turns.get(requestId) ?? null : [...state.turns.values()].filter(turn => turn.status === 'completed').slice(-rowLimit)[0] ?? null : table === 'conversations' ? { id: 'conv-1', user_id: state.conversationOwner } : table === 'session_close_proposals' ? state.proposal : table === 'messages' ? state.rows.filter(row => !state.omitAdmittedMessage || !row.id.startsWith('user-turn')).slice(0, rowLimit) : null, error: table === 'messages' && state.historyFailure || table === 'chat_turns' && state.markerReadFailure ? new Error('history unavailable') : null, count: 0 }).then(resolve, reject)
     return q
   }
   const service = { from: vi.fn(chain), rpc: vi.fn(async (name: string, args: any) => {
     state.writes.push({ name, args })
+    if (name === 'close_session_atomic') { state.session.status = 'closed'; return { data: null, error: null } }
     if (name === 'begin_chat_turn') {
       const prior = state.turns.get(args.p_request_id)
       if (prior?.text !== undefined && prior.text !== args.p_text) return { error: { code: '23514' }, data: null }
       if (prior?.status === 'completed') return { data: { replay: true, chunks: prior.chunks }, error: null }
       if (prior?.status === 'generating' || [...state.turns.values()].some(t => t.status !== 'completed' && t !== prior)) return { error: { code: '55P03' }, data: null }
       if (!prior) state.rows.push({ id: `user-${args.p_request_id}`, role: 'user', parts: [{ type: 'text', text: args.p_text }] })
-      state.turns.set(args.p_request_id, { text: args.p_text, status: 'generating', previousRequest: state.previousRequest, lexicalEvent: args.p_crisis })
+      state.turns.set(args.p_request_id, { request_id: args.p_request_id, text: args.p_text, status: 'generating', previous_request_id: args.p_safety_answer_prompt_request_id ?? state.previousRequest, previousRequest: args.p_safety_answer_prompt_request_id ?? state.previousRequest, safety_answer: args.p_safety_answer ?? null, safety_answer_risk_type: args.p_safety_answer_risk_type ?? null, safetyAnswer: args.p_safety_answer ?? null, safetyAnswerRiskType: args.p_safety_answer_risk_type ?? null, lexicalEvent: args.p_crisis })
       state.session.last_activity_at = new Date().toISOString()
       return { data: { replay: false, token: '11111111-1111-4111-8111-111111111111', urgent: state.urgentReply, userMessageId: `user-${args.p_request_id}` }, error: null }
     }
     if (name === 'finish_chat_turn') {
       if (state.persistFailures-- > 0) return { error: { code: 'XX000' }, data: null }
       const turn = state.turns.get(args.p_request_id)
-      turn.status = 'completed'; turn.chunks = args.p_chunks
+      turn.status = 'completed'; turn.chunks = args.p_chunks; turn.response_parts = args.p_parts
       state.rows.push({ id: `assistant-${args.p_request_id}`, role: 'assistant', parts: args.p_parts })
       state.proposal = args.p_proposal ? { requestId: args.p_request_id, reason: args.p_proposal } : null
       state.previousRequest = args.p_request_id
       if (args.p_close_reason) state.session.status = 'closed'
+      if (state.persistAfterCommitFailures-- > 0) return { error: { code: 'XX000' }, data: null }
     }
-    if (name === 'fail_chat_turn') state.turns.get(args.p_request_id).status = 'failed'
+    if (name === 'fail_chat_turn') {
+      const turn = state.turns.get(args.p_request_id)
+      if (turn.status === 'generating') turn.status = 'failed'
+    }
     if (name === 'close_chat_turn') {
       const turn = state.turns.get(args.p_request_id)
       const crisisAllowed = turn.lexicalEvent || state.criticalQuestionnaireEvidence
@@ -61,19 +67,30 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
     }
     return { data: null, error: null }
   }) }
-  const authClient = { rpc: vi.fn(async (name: string) => { if (name === 'close_session_atomic') { state.session.status = 'closed'; return { data: null, error: null } }; return { data: state.onboardingReady, error: null } }), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
+  const authClient = { rpc: vi.fn(async (name: string): Promise<{ data: unknown; error: unknown }> => {
+    if (name === 'get_onboarding_ready') return { data: state.onboardingReady, error: null }
+    if (name === 'get_chat_turn_recovery') return { data: null, error: null }
+    throw new Error(`Unexpected authenticated RPC in chat harness: ${name}`)
+  }), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
   vi.doMock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => authClient, createServiceRoleClient: () => service }))
   vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
-  vi.doMock('@/lib/shared/llm/models', () => ({ llm: { conversational: () => configuration.model ?? 'synthetic-model' } }))
+  vi.doMock('@/lib/shared/llm/task-policy', async importOriginal => {
+    const actual = await importOriginal<typeof import('@/lib/shared/llm/task-policy')>()
+    return { ...actual, resolveTaskPolicy: () => actual.resolveTaskPolicy('conversation', configuration.directOpenAI ? { LLM_CONVERSATIONAL_PROVIDER: 'openai', LLM_CONVERSATIONAL_MODEL: 'gpt-6-luna' } : { LLM_CONVERSATIONAL_PROVIDER: 'synthetic', LLM_CONVERSATIONAL_MODEL: 'conversation' }) }
+  })
   vi.doMock('@/lib/server/chat/safety-state', () => ({ getSessionSafetyState: async (_client: any, _session: string, _openedAt: string, options?: { strict?: boolean }) => { state.safetyOptions.push(options); await state.contextHook(); if (state.safetyFailure) throw new Error('safety unavailable'); return state.safety } }))
   vi.doMock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: vi.fn(async () => ({ runId: 'synthetic-run' })) }))
+  const enqueueProfileExtraction = vi.fn<(userId?: string, limit?: number) => Promise<{ enqueued: number; failed: number }>>().mockResolvedValue({ enqueued: 0, failed: 0 })
+  vi.doMock('@/lib/server/profile/dispatch', () => ({ enqueueProfileExtraction }))
+  vi.doMock('next/server', async importOriginal => ({ ...await importOriginal<typeof import('next/server')>(), after: (callback: () => Promise<void>) => { state.profileAfter.push(callback) } }))
   vi.doMock('@/lib/server/assessments/questionnaire-facts', () => ({ loadQuestionnaireFacts: vi.fn(async () => []) }))
   vi.doMock('@/lib/server/questionnaires/service', () => ({ createInstance: vi.fn(async (_client, input) => { state.questionnaireCreations.push(input); return { id: 'quiz' } }), getActiveInstanceForSession: async () => { await state.questionnaireHook(); return state.activeQuestionnaire ? { instance: { id: 'pending-quiz' } } : null } }))
   vi.doMock('ai', async importOriginal => {
     const actual = await importOriginal<typeof import('ai')>()
     return { ...actual, streamText: (options: any) => {
       state.captured.push(options)
-      if (configuration.model) return actual.streamText(options)
+      if (configuration.model) return actual.streamText({ ...options, model: configuration.model })
+      if (configuration.directOpenAI) return actual.streamText(options)
       return { toUIMessageStream: ({ onFinish }: any) => new ReadableStream({ async start(controller) {
         await state.hook(options)
         if (state.generationFailure) { controller.enqueue({ type: 'error', errorText: 'synthetic failure' }); controller.close(); return }
@@ -87,5 +104,5 @@ export async function chatHarness(configuration: { model?: LanguageModel } = {})
   })
   const { POST } = await import('@/app/api/chat/route')
   const post = (text = 'Hola', id = 'turn-1', extra: Record<string, unknown> = {}) => POST(new Request('http://localhost/api/chat', { method: 'POST', body: JSON.stringify({ sessionId: SESSION_ID, requestId: id, messages: [{ id, role: 'user', parts: [{ type: 'text', text }] }], ...extra }) }))
-  return { state, service, authClient, post, POST }
+  return { state, service, authClient, post, POST, enqueueProfileExtraction }
 }

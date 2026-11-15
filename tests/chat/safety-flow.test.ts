@@ -50,21 +50,38 @@ describe('safety notices and final input precedence',()=>{
     expect(h.state.session.status).toBe('open')
     expect(h.state.rows.filter(row=>row.role==='assistant')).toHaveLength(1)
     expect(h.state.writes.find(w=>w.name==='begin_chat_turn').args.p_urgent).toBe(true)
-    expect(expectedError.mock.calls).toEqual([['[chat] turn failed',{requestId:'turn-1',failureRecorded:true}]])
+    expect(expectedError.mock.calls).toEqual([['[chat] turn failed',{requestId:'turn-1',failureRpcSucceeded:true}]])
     } finally {expectedError.mockRestore()}
   })
-  it('keeps safety resources when only the final prompt exceeds the context budget',async()=>{
+  it.each([true, false])('reports only the failure RPC outcome without claiming a state transition (succeeded=%s)', async succeeded => {
+    const expectedError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const h = await chatHarness()
+      h.state.generationFailure = true
+      const originalRpc = h.service.rpc.getMockImplementation()!
+      h.service.rpc.mockImplementation(async (name, args) => name === 'fail_chat_turn'
+        ? { data: null, error: succeeded ? null : { code: '55P03', message: 'synthetic private detail' } }
+        : originalRpc(name, args))
+      const response = await h.post('Fictional private text')
+      expect(response.status).toBe(503)
+      expect(h.state.turns.get('turn-1').status).toBe('generating')
+      expect(expectedError.mock.calls).toEqual([['[chat] turn failed', { requestId: 'turn-1', failureRpcSucceeded: succeeded }]])
+      expect(JSON.stringify(expectedError.mock.calls)).not.toContain('Fictional private text')
+      expect(JSON.stringify(expectedError.mock.calls)).not.toContain('synthetic private detail')
+    } finally { expectedError.mockRestore() }
+  })
+  it('keeps direct-signal resources independent of the prompt context budget without closing',async()=>{
     const h=await chatHarness(); h.state.prompt='Synthetic system context '.repeat(600)
     h.state.rows.push({id:'early',role:'user',parts:[{type:'text',text:'x'.repeat(70000)}]})
-    const response=await h.post('Quiero desaparecer para siempre')
+    const response=await h.post('Voy a suicidarme esta noche')
     expect(response.status).toBe(200)
     const body=await response.text(); expect(body).toContain('024'); expect(body).toContain('112')
     expect(h.state.captured).toHaveLength(0)
-    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBeUndefined()
   })
   it.each(['historyFailure','safetyFailure','promptFailure'] as const)('keeps deterministic resources when context preparation fails: %s',async failure=>{
     const h=await chatHarness(); h.state[failure]=true
-    const response=await h.post('Voy a matarme')
+    const response=await h.post('Voy a suicidarme esta noche')
     expect(response.status).toBe(200)
     const body=await response.text(); expect(body).toContain('024'); expect(body).toContain('112')
     expect(h.state.captured).toHaveLength(0)
@@ -76,7 +93,7 @@ describe('safety notices and final input precedence',()=>{
     expect(response.status).toBe(200)
     expect(await response.text()).toContain('024')
     expect(h.state.rows[0].parts[0].text).toContain('matarme')
-    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBe('time_limit')
     expect(h.state.captured).toHaveLength(0)
   })
   it('does not silently drop early context; crisis has a deterministic safe response even over budget',async()=>{
@@ -84,7 +101,7 @@ describe('safety notices and final input precedence',()=>{
     expect((await h.post()).status).toBe(503)
     // Resolve the pending failed turn with the same ID in a fresh bounded fixture.
     const crisis=await chatHarness(); crisis.state.rows.push(...h.state.rows.slice(0,1))
-    const response=await crisis.post('Voy a matarme')
+    const response=await crisis.post('Voy a suicidarme esta noche')
     expect(response.status).toBe(200); expect(await response.text()).toContain('024')
     expect(crisis.state.captured).toHaveLength(0)
   })

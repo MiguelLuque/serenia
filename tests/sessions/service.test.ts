@@ -1,15 +1,24 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+const f = vi.hoisted(() => ({ serviceRpc: vi.fn(), enqueue: vi.fn() }))
+vi.mock('@/lib/server/supabase/server', () => ({ createServiceRoleClient: () => ({ rpc: f.serviceRpc }) }))
+vi.mock('@/lib/server/workflows', () => ({ enqueueAssessmentGeneration: f.enqueue }))
 import {
   isSessionExpired,
   getOrResolveActiveSession,
   createSession,
   touchSession,
   closeSession,
+  requestOwnedSessionClosure,
   computeProtocolPhase,
   PROTOCOL_MAX_PHASE,
   SESSION_MAX_DURATION_MS,
   SESSION_INACTIVITY_MS,
 } from '@/lib/server/sessions/service'
+
+beforeEach(() => {
+  f.serviceRpc.mockReset().mockResolvedValue({ data: null, error: null })
+  f.enqueue.mockReset().mockResolvedValue(undefined)
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,17 +109,27 @@ describe('getOrResolveActiveSession', () => {
 
   it('closes an inactive session through the same atomic RPC as manual close',async()=>{
     const session=makeSession({last_activity_at:new Date(Date.now()-SESSION_INACTIVITY_MS-1000).toISOString()})
-    const rpc=vi.fn().mockResolvedValue({error:null})
+    const rpc=vi.fn()
     const client={from:vi.fn(()=>makeChain({data:session,error:null})),auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}}})},rpc}
     expect(await getOrResolveActiveSession(client as never,'user-1')).toBeNull()
-    expect(rpc).toHaveBeenCalledWith('close_session_atomic',{p_session_id:'session-1',p_user_id:'user-1',p_reason:'inactivity'})
+    expect(f.serviceRpc).toHaveBeenCalledWith('close_session_atomic',{p_session_id:'session-1',p_user_id:'user-1',p_reason:'inactivity'})
   })
 
   it('returns the still-open session when activity resumes after the lazy-close read',async()=>{
     const old=makeSession({last_activity_at:new Date(Date.now()-SESSION_INACTIVITY_MS-1000).toISOString()})
     const current=makeSession()
     const from=vi.fn().mockReturnValueOnce(makeChain({data:old,error:null})).mockReturnValueOnce(makeChain({data:current,error:null}))
-    const client={from,auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc:vi.fn().mockResolvedValue({error:{code:'23514',message:'Session activity resumed'}})}
+    f.serviceRpc.mockResolvedValue({data:null,error:{code:'23514',message:'Session activity resumed'}})
+    const client={from,auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc:vi.fn()}
+    expect(await getOrResolveActiveSession(client as never,'user-1')).toEqual(current)
+    expect(from).toHaveBeenCalledTimes(2)
+  })
+  it('keeps an inactive session open when a turn still needs recovery',async()=>{
+    const stale=makeSession({last_activity_at:new Date(Date.now()-SESSION_INACTIVITY_MS-1000).toISOString()})
+    const current=makeSession()
+    const from=vi.fn().mockReturnValueOnce(makeChain({data:stale,error:null})).mockReturnValueOnce(makeChain({data:current,error:null}))
+    f.serviceRpc.mockResolvedValue({data:null,error:{code:'23514',message:'Unresolved chat turn'}})
+    const client={from,auth:{getUser:vi.fn().mockResolvedValue({data:{user:{id:'user-1'}},error:null})},rpc:vi.fn()}
     expect(await getOrResolveActiveSession(client as never,'user-1')).toEqual(current)
     expect(from).toHaveBeenCalledTimes(2)
   })
@@ -206,36 +225,38 @@ describe('touchSession — owner-checked RPC',()=>{
 // ---------------------------------------------------------------------------
 
 describe('closeSession', () => {
-  // Plan 8 Bloque 2 Fix 3 — closeSession ahora delega en la RPC
-  // `close_session_atomic` (migration 20260502000006). El test valida que
-  // se llama con los args correctos y que el throw de la RPC se propaga.
-
-  function makeAuthedSupabase(rpcResult: { error: unknown } = { error: null }) {
+  function makeAuthedSupabase(
+    rpcResult: { data?: unknown; error: unknown } = { data: { closed: true, newlyClosed: true }, error: null },
+    sessionRow: unknown = { id: 'session-1', user_id: 'user-1', status: 'open' },
+  ) {
     const rpcMock = vi.fn().mockResolvedValue(rpcResult)
     const getUserMock = vi
       .fn()
       .mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    const fromMock = vi.fn(() => makeChain({ data: sessionRow, error: null }))
     return {
       supabase: {
         auth: { getUser: getUserMock },
         rpc: rpcMock,
+        from: fromMock,
       } as never,
       rpcMock,
       getUserMock,
+      fromMock,
     }
   }
 
-  it('invokes close_session_atomic RPC with sessionId, userId, reason', async () => {
+  it('routes user-request close through the serialized owner RPC', async () => {
     const { supabase, rpcMock } = makeAuthedSupabase()
 
     await closeSession(supabase, 'session-1', 'user_request')
 
     expect(rpcMock).toHaveBeenCalledTimes(1)
-    expect(rpcMock).toHaveBeenCalledWith('close_session_atomic', {
+    expect(rpcMock).toHaveBeenCalledWith('close_session_from_chat_view', {
       p_session_id: 'session-1',
-      p_user_id: 'user-1',
       p_reason: 'user_request',
     })
+    expect(f.serviceRpc).not.toHaveBeenCalled()
   })
 
   it('rejects an auth error even when stale user data is present',async()=>{
@@ -245,25 +266,69 @@ describe('closeSession', () => {
     expect(rpcMock).not.toHaveBeenCalled()
   })
 
-  it('passes closure_reason correctly to the RPC', async () => {
+  it('passes the time-limit reason to the safe owner RPC', async () => {
     const { supabase, rpcMock } = makeAuthedSupabase()
 
     await closeSession(supabase, 'session-1', 'time_limit')
 
     expect(rpcMock).toHaveBeenCalledWith(
-      'close_session_atomic',
+      'close_session_from_chat_view',
       expect.objectContaining({ p_reason: 'time_limit' }),
     )
+    expect(rpcMock.mock.calls[0][1]).not.toHaveProperty('p_confirm_request_id')
+    expect(rpcMock.mock.calls[0][1]).not.toHaveProperty('p_confirm_attempt')
   })
 
-  it('propagates an error from the RPC (e.g. session not found)', async () => {
+  it('does not treat an unresolved turn as a successful close', async () => {
     const { supabase } = makeAuthedSupabase({
-      error: new Error('Session session-1 not found for user user-1'),
+      data: { closed: false, reason: 'turn_unresolved', requestId: 'turn-1', attempt: 2, timing: { serverNow: 1000, expiresAt: 2000 } },
+      error: null,
     })
+    await expect(closeSession(supabase, 'session-1', 'user_request')).rejects.toThrow('Session close not completed: turn_unresolved')
+    expect(f.enqueue).not.toHaveBeenCalled()
+  })
 
-    await expect(
-      closeSession(supabase, 'session-1', 'inactivity'),
-    ).rejects.toThrow('Session session-1 not found for user user-1')
+  it('binds an unresolved-turn confirmation to the returned request and attempt', async () => {
+    const response = { closed: false, reason: 'turn_unresolved', requestId: 'turn-1', attempt: 2, timing: { serverNow: 1000, expiresAt: 2000 } }
+    const { supabase, rpcMock } = makeAuthedSupabase({ data: response, error: null })
+
+    await expect(requestOwnedSessionClosure(supabase, 'session-1', 'user_request', { requestId: 'turn-1', attempt: 2 })).resolves.toEqual(response)
+    expect(rpcMock).toHaveBeenCalledWith('close_session_from_chat_view', {
+      p_session_id: 'session-1',
+      p_reason: 'user_request',
+      p_confirm_request_id: 'turn-1',
+      p_confirm_attempt: 2,
+    })
+  })
+
+  it('rejects a session that is not owned by the authenticated user', async () => {
+    const { supabase, rpcMock } = makeAuthedSupabase({ data: { closed: true }, error: null }, { id: 'session-1', user_id: 'other-user', status: 'open' })
+    await expect(requestOwnedSessionClosure(supabase, 'session-1', 'user_request')).rejects.toThrow('Owned session required')
+    expect(rpcMock).not.toHaveBeenCalled()
+    expect(f.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('does not repeat a close or workflow enqueue for an already closed session', async () => {
+    const { supabase, rpcMock } = makeAuthedSupabase({ data: { closed: true }, error: null }, { id: 'session-1', user_id: 'user-1', status: 'closed' })
+    expect(await requestOwnedSessionClosure(supabase, 'session-1', 'user_request')).toEqual({ closed: true })
+    expect(rpcMock).not.toHaveBeenCalled()
+    expect(f.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('uses the service-only atomic RPC for inactivity', async () => {
+    const { supabase, rpcMock } = makeAuthedSupabase()
+    await closeSession(supabase, 'session-1', 'inactivity')
+    expect(rpcMock).not.toHaveBeenCalled()
+    expect(f.serviceRpc).toHaveBeenCalledWith('close_session_atomic', {
+      p_session_id: 'session-1', p_user_id: 'user-1', p_reason: 'inactivity',
+    })
+  })
+
+  it('propagates an error from the service-only RPC', async () => {
+    f.serviceRpc.mockResolvedValue({ data: null, error: new Error('Session session-1 not found for user user-1') })
+    const { supabase } = makeAuthedSupabase()
+
+    await expect(closeSession(supabase, 'session-1', 'inactivity')).rejects.toThrow('Session session-1 not found for user user-1')
   })
 
   it('throws when there is no authenticated user', async () => {
@@ -279,15 +344,8 @@ describe('closeSession', () => {
   })
 
   it('does NOT propagate errors from enqueueAssessmentGeneration (fire-and-forget)', async () => {
-    // The RPC succeeds; the workflow enqueue rejects. closeSession must
-    // resolve normally — the cron sweep is the safety net.
     const { supabase } = makeAuthedSupabase()
-    // We can't easily mock enqueueAssessmentGeneration here without
-    // module-level vi.mock. The pre-existing test suite did not cover this
-    // either; we trust the try/catch in service.ts (covered separately by
-    // close-session-tools and getOrResolveActiveSession tests).
-    await expect(
-      closeSession(supabase, 'session-1', 'user_request'),
-    ).resolves.toBeUndefined()
+    f.enqueue.mockRejectedValue(new Error('workflow unavailable'))
+    await expect(closeSession(supabase, 'session-1', 'user_request')).resolves.toBeUndefined()
   })
 })

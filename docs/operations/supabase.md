@@ -9,15 +9,22 @@ rtk npm run supabase:local -- --version
 rtk npm run supabase:local -- telemetry disable
 rtk npm run supabase:local -- telemetry status
 rtk npm run supabase:local -- start --help
+rtk npm run supabase:local -- migration up --local
 rtk npm run db:test
 rtk npm run db:lint
 rtk npm run db:advisors
 rtk npm run db:types:check
 ```
 
+`migration up --local` applies only pending files to the running local stack without recreating its database or deleting its local data. The repository wrapper permits this command only with `--local`; linked/remote targets remain rejected. Use `db reset --local` only when the local database is disposable.
+
+The wrapper isolates the CLI home, but the Docker stack is selected by `project_id` and configured ports. Worktrees that share the same Supabase config therefore share the same persistent local database. Before `migration up --local`, `db:verify`, or `db:types:generate/check`, confirm that the running stack's migration history belongs to the checkout being verified. Do not reset or generate types from a different worktree's schema; use `db:test` for isolated replay from the current checkout.
+
 Descubrir ayuda de cada comando instalado antes de usarlo. db:test aplica migraciones y seed dos veces desde PostgreSQL17.6 efímero, red none, auth.users vacío y actores ficticios. En CI sin RTK, el harness invoca Docker instalado directamente (subprocess sin shell); localmente usa RTK. auth.uid() es un shim: no prueba JWT, GoTrue, PostgREST, configuración hospedada, emails ni advisors. El seed no inserta datos: las migraciones poseen instrumentos y retiran ASQ. No cambiar bandas/cortes/prompts aprobados.
 
 db:verify requiere stack Supabase local saludable con migraciones aplicadas. Lint/advisors usan fail-on warning/warn y fallan si faltan servicios; typecheck compara tipos generados. db:types:generate sólo sustituye tras generación exitosa; revisar diff antes de commit. Tipos sólo con --local --schema public. Migraciones incluyen grants mínimos/RLS/policies; no grants generales para ocultar fallos Data API.
+
+La [guía de recuperación para Supabase Free](backup-recovery.md) incluye un ensayo opcional con datos ficticios. No es una copia del proyecto alojado ni habilita comandos remotos en el wrapper local.
 
 .env.example incluye NEXT_PUBLIC_SITE_URL y claves modernas: browser/server/proxy prefieren NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, con NEXT_PUBLIC_SUPABASE_ANON_KEY fallback cuando vacía; servidor privilegiado prefiere SUPABASE_SECRET_KEY, con SUPABASE_SERVICE_ROLE_KEY fallback. Secretos nunca públicos. No se rota ninguna clave ni se lee .env.local.
 

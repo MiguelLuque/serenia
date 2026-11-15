@@ -160,13 +160,18 @@ export default async function PatientDetailPage({
           <CardTitle className="text-base">Eventos de riesgo</CardTitle>
         </CardHeader>
         <CardContent>
+          {riskEvents.length > 0 && (
+            <p className="mb-3 text-sm text-slate-600">Los tipos y niveles registrados requieren valoración clínica y no confirman por sí solos un diagnóstico.</p>
+          )}
           {riskEvents.length === 0 ? (
             <p className="text-sm text-slate-600">Sin eventos de riesgo.</p>
           ) : (
             <ul className="space-y-2">
               {riskEvents.map((event) => {
-                const label =
-                  RISK_TYPE_LABEL[event.riskType] ?? event.riskType
+                const recordedType = RISK_TYPE_LABEL[event.riskType] ?? event.riskType
+                const label = event.provenance === 'automatic_lexical'
+                  ? 'Señal automática de seguridad'
+                  : event.provenance === 'unknown' ? `Tipo registrado: ${recordedType}` : recordedType
                 const severityVariant =
                   SEVERITY_VARIANT[event.severity] ?? 'secondary'
                 const severityLabel =
@@ -175,6 +180,18 @@ export default async function PatientDetailPage({
                   <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
                     <div>
                       <div className="font-medium">{label}</div>
+                      {event.provenance === 'automatic_lexical' && (
+                        <div className="text-slate-600">La coincidencia textual por sí sola no confirma el riesgo; requiere contextualización. El nivel registrado requiere valoración.</div>
+                      )}
+                      {event.provenance === 'questionnaire' && (
+                        <div className="text-slate-600">Fuente registrada: cuestionario. El resultado requiere contextualización clínica.</div>
+                      )}
+                      {event.provenance === 'manual_review' && (
+                        <div className="text-slate-600">Fuente indicada: revisión manual. La fuente por sí sola no acredita validación clínica.</div>
+                      )}
+                      {event.provenance === 'unknown' && (
+                        <div className="text-slate-600">Origen desconocido; requiere contextualización.</div>
+                      )}
                       <div className="text-slate-600">
                         {formatDateTime(event.createdAt)}
                       </div>

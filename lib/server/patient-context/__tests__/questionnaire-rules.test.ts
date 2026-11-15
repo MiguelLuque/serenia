@@ -44,9 +44,9 @@ describe('computeQuestionnaireRetakeHint', () => {
     expect(computeQuestionnaireRetakeHint(ctx, NOW)).toBeNull()
   })
 
-  // 2. PHQ-9 score 16, scoredAt 10 days ago → severe hint
+  // 2. PHQ-9 score 20, scoredAt 10 days ago → severe hint
   it('returns severe PHQ-9 hint when score >= 15 and scoredAt > 7 days ago', () => {
-    const ctx = makeCtx([{ code: 'PHQ9', score: 16, band: 'severe', scoredAt: daysAgo(10), deltaVsPrevious: null }])
+    const ctx = makeCtx([{ code: 'PHQ9', score: 20, band: 'severe', scoredAt: daysAgo(10), deltaVsPrevious: null }])
     const result = computeQuestionnaireRetakeHint(ctx, NOW)
     expect(result).not.toBeNull()
     expect(result).toContain('PHQ-9')
@@ -70,9 +70,9 @@ describe('computeQuestionnaireRetakeHint', () => {
     expect(result).toContain('dos semanas')
   })
 
-  // 5. PHQ-9 score 16, scoredAt 16 days ago → severe hint ONLY (not moderate)
+  // 5. PHQ-9 score 20, scoredAt 16 days ago → severe hint ONLY (not moderate)
   it('emits only severe hint when both severe and moderate rules match (priority dedup)', () => {
-    const ctx = makeCtx([{ code: 'PHQ9', score: 16, band: 'severe', scoredAt: daysAgo(16), deltaVsPrevious: null }])
+    const ctx = makeCtx([{ code: 'PHQ9', score: 20, band: 'severe', scoredAt: daysAgo(16), deltaVsPrevious: null }])
     const result = computeQuestionnaireRetakeHint(ctx, NOW)
     expect(result).not.toBeNull()
     expect(result).toContain('severo')
@@ -106,7 +106,7 @@ describe('computeQuestionnaireRetakeHint', () => {
   // 8. PHQ-9 severe >7d + GAD-7 moderate >14d → combined hint with both
   it('combines PHQ-9 and GAD-7 hints into a single string when both match', () => {
     const ctx = makeCtx([
-      { code: 'PHQ9', score: 16, band: 'severe', scoredAt: daysAgo(10), deltaVsPrevious: null },
+      { code: 'PHQ9', score: 20, band: 'severe', scoredAt: daysAgo(10), deltaVsPrevious: null },
       { code: 'GAD7', score: 11, band: 'moderate', scoredAt: daysAgo(20), deltaVsPrevious: null },
     ])
     const result = computeQuestionnaireRetakeHint(ctx, NOW)
@@ -143,17 +143,31 @@ describe('computeQuestionnaireRetakeHint', () => {
   // 12. Exactly 7 days ago → should NOT trigger severe (strict < not ≤)
   it('does not trigger severe rule when scoredAt is exactly 7 days ago (boundary)', () => {
     const exactlySevenDaysMs = 7 * MS_PER_DAY
-    const ctx = makeCtx([{ code: 'PHQ9', score: 16, band: 'severe', scoredAt: daysAgoMs(exactlySevenDaysMs), deltaVsPrevious: null }])
+    const ctx = makeCtx([{ code: 'PHQ9', score: 20, band: 'severe', scoredAt: daysAgoMs(exactlySevenDaysMs), deltaVsPrevious: null }])
     expect(computeQuestionnaireRetakeHint(ctx, NOW)).toBeNull()
   })
 
   // 13. Just over 7 days (7 days + 1 ms) → triggers severe
   it('triggers severe rule when scoredAt is 7 days and 1 ms ago', () => {
     const justOverSevenDaysMs = 7 * MS_PER_DAY + 1
-    const ctx = makeCtx([{ code: 'PHQ9', score: 16, band: 'severe', scoredAt: daysAgoMs(justOverSevenDaysMs), deltaVsPrevious: null }])
+    const ctx = makeCtx([{ code: 'PHQ9', score: 20, band: 'severe', scoredAt: daysAgoMs(justOverSevenDaysMs), deltaVsPrevious: null }])
     const result = computeQuestionnaireRetakeHint(ctx, NOW)
     expect(result).not.toBeNull()
     expect(result).toContain('PHQ-9')
     expect(result).toContain('severo')
+  })
+})
+
+
+describe('retake hint respects each canonical band without changing cadence', () => {
+  it.each([
+    ['PHQ9', 15, 'moderately_severe', 'moderadamente severo'],
+    ['PHQ9', 19, 'moderately_severe', 'moderadamente severo'],
+    ['PHQ9', 20, 'severe', 'era severo'],
+    ['GAD7', 15, 'severe', 'era severo'],
+  ] as const)('%s %i keeps its canonical interpretation', (code, score, band, wording) => {
+    const entry = { code, score, band, scoredAt: daysAgo(8), deltaVsPrevious: null }
+    expect(computeQuestionnaireRetakeHint(makeCtx([entry]), NOW)).toContain(wording)
+    expect(computeQuestionnaireRetakeHint(makeCtx([{ ...entry, scoredAt: daysAgo(7) }]), NOW)).toBeNull()
   })
 })

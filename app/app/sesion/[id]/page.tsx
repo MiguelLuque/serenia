@@ -3,7 +3,7 @@ import { safeValidateUIMessages, type UIMessage } from 'ai'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { SESSION_MAX_DURATION_MS } from '@/lib/shared/chat/session-time'
 import { getActiveInstanceForSession } from '@/lib/server/questionnaires/service'
-import { ChatRecoverySchema } from '@/lib/shared/chat/recovery'
+import { readOwnedChatSnapshot } from '@/lib/server/chat/owned-snapshot'
 import { ChatView } from '@/components/chat/chat-view'
 
 type MessageRow = { id: string; role: string; parts: unknown }
@@ -82,26 +82,15 @@ export default async function SessionPage({
     .eq('user_id', user.id)
     .single()
 
-  if (!session) redirect('/app')
-  if (session.status !== 'open') redirect('/app')
+  if (!session || session.user_id !== user.id) redirect('/app')
 
-  const { data: rows } = await supabase
-    .from('messages')
-    .select('id, role, parts')
-    .eq('conversation_id', session.conversation_id)
-    .eq('visible_to_user', true)
-    .order('created_at', { ascending: true })
-
-  const initialMessages: UIMessage[] = await rehydrateMessages(rows ?? [])
+  const snapshot = await readOwnedChatSnapshot(supabase, session)
+  const initialMessages = await rehydrateMessages(snapshot.rows)
   const expiresAt = new Date(
-    new Date(session.opened_at).getTime() + SESSION_MAX_DURATION_MS,
+    new Date(snapshot.session.opened_at).getTime() + SESSION_MAX_DURATION_MS,
   )
 
-  const { data: recoveryData, error: recoveryError } = await supabase.rpc('get_chat_turn_recovery', { p_session_id: session.id })
-  if (recoveryError) throw recoveryError
-  const recovery = recoveryData === null ? null : ChatRecoverySchema.parse(recoveryData)
-
-  const active = await getActiveInstanceForSession(supabase, session.id)
+  const active = snapshot.session.status === 'open' ? await getActiveInstanceForSession(supabase, session.id) : null
   const activeQuestionnaire =
     active && active.instance.status !== 'scored'
       ? {
@@ -124,7 +113,8 @@ export default async function SessionPage({
     <ChatView
       key={session.id}
       sessionId={session.id}
-      initialRecovery={recovery}
+      initialRecovery={snapshot.recovery}
+      initialClosed={snapshot.session.status !== 'open'}
       initialMessages={initialMessages}
       expiresAt={expiresAt}
       serverNow={new Date()}

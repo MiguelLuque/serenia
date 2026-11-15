@@ -33,10 +33,12 @@ export function ChatInput({ onSend, status, disabled = false, draft }: ChatInput
     const value = text.trim()
     if (!value || sendDisabled) return
     setSending(true); setError(false)
+    // The active send owns this text; typing now creates a separate draft.
+    setText('')
     try {
       const sent = await onSend(value)
-      if (sent !== false) setText(current => current === value || current.trim() === value ? '' : current)
-    } catch { setError(true) }
+      if (sent === false) setText(current => current || value)
+    } catch { setText(current => current || value); setError(true) }
     finally { setSending(false) }
   }
 

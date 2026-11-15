@@ -20,6 +20,7 @@ export type ChatSystemPromptPieces = {
    * y debe leerse como la guía clínica para esta sesión específica.
    */
   protocolPhaseBlock: string
+  profileContextBlock?: string
 }
 
 /**
@@ -49,5 +50,6 @@ export function buildChatSystemPrompt(pieces: ChatSystemPromptPieces): string {
     pieces.intakeBlock,
     pieces.patientContextBlock,
     pieces.protocolPhaseBlock,
+    pieces.profileContextBlock ?? '',
   ].join('')
 }

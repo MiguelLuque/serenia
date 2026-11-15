@@ -28,6 +28,7 @@ export type PatientRiskEvent = {
   severity: RiskSeverity
   sessionId: string | null
   createdAt: string
+  provenance: 'automatic_lexical' | 'questionnaire' | 'manual_review' | 'unknown'
 }
 
 export type PatientSession = {
@@ -89,7 +90,7 @@ export async function getPatientDetail(
         .order('scored_at', { ascending: false }),
       supabase
         .from('risk_events')
-        .select('id, risk_type, severity, session_id, created_at')
+        .select('id, risk_type, severity, session_id, created_at, source_type, signal:payload_json->>signal')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
       supabase
@@ -147,6 +148,13 @@ export async function getPatientDetail(
     severity: r.severity,
     sessionId: r.session_id,
     createdAt: r.created_at,
+    provenance: r.source_type === 'conversation' && r.signal === 'textual_crisis'
+      ? 'automatic_lexical'
+      : r.source_type === 'questionnaire'
+        ? 'questionnaire'
+        : r.source_type === 'manual_review'
+          ? 'manual_review'
+          : 'unknown',
   }))
 
   const sessionRows = sessionsRes.data ?? []

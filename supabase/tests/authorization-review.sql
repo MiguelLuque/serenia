@@ -26,6 +26,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 select pg_temp.must_deny($q$update user_profiles set role='clinician' where user_id=auth.uid()$q$);
 select pg_temp.must_deny($q$select close_session_atomic('20000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002','user_request')$q$);
+select pg_temp.must_deny($q$select close_session_atomic('20000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','user_request')$q$);
 select pg_temp.must_deny($q$insert into assessments(user_id,summary_json,status,generated_by) values(auth.uid(),'{}','reviewed_confirmed','clinician')$q$);
 select pg_temp.must_deny($q$insert into messages(conversation_id,role,parts) values('10000000-0000-0000-0000-000000000001','assistant','[]')$q$);
 do $$ begin
@@ -40,8 +41,17 @@ select pg_temp.must_deny($q$select close_session_atomic('20000000-0000-0000-0000
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
-select close_session_atomic('20000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','user_request');
+do $$ declare result jsonb; begin
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000001','user_request',null,null);
+ if result->>'closed' is distinct from 'true' or result->>'newlyClosed' is distinct from 'true' then raise exception 'Owned view close failed: %',result; end if;
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000001','user_request',null,null);
+ if result->>'closed' is distinct from 'true' or result->>'newlyClosed' is distinct from 'false' then raise exception 'Owned view close was not idempotent: %',result; end if;
+end $$;
+select pg_temp.must_deny($q$select close_session_atomic('20000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','user_request')$q$);
+reset role;
+set role service_role;
 select close_session_atomic('20000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','inactivity');
+reset role;
 do $$ begin
  if not exists(select 1 from clinical_sessions s join conversations c on c.id=s.conversation_id where s.id='20000000-0000-0000-0000-000000000001' and s.status='closed' and c.status='closed' and s.closed_at=c.ended_at and s.closure_reason='user_request') then raise exception 'closure not atomic or idempotent'; end if;
 end $$;

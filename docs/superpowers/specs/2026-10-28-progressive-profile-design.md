@@ -1,0 +1,64 @@
+# Perfil progresivo con fuentes y correcciones
+
+28 octubre 2026. Petición explícita: implementar ahora el perfil descrito en la revisión del recorrido, como objetivo actual. Base `11ec2c2`; rama `codex/progressive-patient-profile`, checkout autorizado `/Users/miguelluque/git/serenia`. Se conserva todo el incremento anterior; sin publicación, datos reales, nuevos modelos ni dependencias.
+
+## Decisión de producto
+
+Extraer observaciones relevantes de mensajes del usuario ya guardados, sin interrumpir la conversación. Mostrar qué se recuerda, su origen y cuándo se dijo; permitir confirmar o descartar y procesar correcciones relatadas en el chat. Una observación es una cita de autorreporte, no un diagnóstico ni una conclusión clínica. Confirmarla como usuario tampoco equivale a revisión de Pablo. Los informes revisados siguen en su circuito actual.
+
+Se consideran tres opciones: reutilizar sólo informes de cierre (no conserva hechos en sesiones cortas/interrumpidas), escribir perfil con una tool del conversador (mezcla respuesta/extracción y sus fallos), o cola transaccional y extractor separado. Se elige la tercera por durabilidad y separación de responsabilidades. Se reutiliza el patrón outbox y Workflow instalado; no se añade pgmq ni un proveedor.
+
+Primera versión detrás de `FEATURE_PROGRESSIVE_PROFILE=on`, apagado por defecto, y activación explícita por el propio usuario. No hay backfill automático de conversaciones anteriores. El flag corta UI, dispatch y uso del contexto antes de consultar tablas nuevas. La activación en BD controla qué mensajes nuevos crean trabajos. Activar/desactivar no debe cambiar ni borrar conversaciones, escalas, informes, alertas o permisos.
+
+## Datos y extracción
+
+Tres tablas: `profile_settings`, `profile_extraction_jobs`, `profile_observations`. Settings: user_id,enabled,consent_epoch,updated_at. Jobs: id,user_id,source_message_id,session_id,conversation_id,source_created_at,consent_epoch,status,token,lease_until,attempts,available_at,run_id,error_code,extractor_version,model_id,created_at,updated_at. Observaciones: id,job_id,user_id,source_message_id,source_created_at,category,quote,time_scope,supersedes_id,status,created_at,updated_at.
+
+- Categorías cerradas: `concern`, `goal`, `context`, `functioning`, `resource`, `preference`, `history`, `agreement`.
+- time_scope: `current`, `historical`, `unspecified`. Current significa actual en la fecha de la fuente, no vigente para siempre.
+- Estados de observación: `pending`, `confirmed`, `rejected`, `superseded`. Fuente siempre mensaje de usuario; no se atribuyen palabras del asistente a la persona. No se almacenan paráfrasis diagnósticas ni puntuaciones inferidas.
+- Extractor `profile-v1`: un mensaje guardado de hasta8000 caracteres; hasta20 observaciones propias confirmed como referencias de corrección; máximo5 observaciones por resultado, cita literal de1–400 caracteres, sin repetición category+quote. Cada supersedes_id es nullable y sólo puede apuntar a una observación confirmed propia, anterior y de igual categoría. JSON estricto con campos `category`, `quote`, `time_scope`, `supersedes_id`; wrapper `observations`.
+- Texto fuente canónico: partes `type=text` concatenadas en orden con salto de línea (`\n`), idéntico en SQL y extractor.
+- Validación en TS y SQL de cita exacta y fuente/owner; salida completa inválida falla sin insertar parcialmente. Vacío es válido. Modelo existente `llm.structured()`, `generateText` + `Output.object`, maxOutputTokens1500,maxRetries0,timeout20s. No nuevas tools ni modelos. No imprimir texto, prompts, salidas o errores crudos del proveedor.
+- El prompt excluye atribuciones a terceros, citas ajenas, hipótesis, instrucciones, diagnósticos inferidos y acuerdos sólo propuestos por la IA. Estos límites semánticos deben evaluarse también con proveedor real; validación estructural no acredita comprensión perfecta.
+
+## Durabilidad, consentimiento y aislamiento
+
+Trigger de inserción de messages user con sesión crea un job único por source_message_id sólo con settings.enabled. No llama a LLM/Workflow. Owner procede de la sesión/conversación, no del cliente/modelo. FKs compuestas fuente/sesión/conversación/owner y target/owner; RLS owner-only en settings/observaciones; jobs sólo service_role; mutaciones sólo RPC. Borrado del auth user o mensaje fuente elimina dependientes. Una fuente con job de perfil no puede cambiar su texto/rol/identidad/fecha sin preservar la procedencia original: se usará guard de UPDATE; una corrección es una nueva intervención. Borrar una fuente antigua no debe borrar también la cita correctora de otra fuente: se desvincula sólo supersedes_id.
+
+La fila settings es mutex de claim/start/finish/review/disable. Sólo un job enqueued/running por usuario mediante índice único parcial. Procesar el trabajo no terminal más antiguo por source_created_at,id; un lease vencido recupera ese mismo job con token nuevo, no adelanta otros. Lease2min, máximo3claims; intento agotado→exhausted permite avanzar. Fallo vuelve pending con30s de backoff o exhausted al tercer claim. Nunca mantener un lock durante LLM.
+
+Opt-out incrementa consent_epoch, cancela pendientes/activos y cambia tokens; finish exige enabled,epoch y token/lease vigentes. Re-enable no resucita jobs antiguos. Retirar activación impide nuevas extracciones/usos; no puede deshacer una petición de modelo que ya comenzó. Las observaciones se conservan para poder revisarlas o descartarlas; no se promete borrado de conversaciones por desactivar memoria.
+
+`finish_profile_job` guarda observaciones y completa job en una transacción; repetición del mismo token completado es replay sin duplicación. Tokens viejos no escriben. Settings off o fuente eliminada impiden persistencia. Claims para usuarios distintos pueden avanzar independientemente.
+
+## Correcciones y lectura
+
+Pending replacement deriva disputa de su target confirmed; no destruye ese registro. En contexto, el dato disputado no se presenta como confirmado y se identifica la corrección pendiente. Confirmar replacement supersede target confirmado y confirma nuevo atómicamente; otros pending siblings quedan superseded. Si el usuario rechazó antes ese target, puede confirmar la nueva cita pendiente sin reactivar el dato rechazado: se conserva target rejected y vínculo de procedencia, y se resuelven igualmente los siblings. Nunca se permite confirmar frente a un target superseded o restaurarlo automáticamente. Rechazar replacement deja reaparecer target sólo si éste seguía confirmed. Conflictos de revisión son explícitos y recargables. Los conflictos de negocio de las RPC de perfil usan `PT409`/HTTP409, no el código de serialización transitoria `40001`, para evitar reintentos internos de PostgREST14.
+
+RPC `get_profile_memory()` devuelve una sola proyección consistente del owner: enabled,pending_jobs,failed_jobs y hasta100 observaciones recientes con `disputed`,metadata de fuente y estados. pending_jobs cuenta no-terminales y failed_jobs cuenta exhausted del consent_epoch vigente, sin errores crudos. No devuelve conversación completa ni notas clínicas. El worker lee hasta20 confirmed propios como referencias de corrección. Contexto añade bloque acotado a4000 caracteres/hasta8 citas, priorizando correcciones y pertinencia léxica simple del mensaje actual, sin vectores ni nuevo LLM. Conservar etiqueta pending/confirmed por usuario, categoría y fecha; citas JSON como datos no instrucciones. La información nueva de la conversación prevalece ante conflicto. No afecta a score, fase, riesgos, permisos, tareas o cierre.
+
+Revisión final30octubre: el límite de100 es por página y por proyección de contexto, no una pérdida de control sobre citas retenidas. La página de perfil usa una nueva RPC autenticada `get_profile_memory_page(p_before_created_at timestamptz default null,p_before_id uuid default null)` con la misma proyección y `next_cursor` nullable `{source_created_at,id}`. Orden estable descendente por fecha de fuente e ID; ambos componentes del cursor ausentes o presentes, conservando microsegundos sin conversión por Date. Cada respuesta contiene como máximo100 citas; se comprueba una fila adicional para saber si existe otra página. La disputa se calcula sobre todas las citas propias, no sólo la página visible. Enlaces visibles permiten avanzar a citas anteriores y volver a recientes; las acciones mantienen la versión exacta. No cambia la RPC existente, el worker ni los presupuestos del contexto. La navegación móvil debe mostrar el destino al seleccionar cualquiera de los enlaces compartidos, sin alterar el estado de escritorio.
+
+Lectura del perfil falla aislada: si no está disponible, continúa conversación sin este bloque. Una omisión por presupuesto no significa que no conste información. No se cambia el builder clínico existente ni su aprobación.
+
+## Ejecución y experiencia
+
+Next `after` sólo intenta despachar tras admisión guardada, incluso replay; no retrasa la respuesta. Jobs existen aunque ese intento falle. Workflow recibe sólo jobID+token; un único step carga fuente, genera, valida y persiste, devolviendo sólo IDs/contadores para no duplicar citas en historial Workflow. El step usa maxRetries0; reintentos se controlan en outbox. Después de cada ejecución se intenta despachar el siguiente trabajo propio. Cron actual recupera hasta10jobs, máximo2 dispatch concurrentes. Es un respaldo diario, no promesa de latencia. Cada mensaje nuevo vuelve a intentar recuperación propia.
+
+Página `/app/perfil`, autenticada y disponible sólo con flag, con enlace para pacientes: «Lo que recuerda Serenia». Explica activación y límites con claridad. Muestra citas, categoría/fecha, estado extraído/confirmado por ti y disputa; acciones Confirmar/Descartar con versión esperada. Corregir texto se hace en la conversación y queda como nueva fuente; sin cuestionario extra en cada turno. Estado pendiente/fallo comprensible sin exponer leases/tokens. Navegación conserva el flujo normal. No tocar otras fricciones UX en este incremento.
+
+## RPC contract
+
+- `set_profile_enabled(p_enabled boolean) returns void`, authenticated owner/onboarding ready.
+- `get_profile_memory() returns jsonb`, authenticated owner. DTO: `{enabled:boolean,pending_jobs:number,failed_jobs:number,observations:[{id,category,quote,time_scope,status,supersedes_id,source_message_id,session_id,source_created_at,updated_at,disputed}]}`.
+- `get_profile_memory_page(p_before_created_at timestamptz default null,p_before_id uuid default null) returns jsonb`, authenticated owner, DTO anterior más `next_cursor:null|{source_created_at,id}`; paginación keyset de100, sin lectura ilimitada y con cursor completo validado. Sólo la pantalla usa esta RPC.
+- `claim_profile_jobs(p_user_id uuid default null,p_limit integer default 1) returns setof profile_extraction_jobs`, service only, limit1–10.
+- `start_profile_job(p_job_id uuid,p_token uuid) returns boolean`, service only, false for completed replay, otherwise fenced running transition.
+- `update_profile_job(p_job_id uuid,p_token uuid,p_action text,p_run_id text default null) returns void`, service only, actions enqueued/failed, checks state/token/lease; completed enqueue acknowledgement is allowed for same token.
+- `finish_profile_job(p_job_id uuid,p_token uuid,p_observations jsonb,p_model_id text) returns void`, service only, atomic/fenced/replay.
+- `review_profile_observation(p_observation_id uuid,p_action text,p_expected_updated_at timestamptz) returns void`, owner, actions confirm/reject, conflict on stale version. No direct DML for authenticated clients.
+
+## Acceptance
+
+RED→GREEN units for validation/projection/workflow/actions/UI and source integration; SQL regressions for grants,RLS,foreign source/target,consent epochs,replay,fencing,claim order/expiry/exhaustion,review/disputes/cascades and concurrency. Generated types via local CLI; db:verify against migrated local stack in addition to seven native gates. Real local Auth/Data API + generated Workflow HTTP + synthetic provider and browser: activate, message→pending observation, confirm, correction dispute→confirm/reject, opt-out and cross-owner rejection. No patient data or real-provider quality claims. Keep flag off and no remote migrations/deployment in this goal. Provide Pablo cases for semantic extraction/corrections.
