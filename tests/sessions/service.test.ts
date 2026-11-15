@@ -255,8 +255,6 @@ describe('closeSession', () => {
     expect(rpcMock).toHaveBeenCalledWith('close_session_from_chat_view', {
       p_session_id: 'session-1',
       p_reason: 'user_request',
-      p_confirm_request_id: null,
-      p_confirm_attempt: null,
     })
     expect(f.serviceRpc).not.toHaveBeenCalled()
   })
@@ -275,8 +273,10 @@ describe('closeSession', () => {
 
     expect(rpcMock).toHaveBeenCalledWith(
       'close_session_from_chat_view',
-      expect.objectContaining({ p_reason: 'time_limit', p_confirm_request_id: null, p_confirm_attempt: null }),
+      expect.objectContaining({ p_reason: 'time_limit' }),
     )
+    expect(rpcMock.mock.calls[0][1]).not.toHaveProperty('p_confirm_request_id')
+    expect(rpcMock.mock.calls[0][1]).not.toHaveProperty('p_confirm_attempt')
   })
 
   it('does not treat an unresolved turn as a successful close', async () => {

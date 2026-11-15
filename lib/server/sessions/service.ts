@@ -75,8 +75,10 @@ export async function requestOwnedSessionClosure(
   const { data, error } = await supabase.rpc('close_session_from_chat_view', {
     p_session_id: sessionId,
     p_reason: reason,
-    p_confirm_request_id: confirmUnresolved?.requestId ?? null,
-    p_confirm_attempt: confirmUnresolved?.attempt ?? null,
+    ...(confirmUnresolved === null ? {} : {
+      p_confirm_request_id: confirmUnresolved.requestId,
+      p_confirm_attempt: confirmUnresolved.attempt,
+    }),
   })
   if (error) throw new Error('Session close unavailable')
   const result = ViewCloseResultSchema.parse(data)
