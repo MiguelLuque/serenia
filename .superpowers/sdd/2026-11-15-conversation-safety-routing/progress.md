@@ -65,3 +65,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added explicit clause-result types to fix the Task 1 TypeScript inference error.
 - Focused suite passes 51/51; `rtk npm run typecheck` passes. Full suite: 99 files pass, 1 fails; 1,315 pass and 4 fail because `tests/tooling/dependency-integration.test.ts` child processes receive `listen EPERM: operation not permitted 127.0.0.1`. Details: `task-1-report.md`.
 
+### Task 1 follow-up: negation scope and grooming clauses
+
+- Added RED cases for progressive hair/nail grooming, `no quiero dejar de` risk phrasing, clear `no voy a` denial, and coordinated shared `quiero`; 7 assertions failed before the fix.
+- Progressive grooming stays `none`; conflicted negation stays ambiguous; direct future denials are contextual; shared `quiero` preserves the explicit suicide clause. Focused tests pass 58/58 and typecheck passes.
+- `rtk npm test`: 99 files passed, 1 failed; 1,322 passed, 4 failed in dependency integration due `listen EPERM: operation not permitted 127.0.0.1`. Details: `task-1-report.md`.
+

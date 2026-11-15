@@ -33,6 +33,13 @@
 - Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 51 tests. `rtk npm run typecheck` passed.
 - Full suite: 99 files passed, 1 failed; 1,315 tests passed and 4 failed in `tests/tooling/dependency-integration.test.ts`. Each failure is a child Node server bind error, `listen EPERM: operation not permitted 127.0.0.1`.
 
+## Task 1 follow-up: grooming scope and negation
+
+- Added RED tests for progressive hair/nail grooming, negation scope, clear future denials, and shared `quiero` scope across coordinated clauses; 7 assertions failed before the fix.
+- `Me estoy cortando el pelo/uñas` now remains `none`. `No quiero dejar de pensar en suicidarme` and `No quiero dejar de autolesionarme` remain ambiguous. `No voy a suicidarme` and `No voy a autolesionarme` are contextual denials. Coordinated `Quiero cortarme el pelo y quitarme la vida` retains the explicit suicidal-ideation clause.
+- Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 58 tests. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,322 tests passed and 4 failed. All four failures remain child-process bind denials in `tests/tooling/dependency-integration.test.ts`: `listen EPERM: operation not permitted 127.0.0.1`.
+
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.

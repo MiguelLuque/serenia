@@ -77,8 +77,11 @@ type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const normalized = normalize(text)
   const clauses = normalized.split(/[;,]|\s+(?:y|pero|aunque|sin embargo)\s+/).map(part => part.trim())
-  const results = clauses.flatMap<ClauseClassification>(clause => {
-    if (/\b(cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
+  const results = clauses.flatMap<ClauseClassification>((rawClause, index) => {
+    const previous = clauses[index - 1] ?? ''
+    const sharedWant = index > 0 && /\bquiero\b/i.test(previous) && /\b(quitarme la vida|suicid|autolesion)/i.test(rawClause)
+    const clause = sharedWant ? `quiero ${rawClause}` : rawClause
+    if (/\b(?:me estoy cortando|cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
     const suicide = SUICIDE.test(clause)
     const selfHarm = SELF_HARM.test(clause)
     if (!suicide && !selfHarm) return []
@@ -86,8 +89,8 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|vimos|guia|articulo|amigo|amiga|hermano|hermana|dijo|dice|hablo|cita|personaje|antes|cuando era)\b/i.test(clause)
     const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
     const denial = /\b(no|nunca|jamas)\b/i.test(clause)
-    const uncertainNegation = /\b(no puedo dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
-    const clearDenial = denial && /\b(no quiero|no pienso|no estoy pensando|no tengo)\b/i.test(clause) && !uncertainNegation && !/\b(no quiero vivir)\b/i.test(clause)
+    const uncertainNegation = /\b(no puedo dejar de|no quiero dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
+    const clearDenial = denial && (/\b(no quiero|no pienso|no estoy pensando|no tengo|no voy a)\b/i.test(clause)) && !uncertainNegation && !/\b(no quiero vivir)\b/i.test(clause)
     const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
     const explicit = !context && !past && !uncertainNegation && !clearDenial && (
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||

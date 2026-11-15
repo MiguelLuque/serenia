@@ -171,6 +171,10 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
   })
 
+  it.each(['Me estoy cortando el pelo', 'Me estoy cortando las uñas'])('does not route ongoing grooming as current self-harm: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
+  })
+
   it('uses the ambiguous clause topic when earlier context mentioned another topic', () => {
     expect(classifyCrisisSignal('Mi hermano habló de suicidio y no sé si autolesionarme')).toEqual({
       disposition: 'ambiguous', riskType: 'self_harm',
@@ -185,6 +189,20 @@ describe('classifyCrisisSignal — conversation routing', () => {
 
   it.each(['No quiero suicidarme', 'No estoy pensando en suicidarme'])('retains unequivocal denial: %s', text => {
     expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it.each(['No quiero dejar de pensar en suicidarme', 'No quiero dejar de autolesionarme'])('keeps risk when negation scopes over stopping the thought: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it.each(['No voy a suicidarme', 'No voy a autolesionarme'])('treats a clear future denial as contextual: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it('carries shared querer scope into the next coordinated clause', () => {
+    expect(classifyCrisisSignal('Quiero cortarme el pelo y quitarme la vida')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
   })
 })
 
