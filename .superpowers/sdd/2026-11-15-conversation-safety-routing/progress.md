@@ -22,8 +22,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 
 - [x] Task 1: signal dispositions and pure answer candidates. Commit: f384238.
 - [x] Task 2: prompt-bound database transaction and SQL regression cases. Commit: 0f9b741.
-- [ ] Task 3: integrate dispositions in chat route, tests and crisis protocol.
-- [ ] Task 4: run local/repository gates, review full diff, document remaining hosted/runtime/clinical gates.
+- [x] Task 3: integrate dispositions in chat route, tests and crisis protocol. Final code commit: `bbc99d9`.
+- [x] Task 4: run local/repository gates, review full diff, document remaining hosted/runtime/clinical gates. `rtk npm run verify` passed on `bbc99d9`; see final verification below.
 
 ### Task 1 independent review follow-up
 
@@ -183,7 +183,7 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Routed chat admission through `classifyCrisisSignal` independent of pilot state. Direct current signals pass the correct risk type and urgency, use static responses, avoid profile/model work, and never close due to the classification. Hard time closure remains `time_limit`. Contextual cues use ordinary generation. Ambiguous signals persist a typed `data-safety-prompt` and do not emit an event.
 - Bound clarification categories to the most recent server-stored marker; route reads fail closed, stale/malformed refs are rejected, and SQL remains the lock/transaction authority. The UI sends only the prompt request ID and carries it through a same-turn retry. The harness now stores response parts, candidate/type, previous request ID, and completed replay chunks. Added regression that stored candidate wins on retry even if current classifier behavior differs.
 - Affirmative/negative/unclear answers return deterministic outcomes; skip consumes the marker and generates against the changed topic. Profile extraction is skipped for direct, ambiguous, and marker-answer turns. Removed the generative `close_session_crisis` tool and replaced obsolete protocol/model wording.
-- Focused suite: 7 files / 242 tests passed. `rtk npm run typecheck` and `rtk git diff --check` pass. Full suite and repository verification remain for Task 4; no DB/hosted/provider/runtime/clinical gates were run. Detailed evidence: `task-3-report.md`.
+- Initial focused suite: 7 files / 242 tests passed. Later Task 4 verification and review follow-ups are recorded below; no hosted/provider/runtime/clinical acceptance is implied. Detailed evidence: `task-3-report.md`.
 
 ### Task 3 review follow-up: inactivity, time-bound answers, natural skip, replay
 
@@ -208,10 +208,10 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED for `No creo que voy a matarme esta noche` (incorrectly explicit); uncertainty pattern now keeps it ambiguous while existing positive, clear denial, and attributed-quote cases remain covered.
 - Focused RED: 2 failed / 194 passed. Focused GREEN: 2 files / 196 tests passed. Typecheck, lint, and diff check passed. Full verify deferred for independent review; details in `task-3-report.md`.
 
+### Task 4 final verification — 2026-11-15
 
-
-### Task 3 full-verify behavioral follow-up
-
-- Reproduced review regressions before fixes: focused RED was 5 failing files / 2 passing files, 6 failed tests / 226 passing. Failures covered , private-context degradation, and deadline closure after context/generation errors.
-- Added direct  recognition while retaining direct denial and attributed quote behavior; optional patient context now degrades to ordinary chat; deadline errors recheck expiry and close by ; corrected completed ordinary replay expectation to prevent duplicate profile extraction.
-- Focused GREEN: 5 files / 232 tests passed. Typecheck, lint, and diff check passed. Full suite/verify deferred as requested for parent rerun. Detailed evidence in .
+- Final code commit: `bbc99d9`; independent static review found no P1/P2 findings. One P3 edge for Pablo to review: a natural topic change that itself contains an ambiguous self-harm cue can consume the clarification marker.
+- `rtk npm run verify` passed all eight gates: `test`, `lint`, `typecheck`, `workflow:wire`, `db:test`, `chronology:test`, `audit:dependencies`, and `build:isolated`.
+- Full suite: 101 files / 1,466 tests passed. Isolated PostgreSQL migration replay and chronology passed. Production and full dependency audits each returned zero advisories with matching npm exit codes. Isolated build passed.
+- Full evidence is in `/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-tNAuVz`.
+- `db:verify` against a running local Supabase stack was not run because this turn did not confirm that stack's project identity and migration history. No hosted database write, Vercel mutation, provider/model call, deployment, clinical approval, or pilot was performed.

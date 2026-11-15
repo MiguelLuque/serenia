@@ -20,11 +20,10 @@
 - `rtk npm run typecheck` — passed.
 - `rtk git diff --check` — passed.
 
-## Gates not run
+## Acceptance boundaries
 
-- Full `rtk npm test` and repository `rtk npm run verify` were not run; Task 4 owns full verification and the parent requested the focused suite first.
-- No database replay/type generation or local Supabase stack command was run. SQL/migrations were not modified; RPC lock behavior remains subject to Task 4's local database verification.
-- No hosted Supabase, Vercel, provider/model call, deployment, clinical review, or pilot validation was performed.
+- The final repository verification is recorded below. It includes isolated PostgreSQL migration replay, not a check against a running local Supabase stack.
+- No hosted Supabase write or migration apply, Vercel environment mutation, provider/model call, deployment, clinical review, or pilot validation was performed.
 
 ## Review follow-up — 2026-11-15
 
@@ -76,40 +75,17 @@ GREEN: `rtk npx vitest run tests/chat/cross-session-context.test.ts tests/chat/s
 - RED: `rtk npx vitest run tests/chat/crisis-detector.test.ts tests/api/chat-safety-routing.test.ts` — **2 failed, 194 passed**.
 - GREEN: same focused command — **2 files passed, 196 tests passed**.
 - `rtk npm run typecheck`, `rtk npm run lint`, and `rtk git diff --check` — passed.
-- Full verify intentionally not run pending independent review. No hosted or external operations were performed.
+- At this point in the sequence, full verify was pending independent review; it passed later as recorded below. No hosted database write, Vercel mutation, provider/model call, or deployment was performed.
 
 
-## Full-verify behavioral follow-up — 2026-11-15
+## Final repository verification — 2026-11-15
 
-Addressed the four review findings from the full verify using regression-first TDD:
+Final code commit: `bbc99d9` (`Preserve committed chat replay on finish errors`). Independent static review found no P1/P2 findings in this commit. One P3 pilot-review edge remains: a natural topic-change request that itself contains an ambiguous self-harm cue can consume the clarification marker; discuss this case with Pablo during supervised review.
 
-- Added  to the direct  suicidal-intent matcher, with a direct positive and clear-negation case plus an attributed-quote control.
-- Restored the optional private-context contract:  failure logs and degrades to base chat. Session safety-state read failures remain fail-closed.
-- Corrected the ordinary completed replay test: replay does not enqueue profile extraction a second time.
-- Reworked the stale deadline tests to use an ordinary contextual media/article mention for generation crossing/failure; the after-inactivity direct case now asserts deterministic direct resources, typed urgent admission, and no model call. The route catch rechecks the hard deadline even for context failures before model generation begins, then closes with .
-
-RED:  RUN  v4.1.12 /Users/miguelluque/.codex/worktrees/serenia-pablo-safety-integration/serenia
- Test Files  5 passed (5)
-      Tests  232 passed (232)
-   Start at  18:27:48
-   Duration  582ms (transform 498ms, setup 0ms, import 422ms, tests 1.28s, environment 1ms) — 5 files failed, 2 passed; 6 failed tests / 226 passed.
-
-GREEN:  RUN  v4.1.12 /Users/miguelluque/.codex/worktrees/serenia-pablo-safety-integration/serenia
- Test Files  5 passed (5)
-      Tests  232 passed (232)
-   Start at  18:27:49
-   Duration  538ms (transform 474ms, setup 0ms, import 354ms, tests 1.25s, environment 0ms) — 5 files passed, 232 tests passed.
-
-- > tsc --noEmit — passed.
-- > eslint --max-warnings=0 — passed (zero warnings).
--  — passed.
-- Full suite / > node scripts/verify.mjs
-FAIL test; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/test.log
-PASS lint; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/lint.log
-PASS typecheck; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/typecheck.log
-PASS workflow:wire; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/workflow-wire.log
-FAIL db:test; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/db-test.log
-FAIL chronology:test; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/chronology-test.log
-FAIL audit:dependencies; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/audit-dependencies.log
-FAIL build:isolated; full log: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R/build-isolated.log
-Verification evidence: /var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-HPwq1R. Supabase runtime acceptance additionally requires npm run db:verify with a healthy local stack. were not rerun in this follow-up; parent requested focused GREEN before rerunning repository gates. No hosted DB, Vercel, model/provider, push, merge, or deploy operations were performed.
+- `rtk npm run verify` — **all gates passed**: test, lint, typecheck, workflow wire, isolated `db:test`, chronology, dependency audit, and isolated build.
+- Full suite: **101 files, 1,466 tests passed**.
+- Dependency audit: production and full reports both showed zero advisories; npm exit codes matched.
+- Evidence is in the private temp directory `/var/folders/3q/lq4c_t8s06v_jc64x_vv3f980000gn/T/serenia-verify-tNAuVz`.
+- `db:verify` against a running local Supabase stack was not run because this turn did not confirm that stack's project identity and migration history. The isolated PostgreSQL migration replay in `db:test` passed.
+- Vercel metadata access was retried with `decrypt=false`; the connector returned 57 rows but marked its response truncated. No environment values were decrypted and no variable targets were changed.
+- No hosted database write, Vercel mutation, provider/model call, deployment, clinical approval, or patient pilot was performed.
