@@ -177,3 +177,11 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Attribution now binds per nested quote span after excluding child spans; root wrappers cannot confer third-party provenance on the entire envelope. Supported own-intent root endorsement is handled separately; results preserve disposition and riskType from one evidence item.
 - Focused 169/169, typecheck and diff check pass; full suite not rerun. Details in Task 1 report.
 
+### Task 3: server-routed safety dispositions
+
+- Added RED route and request-boundary tests for contextual generation, typed direct signal, ambiguous marker persistence, prompt-bound answer derivation, stale ID rejection, marker-read failure, and hard time limit. Initial RED run: 8 failed / 7 passed. A separate RED exposed that a compound explicit topic change was treated as `unclear`; it now remains `skip`.
+- Routed chat admission through `classifyCrisisSignal` independent of pilot state. Direct current signals pass the correct risk type and urgency, use static responses, avoid profile/model work, and never close due to the classification. Hard time closure remains `time_limit`. Contextual cues use ordinary generation. Ambiguous signals persist a typed `data-safety-prompt` and do not emit an event.
+- Bound clarification categories to the most recent server-stored marker; route reads fail closed, stale/malformed refs are rejected, and SQL remains the lock/transaction authority. The UI sends only the prompt request ID and carries it through a same-turn retry. The harness now stores response parts, candidate/type, previous request ID, and completed replay chunks. Added regression that stored candidate wins on retry even if current classifier behavior differs.
+- Affirmative/negative/unclear answers return deterministic outcomes; skip consumes the marker and generates against the changed topic. Profile extraction is skipped for direct, ambiguous, and marker-answer turns. Removed the generative `close_session_crisis` tool and replaced obsolete protocol/model wording.
+- Focused suite: 7 files / 242 tests passed. `rtk npm run typecheck` and `rtk git diff --check` pass. Full suite and repository verification remain for Task 4; no DB/hosted/provider/runtime/clinical gates were run. Detailed evidence: `task-3-report.md`.
+

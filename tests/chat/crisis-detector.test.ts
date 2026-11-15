@@ -571,4 +571,7 @@ describe('classifySafetyClarificationReply', () => {
   it('recognizes a negated safety clarification as negative', () => {
     expect(classifySafetyClarificationReply('No, no estoy pensando en eso')).toBe('negative')
   })
+  it('classifies an explicit topic change with a new topic as skip', () => {
+    expect(classifySafetyClarificationReply('Cambiemos de tema; quiero hablar del trabajo')).toBe('skip')
+  })
 })

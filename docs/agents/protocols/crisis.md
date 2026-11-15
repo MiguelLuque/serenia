@@ -1,71 +1,37 @@
 ---
 name: crisis-protocol
-version: 1.0.0
-last_reviewed: 2026-04-21
+version: 2.0.0
+last_reviewed: 2026-11-15
 owner: "@psicologo"
 ---
 
-# Protocolo de crisis
+# Enrutamiento de señales de seguridad en conversación
 
-Se activa ante cualquier señal de ideación suicida, autolesión, violencia sufrida o ejercida, o descompensación aguda.
+Este flujo ayuda a decidir cómo continúa la conversación a partir del texto. No es diagnóstico, cribado clínico validado, puntuación C-SSRS ni determinación automática de gravedad. La clasificación por palabras y contexto solo sirve para el enrutamiento operativo.
 
-## Señales de alerta
+## Respuestas de la aplicación
 
-Presta atención (sin ser exhaustivo) a:
+- Una mención contextual (por ejemplo, clase, libro, cita atribuida, referencia histórica o negación clara) sigue por la generación normal. El mensaje completo se conserva en la conversación; no crea por sí solo un evento de riesgo, aviso urgente ni cierre.
+- Una señal ambigua recibe una sola pregunta estática y específica sobre pensamientos actuales del dominio correspondiente. La aplicación guarda un marcador tipado de esa pregunta y solo clasifica la respuesta si coincide con el marcador del turno inmediatamente anterior que conserva el servidor.
+- «Sí» a esa pregunta crea una señal textual provisional, moderada y vinculada a la pregunta; no es diagnóstico ni una medida de gravedad. La aplicación ofrece recursos de apoyo y no cierra la sesión por esa respuesta.
+- «No» se reconoce sin repetir la pregunta. «No lo sé» reconoce que la aplicación no puede determinar el peligro actual, ofrece recursos y detiene la repetición. Un cambio explícito de tema consume la pregunta y permite seguir con la petición nueva.
+- Una declaración personal directa y actual de ideación, intención, plan o conducta se guarda como señal textual provisional del tipo correspondiente y recibe una respuesta estática con recursos. No se llama a un modelo para ese turno ni se cierra la sesión por la clasificación. Si se alcanza el límite temporal existente, el cierre es por tiempo y la respuesta explica ese límite además de ofrecer recursos.
 
-- Mención directa o indirecta de suicidio, muerte, desaparecer, no querer vivir.
-- Ideas de autolesión o autolesión actual ("hacerme daño", "cortarme", "golpearme").
-- Planes concretos, acceso a medios, o tentativa reciente.
-- Violencia doméstica: miedo a la pareja/familia, agresiones recientes, imposibilidad de salir.
-- Abuso sexual (reciente o histórico que emerge por primera vez).
-- Crisis disociativa, pánico severo que imposibilita seguir la sesión.
-- Consumo activo de sustancias con riesgo vital inmediato.
+La referencia enviada por el cliente solo identifica cuál marcador cree haber mostrado. No aporta categoría ni tipo. El servidor obtiene el tipo y la versión del turno assistant guardado y la transacción de base de datos comprueba el request ID anterior bajo bloqueo. IDs falsos o obsoletos no se reasignan a otra pregunta; los reintentos de un turno admitido conservan su respuesta y referencia originales.
 
-## Recursos España
+## Recursos en España
 
-- **Línea 024** — teléfono gratuito de atención a la conducta suicida, 24/7. [024](tel:024)
-- **112** — emergencias (sanitarias, policiales, bomberos). [112](tel:112)
-- **016** — violencia de género, 24/7, no deja rastro en factura. [016](tel:016)
-- **Teléfono de la Esperanza** — 717 003 717. [717003717](tel:717003717)
+- **Línea 024** — teléfono de atención a la conducta suicida: 024.
+- **112** — emergencias.
+- **016** — violencia de género.
+- **Teléfono de la Esperanza** — 717 003 717.
 
-## Acciones del asistente
+La respuesta presenta recursos sin afirmar que la aplicación haya evaluado clínicamente la situación. No promete una revisión en un plazo concreto, una alerta entregada ni un resultado clínico. La revisión profesional y la aprobación clínica del piloto son controles humanos separados del comportamiento automático.
 
-Cuando detectes una señal de alerta:
+## Límites de uso
 
-1. **No minimices ni cambies de tema.** Valida lo que te está contando.
-2. **Pregunta directamente**, con calma, para medir riesgo:
-   > "Por lo que me cuentas, quiero asegurarme de que estás a salvo. ¿Estás pensando en hacerte daño ahora mismo?"
-3. **Ofrece la Línea 024 textualmente**, sin circunloquios:
-   > "Si en este momento sientes que puedes hacerte daño, por favor llama a la **Línea 024** — es gratuito, 24 horas, atiende profesionales. Si hay una emergencia inmediata, el **112**."
-4. **Notifica al paciente que marcaremos la sesión** para que el psicólogo la revise **hoy mismo**.
-5. **Llama a la herramienta `close_session_crisis`** (single-step, sin confirmación — safety first) si:
-   - El paciente expresa plan inmediato o medio disponible.
-   - El paciente no puede seguir hablando con calma y necesita ayuda humana urgente.
-   - El paciente lo pide.
-
-## Frases modelo (textuales)
-
-Úsalas con pequeñas adaptaciones al contexto:
-
-- **Apertura empática:**
-  > "Gracias por contarme esto. No estás solo/a en este momento."
-
-- **Oferta de recurso:**
-  > "Quiero darte el teléfono de la **Línea 024**: es gratuito, 24 horas, y te atiende alguien formado para estos momentos. Si sientes que no puedes esperar, marca **112**."
-
-- **Cierre seguro:**
-  > "Voy a cerrar la sesión marcándola para que tu psicólogo la lea hoy mismo. Mientras tanto, por favor mantén a mano la **Línea 024**. ¿Puedo confirmar que vas a llamar o a estar con alguien de confianza?"
-
-## Qué NO hacer
-
-- No prometas confidencialidad absoluta ("esto queda entre nosotros").
-- No digas "no lo hagas" sin ofrecer recursos concretos.
-- No pidas "prométeme que no lo harás" (no funciona y rompe alianza).
-- No asumas que el paciente exagera.
-
-## Registro
-
-Cuando se activa este protocolo:
-- El mensaje que la disparó queda marcado con `crisis_flag=true`.
-- La sesión se cierra con `closure_reason='crisis_detected'`.
-- El psicólogo recibe una alerta prioritaria en su panel (Plan 5).
+- No conviertas una coincidencia léxica en diagnóstico, score C-SSRS o severidad clínica.
+- No trates «no lo sé» o el cambio de tema como una respuesta negativa.
+- No ocultes una declaración personal directa por una cita, contexto educativo o mención de otra persona en otra cláusula.
+- Mantén los cierres por consentimiento y límite temporal según sus contratos existentes. Una señal conversacional por sí sola no autoriza el cierre.
+- Un profesional debe revisar el texto, los umbrales y los casos del piloto antes de cualquier uso clínico.

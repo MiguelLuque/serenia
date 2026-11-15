@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
+import { latestSafetyPromptRequestId } from '@/lib/shared/chat/safety-prompt'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import { MessageBubble } from './message-bubble'
 import { ChatInput } from './chat-input'
@@ -38,9 +39,11 @@ interface LocalSubmission {
   requestId: string
   userMessageId?: string
   text: string
+  safetyPromptRequestId?: string
   urgent: boolean
   state: 'sending' | 'uncertain' | 'interrupted'
 }
+
 
 const CLOSE_ACTION_TIMEOUT_MS = 15_000
 const LOCAL_TEXT_COPY_WARNING = 'El texto pendiente solo sigue en esta pantalla. Cópialo antes de recargar o salir.'
@@ -242,16 +245,14 @@ export function ChatView({
         const message = [...messages].reverse().find(message => message.role === 'user')
         const requestId = typeof body?.requestId === 'string' ? body.requestId : message?.id
         const text = typeof body?.retryText === 'string' ? body.retryText : message?.parts.filter(part => part.type === 'text').map(part => part.text).join('')
-        return { body: { sessionId, requestId, messages: requestId && typeof text === 'string' ? [{ id: requestId, role: 'user', parts: [{ type: 'text', text }] }] : [] } }
+        const safetyPromptRequestId = typeof body?.safetyPromptRequestId === 'string' ? body.safetyPromptRequestId : undefined
+        return { body: { sessionId, requestId, safetyPromptRequestId, messages: requestId && typeof text === 'string' ? [{ id: requestId, role: 'user', parts: [{ type: 'text', text }] }] : [] } }
       },
     }),
   })
 
-  // `closeSignal` is derived from `messages` on every render: 'confirm'
-  // for a non-crisis close (confirm_close_session reached
-  // output-available) and 'crisis' for close_session_crisis. This is how
-  // the client knows the server closed the session before the next POST
-  // would 409.
+  // `closeSignal` also recognizes persisted legacy crisis-close payloads;
+  // the current generative route cannot invoke a crisis-close tool.
   const closeSignal = detectServerClose(messages)
   const isClosed = closeSignal !== 'none' || externallyClosed
   const isExpired = isTimeExpired || isClosed
@@ -540,7 +541,8 @@ export function ChatView({
     let completed = false
     try {
       const existing = messages.find(message => message.id === attempt.userMessageId || message.id === attempt.requestId)
-      await sendMessage(existing ? { text: attempt.text, messageId: existing.id } : undefined, { body: { requestId: attempt.requestId, retryText: attempt.text } })
+      const safetyPromptRequestId = localSubmissionsRef.current.find(item => item.requestId === attempt.requestId)?.safetyPromptRequestId
+      await sendMessage(existing ? { text: attempt.text, messageId: existing.id } : undefined, { body: { requestId: attempt.requestId, retryText: attempt.text, safetyPromptRequestId } })
       completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(transport)
     } catch {
       failedRef.current = true
@@ -573,7 +575,7 @@ export function ChatView({
     failedRef.current = false; clearError()
     const requestId = replay?.requestId ?? crypto.randomUUID()
     const urgent = replay?.urgent ?? urgentMode
-    const submission: LocalSubmission = { requestId, userMessageId: replay?.userMessageId, text, urgent, state: 'sending' }
+    const submission: LocalSubmission = { requestId, userMessageId: replay?.userMessageId, text, urgent, safetyPromptRequestId: replay?.safetyPromptRequestId ?? latestSafetyPromptRequestId(messages), state: 'sending' }
     updateLocalSubmission(requestId, submission)
     if (urgent) setUrgentMode(true)
     lastAttemptRef.current = { requestId, userMessageId: requestId, text, status: 'failed', canRetry: true, leaseUntil: new Date().toISOString() }
@@ -584,7 +586,7 @@ export function ChatView({
       const message = existing
         ? { text, messageId: existing.id }
         : { id: requestId, role: 'user' as const, parts: [{ type: 'text' as const, text }] }
-      await sendMessage(message, { body: { requestId, retryText: text } })
+      await sendMessage(message, { body: { requestId, retryText: text, safetyPromptRequestId: submission.safetyPromptRequestId } })
       completed = isCurrentTransition(operation) && !failedRef.current && !cancelledRequestsRef.current.has(transport)
     } catch {
       failedRef.current = true

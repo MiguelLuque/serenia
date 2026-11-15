@@ -136,7 +136,7 @@ describe('authenticated server-owned chat transport', () => {
     release(); expect((await first).status).toBe(200)
     expect(h.state.captured).toHaveLength(1)
   })
-  it.each([['El texto nuevo distintivo',503],['Voy a matarme',200]] as const)('detects raw-row truncation before filtering tool-only history: %s',async(text,status)=>{
+  it.each([['El texto nuevo distintivo',503],['Voy a suicidarme esta noche',200]] as const)('detects raw-row truncation before filtering tool-only history: %s',async(text,status)=>{
     const h=await chatHarness()
     h.state.rows.push(...Array.from({length:162},(_,i)=>({id:`legacy-${i}`,role:'assistant',parts:i<2?[{type:'tool-example',state:'output-available',output:{}}]:[{type:'text',text:`Short historical text ${i}`}]})))
     const response=await h.post(text)

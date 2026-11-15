@@ -36,11 +36,10 @@ describe('persistent proposal + explicit next-turn acceptance', () => {
       expect(h.state.session.status).toBe('open')
     }
   })
-  it('allows a registered crisis to close without acceptance',async()=>{
+  it('does not register a model tool that closes for a crisis signal',async()=>{
     const h=await chatHarness()
-    h.state.hook=async opts=>{expect(await opts.tools.close_session_crisis.execute({})).toMatchObject({closed:true})}
-    // A registered low-signal crisis still reaches the existing closure tool.
-    await h.post('Quiero desaparecer para siempre')
-    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBe('crisis_detected')
+    h.state.hook=async opts=>{expect(opts.tools.close_session_crisis).toBeUndefined()}
+    await h.post('Quiero hablar de mi semana')
+    expect(h.state.writes.find(w=>w.name==='finish_chat_turn').args.p_close_reason).toBeUndefined()
   })
 })

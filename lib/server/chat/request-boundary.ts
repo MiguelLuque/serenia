@@ -7,6 +7,7 @@ const identifier = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/)
 export const ChatRequestSchema = z.object({
   sessionId: z.string().uuid(),
   requestId: identifier,
+  safetyPromptRequestId: identifier.optional(),
   messages: z.array(z.object({
     id: identifier,
     role: z.literal('user'),
