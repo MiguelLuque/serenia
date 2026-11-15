@@ -27,8 +27,8 @@ parser.add_argument('--profile-history', action='store_true', help='Focused prof
 parser.add_argument('--safety-red', action='store_true', help='Focused Task 2 RED check: replay all migrations except conversation_safety_answer and run its SQL assertions')
 args = parser.parse_args()
 historical_baseline = args.baseline_security or args.baseline_chat or args.baseline_flows
-if args.safety_red and historical_baseline:
-    parser.error('--safety-red cannot be combined with a historical baseline')
+if args.safety_red and (historical_baseline or args.profile_history):
+    parser.error('--safety-red cannot be combined with a historical baseline or --profile-history')
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 container_started = False
 container_start_attempted = False

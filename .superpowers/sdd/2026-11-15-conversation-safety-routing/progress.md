@@ -51,6 +51,13 @@ No internal contradiction found. Existing branch was clean at base before adding
 - These DB runs used the repository's ephemeral PostgreSQL 17.6 harness (`--network none`, synthetic fixtures, auth.uid shim). No hosted schema, Vercel configuration, paid model, push, merge or deploy was touched.
 - Review-fix commit: `fd65c57` (`fix: bind safety answers to prompt requests`).
 
+### Task 2 safety-RED mode compatibility follow-up
+
+- The focused `--safety-red` mode now rejects `--profile-history` as well as historical baseline flags during argument parsing, before Docker setup. These modes otherwise exit before reaching the intended RED assertion.
+- Before the change, `rtk npm run db:test -- --safety-red --profile-history` reached Docker startup (then the sandbox denied the socket). After the change it exits 2 with the parser error `--safety-red cannot be combined with a historical baseline or --profile-history`, before any Docker call.
+- `rtk npm run db:test -- --safety-red` still exits 1 at `Prompt-bound begin_chat_turn signature missing`, the expected focused RED. `rtk git diff --check` passes. This follow-up changes only harness argument validation; typecheck was not rerun.
+- The parser guard and this ledger entry are committed locally.
+
 ### Task 1 follow-up: grooming, risk type and TypeScript
 
 - Added RED coverage for ordinary hair/nail grooming mentions, contextual-plus-ambiguous topic precedence, `No quiero vivir`, and unequivocal denials. Six new assertions failed before the fix.
