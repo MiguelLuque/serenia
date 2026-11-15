@@ -71,3 +71,10 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Progressive grooming stays `none`; conflicted negation stays ambiguous; direct future denials are contextual; shared `quiero` preserves the explicit suicide clause. Focused tests pass 58/58 and typecheck passes.
 - `rtk npm test`: 99 files passed, 1 failed; 1,322 passed, 4 failed in dependency integration due `listen EPERM: operation not permitted 127.0.0.1`. Details: `task-1-report.md`.
 
+### Task 1 follow-up: clause boundaries and explicit-current threshold
+
+- Added the re-review cases first; 7 regression cases failed before the fix.
+- Clause parsing now retains connector type. Positive `quiero` inherits only across `y`, not across punctuation or a negated clause. Negation over “dejar de” remains ambiguous; clear “no voy a” denial stays contextual.
+- Broad “quiero desaparecer/acabar con todo” expressions are ambiguous alone. Direct personal statements already accepted remain explicit, including coordinated positive `quiero` + `quitarme la vida`/`matarme`.
+- Focused tests pass 70/70; typecheck passes. Full suite: 99 files pass, 1 fails; 1,334 pass and 4 fail due dependency integration child server `listen EPERM` on 127.0.0.1. See `task-1-report.md`.
+

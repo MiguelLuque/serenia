@@ -204,6 +204,35 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
     })
   })
+
+  it.each([
+    'No quiero cortarme el pelo y quitarme la vida',
+    'No quiero cortarme el pelo y matarme',
+  ])('does not propagate positive intent from a negated coordination: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).not.toBe('explicit_current')
+  })
+
+  it.each(['No voy a dejar de pensar en suicidarme', 'No voy a dejar de autolesionarme'])('treats negation over stopping as ambiguous: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it.each(['Quiero desaparecer para siempre', 'Quiero acabar con todo'])('keeps broad expressions ambiguous without a direct current signal: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('propagates a positive querer only across clear y coordination', () => {
+    for (const text of ['Quiero cortarme el pelo y quitarme la vida', 'Quiero cortarme el pelo y matarme']) {
+      expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+    }
+  })
+
+  it('does not propagate querer across punctuation', () => {
+    expect(classifyCrisisSignal('Quiero cortarme el pelo; suicidarme es un tema complejo').disposition).not.toBe('explicit_current')
+  })
+
+  it.each(['Estoy pensando en suicidarme ahora', 'Quiero hacerme daño ahora', 'quiero matarme', 'Quiero cortarme las venas'])('retains accepted direct personal signals: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('explicit_current')
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

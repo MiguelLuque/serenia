@@ -76,11 +76,25 @@ type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const normalized = normalize(text)
-  const clauses = normalized.split(/[;,]|\s+(?:y|pero|aunque|sin embargo)\s+/).map(part => part.trim())
-  const results = clauses.flatMap<ClauseClassification>((rawClause, index) => {
-    const previous = clauses[index - 1] ?? ''
-    const sharedWant = index > 0 && /\bquiero\b/i.test(previous) && /\b(quitarme la vida|suicid|autolesion)/i.test(rawClause)
-    const clause = sharedWant ? `quiero ${rawClause}` : rawClause
+  const clauses: Array<{ text: string; separator: 'start' | 'and' | 'other' }> = []
+  const separators = /([;,]|\s+(y|pero|aunque|sin embargo)\s+)/g
+  let previousEnd = 0
+  let previousSeparator: 'start' | 'and' | 'other' = 'start'
+  for (const match of normalized.matchAll(separators)) {
+    const separatorIndex = match.index ?? 0
+    const clauseText = normalized.slice(previousEnd, separatorIndex).trim()
+    if (clauseText) clauses.push({ text: clauseText, separator: previousSeparator })
+    previousEnd = separatorIndex + match[0].length
+    previousSeparator = match[2] === 'y' ? 'and' : 'other'
+  }
+  const lastClause = normalized.slice(previousEnd).trim()
+  if (lastClause) clauses.push({ text: lastClause, separator: previousSeparator })
+
+  const results = clauses.flatMap<ClauseClassification>((item, index) => {
+    const previous = clauses[index - 1]?.text ?? ''
+    const previousDenies = /\b(no|nunca|jamas)\b/i.test(previous)
+    const sharedWant = item.separator === 'and' && /\bquiero\b/i.test(previous) && !previousDenies && /\b(quitarme la vida|suicid|autolesion|matarme)\b/i.test(item.text)
+    const clause = sharedWant ? `quiero ${item.text}` : item.text
     if (/\b(?:me estoy cortando|cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
     const suicide = SUICIDE.test(clause)
     const selfHarm = SELF_HARM.test(clause)
@@ -89,13 +103,13 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|vimos|guia|articulo|amigo|amiga|hermano|hermana|dijo|dice|hablo|cita|personaje|antes|cuando era)\b/i.test(clause)
     const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
     const denial = /\b(no|nunca|jamas)\b/i.test(clause)
-    const uncertainNegation = /\b(no puedo dejar de|no quiero dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
+    const uncertainNegation = /\b(no puedo dejar de|no quiero dejar de|no voy a dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
     const clearDenial = denial && (/\b(no quiero|no pienso|no estoy pensando|no tengo|no voy a)\b/i.test(clause)) && !uncertainNegation && !/\b(no quiero vivir)\b/i.test(clause)
     const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
     const explicit = !context && !past && !uncertainNegation && !clearDenial && (
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
       (!/\b(me hice dano hoy)\b/i.test(clause) && /\b(ahora|hoy|actualmente)\b/i.test(clause) && /\b(yo|me|estoy|tengo|quiero|pienso|pensando|siento)\b/i.test(clause)) ||
-      (!denial && /\b(quiero|estoy pensando|pienso|me estoy)\b/i.test(clause) && !/\b(a veces|a menudo)\b/i.test(clause))
+      (!denial && /\b(quiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme)|me estoy cortando|me corto ahora)\b/i.test(clause) && !/\b(a veces|a menudo)\b/i.test(clause))
     )
     const disposition = explicit ? 'explicit_current' : (context || past || clearDenial ? 'contextual' : 'ambiguous')
     return [{ disposition, riskType } as ClauseClassification]

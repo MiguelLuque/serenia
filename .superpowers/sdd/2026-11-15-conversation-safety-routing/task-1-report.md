@@ -40,6 +40,15 @@
 - Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 58 tests. `rtk npm run typecheck` passed.
 - Full suite: 99 files passed, 1 failed; 1,322 tests passed and 4 failed. All four failures remain child-process bind denials in `tests/tooling/dependency-integration.test.ts`: `listen EPERM: operation not permitted 127.0.0.1`.
 
+## Task 1 follow-up: clause boundaries and explicit-current threshold
+
+- Added the re-review cases first; RED: 7 test cases failed before the fix.
+- Clause boundaries now retain whether a clause follows a clear `y` coordination or punctuation/other connector. Positive `quiero` carries only over `y`, and never from a negated clause. Semicolon clauses do not inherit intent.
+- `No quiero dejar de...` and `No voy a dejar de...` remain ambiguous. Clear `No voy a suicidarme/autolesionarme` remains contextual. Broad wishes to disappear or end everything no longer cross the `explicit_current` threshold on their own.
+- Accepted direct personal statements remain explicit; coordinated positive intent with `quitarme la vida` or `matarme` remains explicit.
+- Focused suite: 70 tests passed. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,334 passed and 4 failed. All four are in `tests/tooling/dependency-integration.test.ts` due child Node servers receiving `listen EPERM: operation not permitted 127.0.0.1`.
+
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.
