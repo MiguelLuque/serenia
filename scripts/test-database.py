@@ -21,10 +21,14 @@ from database_test_processes import cleanup_container, finish_query_session, run
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--baseline-security', action='store_true', help='Historical baseline without the two nonportable data operations or hardening migration')
-parser.add_argument('--baseline-chat', action='store_true', help='Task 1 schema with Task 2 regressions and no Task 2 migration')
-parser.add_argument('--baseline-flows', action='store_true', help='Task 2 schema with Task 3 functional regressions')
+parser.add_argument('--baseline-chat', action='store_true', help='Historical pre-Task-2 chat schema; excludes Task 2 migration and assertions')
+parser.add_argument('--baseline-flows', action='store_true', help='Historical baseline without Task 2 schema-dependent assertions')
 parser.add_argument('--profile-history', action='store_true', help='Focused profile history regression on the full migrated ephemeral schema')
+parser.add_argument('--safety-red', action='store_true', help='Focused Task 2 RED check: replay all migrations except conversation_safety_answer and run its SQL assertions')
 args = parser.parse_args()
+historical_baseline = args.baseline_security or args.baseline_chat or args.baseline_flows
+if args.safety_red and historical_baseline:
+    parser.error('--safety-red cannot be combined with a historical baseline')
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
 container_started = False
 container_start_attempted = False
@@ -76,7 +80,7 @@ try:
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
         if ('chat_turn_lease_fencing' in path.name or 'resolve_expired_chat_turn' in path.name) and (args.baseline_security or args.baseline_chat or args.baseline_flows):
             continue
-        if 'conversation_safety_answer' in path.name and args.baseline_chat:
+        if 'conversation_safety_answer' in path.name and (args.safety_red or historical_baseline):
             continue
         if args.baseline_flows and 'patient_flows_acceptance' in path.name:
             continue
@@ -294,6 +298,10 @@ try:
         query((ROOT / 'supabase/tests/profile-memory-page.sql').read_text())
         print('PASS profile history pagination, precision, ownership, disputes and stale review')
         raise SystemExit(0)
+    if args.safety_red:
+        print('RED: running Task 2 assertions without conversation_safety_answer migration', flush=True)
+        query((ROOT / 'supabase/tests/conversation-safety-routing.sql').read_text())
+        raise RuntimeError('Task 2 RED check unexpectedly passed without its migration')
     # Keep the temporary must_deny helper and fixtures on one SQL connection.
     query((ROOT / 'supabase/tests/authorization-review.sql').read_text() + '\n' +
           (ROOT / 'supabase/tests/relationships.sql').read_text() + '\n' +
@@ -365,8 +373,9 @@ try:
     print('PASS concurrent confirm/modify and duplicate modify retry')
     query((ROOT / 'supabase/tests/chat-questionnaire-recovery.sql').read_text())
     print('PASS atomic questionnaire validation/retry/rollback, CSSRS priority, chat consent/leases and durable recovery')
-    query((ROOT / 'supabase/tests/conversation-safety-routing.sql').read_text())
-    print('PASS prompt-bound safety answer validation, replay, typed provisional events and RPC grants')
+    if not historical_baseline:
+        query((ROOT / 'supabase/tests/conversation-safety-routing.sql').read_text())
+        print('PASS prompt-bound safety answer validation, replay, typed provisional events and RPC grants')
     run_chat_view_close_concurrency(query, open_query_session, finish_query_session)
     print('PASS concurrent chat-view close/admission in both lock acquisition orders')
     if not (args.baseline_security or args.baseline_chat or args.baseline_flows):

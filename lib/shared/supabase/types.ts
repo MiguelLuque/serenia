@@ -703,10 +703,10 @@ isOneToOne: false
 { Args: { "doc": Json }; Returns: boolean
                            },
 "begin_chat_turn":
-{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
+{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
                            },
 "begin_chat_turn_after_onboarding":
-{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
+{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
                            },
 "claim_assessment_jobs":
 { Args: { "p_limit"?: number,"p_session_id"?: string }; Returns: {

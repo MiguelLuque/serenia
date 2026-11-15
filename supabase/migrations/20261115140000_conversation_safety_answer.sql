@@ -99,7 +99,8 @@ create function public.begin_chat_turn_after_onboarding(
   p_direct_risk_type public.risk_type default null,
   p_safety_answer text default null,
   p_safety_answer_risk_type public.risk_type default null,
-  p_safety_answer_required boolean default false
+  p_safety_answer_required boolean default false,
+  p_safety_answer_prompt_request_id text default null
 )
 returns jsonb language plpgsql set search_path=public,pg_temp as $$
 declare
@@ -135,8 +136,9 @@ begin
 
   if not direct_signal then
     if (p_safety_answer is null) is distinct from (p_safety_answer_risk_type is null)
+      or (p_safety_answer is null) is distinct from (p_safety_answer_prompt_request_id is null)
       or p_safety_answer_required is distinct from (p_safety_answer is not null) then
-      raise exception 'Safety answer candidate and requirement must be supplied together' using errcode='23514';
+      raise exception 'Safety answer candidate, prompt request and requirement must be supplied together' using errcode='23514';
     end if;
     if p_safety_answer is not null
       and p_safety_answer not in ('affirmative','negative','unclear','skip') then
@@ -182,7 +184,9 @@ begin
       raise exception 'Turn interrupted by urgent signal' using errcode='23514';
     end if;
     if not direct_signal and (t.safety_answer is distinct from effective_safety_answer
-      or t.safety_answer_risk_type is distinct from effective_safety_answer_risk_type) then
+      or t.safety_answer_risk_type is distinct from effective_safety_answer_risk_type
+      or (t.safety_answer is not null
+        and p_safety_answer_prompt_request_id is distinct from t.previous_request_id)) then
       raise exception 'Retry cannot change the first safety answer' using errcode='23514';
     end if;
     if t.status='generating' and t.lease_until>lease_stamp then
@@ -237,15 +241,17 @@ begin
         -- present, but the explicit signal remains the only risk event.
         if p_safety_answer_required
           and p_safety_answer in ('affirmative','negative','unclear','skip')
-          and p_safety_answer_risk_type::text=marker_type then
+          and p_safety_answer_risk_type::text=marker_type
+          and p_safety_answer_prompt_request_id is not distinct from prev_turn.request_id then
           effective_safety_answer := p_safety_answer;
           effective_safety_answer_risk_type := p_safety_answer_risk_type;
           effective_safety_answer_required := true;
         end if;
       elsif not effective_safety_answer_required
         or effective_safety_answer is null
-        or marker_type is distinct from effective_safety_answer_risk_type::text then
-        raise exception 'Safety answer required for the immediately preceding prompt' using errcode='23514';
+        or marker_type is distinct from effective_safety_answer_risk_type::text
+        or p_safety_answer_prompt_request_id is distinct from prev_turn.request_id then
+        raise exception 'Safety answer required for the immediately preceding prompt request' using errcode='23514';
       end if;
     elsif not direct_signal and (effective_safety_answer_required or effective_safety_answer is not null) then
       raise exception 'No immediately preceding safety prompt authorizes this answer' using errcode='23514';
@@ -333,7 +339,7 @@ end
 $$;
 
 revoke all on function public.begin_chat_turn_after_onboarding(
-  uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean
+  uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text
 ) from public,anon,authenticated,service_role;
 
 create function public.begin_chat_turn(
@@ -346,7 +352,8 @@ create function public.begin_chat_turn(
   p_direct_risk_type public.risk_type default null,
   p_safety_answer text default null,
   p_safety_answer_risk_type public.risk_type default null,
-  p_safety_answer_required boolean default false
+  p_safety_answer_required boolean default false,
+  p_safety_answer_prompt_request_id text default null
 )
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 begin
@@ -357,25 +364,26 @@ begin
   end if;
   return public.begin_chat_turn_after_onboarding(
     p_session_id,p_user_id,p_request_id,p_text,p_crisis,p_urgent,
-    p_direct_risk_type,p_safety_answer,p_safety_answer_risk_type,p_safety_answer_required
+    p_direct_risk_type,p_safety_answer,p_safety_answer_risk_type,
+    p_safety_answer_required,p_safety_answer_prompt_request_id
   );
 end
 $$;
 
 revoke all on function public.begin_chat_turn(
-  uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean
+  uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text
 ) from public,anon,authenticated,service_role;
 grant execute on function public.begin_chat_turn(
-  uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean
+  uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text
 ) to service_role;
 
 do $readback$
 declare
   internal_id oid := to_regprocedure(
-    'public.begin_chat_turn_after_onboarding(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean)'
+    'public.begin_chat_turn_after_onboarding(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text)'
   );
   public_id oid := to_regprocedure(
-    'public.begin_chat_turn(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean)'
+    'public.begin_chat_turn(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text)'
   );
   p pg_proc%rowtype;
 begin
@@ -394,11 +402,12 @@ begin
     or p.prorettype <> 'jsonb'::regtype
     or p.proargnames is distinct from array[
       'p_session_id','p_user_id','p_request_id','p_text','p_crisis','p_urgent',
-      'p_direct_risk_type','p_safety_answer','p_safety_answer_risk_type','p_safety_answer_required'
+      'p_direct_risk_type','p_safety_answer','p_safety_answer_risk_type',
+      'p_safety_answer_required','p_safety_answer_prompt_request_id'
     ]::text[]
-    or p.pronargdefaults<>6
+    or p.pronargdefaults<>7
     or p.proconfig is distinct from array['search_path=public, pg_temp']::text[]
-    or md5(p.prosrc)<>'136e68882142503adf1465453c78ecee' then
+    or md5(p.prosrc)<>'a5f4cdd9cdeeed9a8006348c8738f1fc' then
     raise exception 'Conversation safety internal RPC readback failed';
   end if;
 
@@ -411,11 +420,12 @@ begin
     or p.prorettype <> 'jsonb'::regtype
     or p.proargnames is distinct from array[
       'p_session_id','p_user_id','p_request_id','p_text','p_crisis','p_urgent',
-      'p_direct_risk_type','p_safety_answer','p_safety_answer_risk_type','p_safety_answer_required'
+      'p_direct_risk_type','p_safety_answer','p_safety_answer_risk_type',
+      'p_safety_answer_required','p_safety_answer_prompt_request_id'
     ]::text[]
-    or p.pronargdefaults<>6
+    or p.pronargdefaults<>7
     or p.proconfig is distinct from array['search_path=public, pg_temp']::text[]
-    or md5(p.prosrc)<>'45eb5b4684261193207bcee6ce6496d4' then
+    or md5(p.prosrc)<>'1eea5dee1a4e0210819db4c1a90f2289' then
     raise exception 'Conversation safety public RPC readback failed';
   end if;
 end
