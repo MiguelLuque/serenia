@@ -78,8 +78,9 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   let normalized = normalize(text)
   const quotedContexts: ClauseClassification[] = []
   const quotePattern = /«[^»]*»|“[^”]*”|‘[^’]*’|"[^"]*"|'[^']*'/g
-  const quoteRanges: Array<{ start: number; end: number }> = []
+  const quoteRanges: Array<{ start: number; end: number; replacement: string }> = []
   const reportingLead = /(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\s*[:,]?\s*$/i
+  const embeddedLead = /^(?:(?:hoy|ayer|ahora)\s+)?(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s*[:,]?\s*[“‘"']?/i
   const reportingTail = /^\s*[,;]?\s*(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|el|ella)\b/i
   for (const match of normalized.matchAll(quotePattern)) {
     const start = match.index ?? 0
@@ -87,17 +88,32 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const quoteText = match[0].slice(1, -1)
     const suicideCue = SUICIDE.test(quoteText)
     const selfHarmCue = SELF_HARM.test(quoteText)
-    if (suicideCue || selfHarmCue) {
+    if (!suicideCue && !selfHarmCue) continue
+    const prefix = normalized.slice(0, start)
+    const suffix = normalized.slice(end)
+    const leadMatch = reportingLead.exec(prefix)
+    const tailMatch = reportingTail.exec(suffix)
+    const embeddedAttribution = embeddedLead.test(quoteText)
+    const attributed = Boolean(leadMatch || tailMatch || embeddedAttribution)
+    const mediaContext = /\b(pelicula|serie|cancion|libro|titulo)\b[^.!?]*$/i.test(prefix) || /^\s*(?:es|se llama|el titulo es)\b/i.test(suffix)
+    const thirdPartyFrame = /\b(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:cree|piensa)\s+que\s+(?:yo\s+)?estoy pensando\s*:\s*$/i.test(prefix)
+    const negativeSelfFrame = /\bno\s+estoy pensando\s*:\s*$/i.test(prefix)
+    const affirmativeSelfFrame = /\b(?:yo\s+)?(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix) && !negativeSelfFrame && !thirdPartyFrame
+    if (attributed || mediaContext) {
       quotedContexts.push({ disposition: 'contextual', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
+    } else if (affirmativeSelfFrame) {
+      quoteRanges.push({ start, end, replacement: ` ${quoteText} ` })
+      continue
+    } else {
+      quotedContexts.push({ disposition: 'ambiguous', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
     }
-    const leadMatch = reportingLead.exec(normalized.slice(0, start))
-    const tailMatch = reportingTail.exec(normalized.slice(end))
     quoteRanges.push({
       start: leadMatch ? start - leadMatch[0].length : start,
       end: tailMatch ? end + tailMatch[0].length : end,
+      replacement: ' ',
     })
   }
-  for (const range of quoteRanges.reverse()) normalized = `${normalized.slice(0, range.start)} ${normalized.slice(range.end)}`
+  for (const range of quoteRanges.reverse()) normalized = `${normalized.slice(0, range.start)}${range.replacement}${normalized.slice(range.end)}`
   normalized = normalized.trim()
   const clauses: Array<{ text: string; separator: 'start' | 'and' | 'other' }> = []
   const separators = /([;,.!?]|\s+(y|pero|aunque|sin embargo|porque)\s+)/g

@@ -147,3 +147,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for introductory/punctuated quote attribution, quote then a new sentence with personal intent, quoted non-risk wording followed by a risk cue, topic-discussion intent sharing, and speaker self-harm plus a third-party suicide quote.
 - Quoted cue spans now contribute contextual evidence, then only adjacent reporting lead/tail is removed before classifying speaker clauses. Sentence punctuation is a boundary. Shared `quiero` inheritance is limited to direct speaker intent or grooming; quoted intent and broad topic discussion cannot authorize it.
 - The `porque` own-intent case and direct coordinated signals remain covered and pass. Focused suite: 151 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted follow-up.
+
+## Task 1 follow-up: resolve quote provenance before routing
+
+- Added RED cases for an unattributed quote (ambiguous), an affirmative own-thought frame (explicit), a negated/third-party thought frame (ambiguous), and nested explicit third-party attribution (contextual). Four cases failed before the fix.
+- Quoted risk cues are no longer contextual by default. The helper checks adjacent/embedded third-party reporting, known media framing, and affirmative/negative own-thought framing before assigning a candidate. Only attributed or media quote spans are contextual; uncertain provenance is ambiguous; an affirmative own frame is evaluated with its quoted content.
+- Focused suite: 156 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted follow-up.

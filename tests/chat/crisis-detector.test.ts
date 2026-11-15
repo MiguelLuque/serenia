@@ -458,6 +458,29 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'explicit_current', riskType: 'self_harm',
     })
   })
+
+  it('treats an unattributed risk quote as ambiguous', () => {
+    expect(classifyCrisisSignal('«Quiero suicidarme»')).toEqual({ disposition: 'ambiguous', riskType: 'suicidal_ideation' })
+  })
+
+  it('evaluates a direct affirmative thought frame with its quoted content', () => {
+    expect(classifyCrisisSignal('Estoy pensando: “voy a suicidarme esta noche”')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each([
+    'No estoy pensando: “voy a suicidarme”',
+    'Mi amigo cree que estoy pensando: “voy a suicidarme”',
+  ])('does not treat a negative or third-party thought frame as explicit: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('ambiguous')
+  })
+
+  it('keeps a nested quote attributed to a third party contextual', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme”»')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

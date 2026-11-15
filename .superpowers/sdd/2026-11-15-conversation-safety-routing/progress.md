@@ -159,3 +159,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Quoted cues contribute contextual candidates and adjacent reporting leads/tails are removed before classifying speaker clauses. Punctuation splits sentences. `sharedWant` only inherits from a direct own-intent or grooming predicate.
 - Focused suite 151/151, typecheck and diff check pass. Full suite not rerun for this targeted fix. Details in report.
 
+### Task 1 follow-up: quote provenance before disposition
+
+- Added RED cases for unknown quote provenance, affirmative own-thought framing, negated/third-party thought framing, and nested third-party attribution; four cases failed pre-fix.
+- Quote cues are now classified by provenance: attributed/media quotes contextual, affirmative own frames evaluated with their content, uncertain source ambiguous.
+- Focused suite 156/156; typecheck and diff check pass. Full suite not rerun for this targeted fix. See Task 1 report.
+
