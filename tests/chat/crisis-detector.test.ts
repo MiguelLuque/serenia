@@ -162,6 +162,30 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'explicit_current', riskType: 'self_harm',
     })
   })
+
+  it.each([
+    'Quiero cortarme el pelo',
+    'Me corto el pelo',
+    'Me corto las uñas',
+  ])('does not route ordinary grooming as safety signal: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
+  })
+
+  it('uses the ambiguous clause topic when earlier context mentioned another topic', () => {
+    expect(classifyCrisisSignal('Mi hermano habló de suicidio y no sé si autolesionarme')).toEqual({
+      disposition: 'ambiguous', riskType: 'self_harm',
+    })
+  })
+
+  it('treats not wanting to live as ambiguous rather than a clear denial', () => {
+    expect(classifyCrisisSignal('No quiero vivir')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['No quiero suicidarme', 'No estoy pensando en suicidarme'])('retains unequivocal denial: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

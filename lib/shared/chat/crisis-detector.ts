@@ -71,12 +71,14 @@ export function detectCrisis(text: string): CrisisDetection {
 
 const SUICIDE = /suicid|quitar(me|se)\s+la\s+vida|matar(me|se)|no\s+(quiero|merezco)\s+vivir|mejor\s+no\s+estar|acabar\s+con\s+todo|desaparecer\s+para\s+siempre|tirarme\s+(desde|por)/i
 const SELF_HARM = /hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse)?|cortarme|\bme\s+(?:estoy\s+)?cortando\b|\bme\s+corto\b|\bme\s+hice\s+dan[oó]\b/i
+type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<CrisisRiskType, null> }
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const normalized = normalize(text)
   const clauses = normalized.split(/[;,]|\s+(?:y|pero|aunque|sin embargo)\s+/).map(part => part.trim())
-  const results = clauses.flatMap(clause => {
+  const results = clauses.flatMap<ClauseClassification>(clause => {
+    if (/\b(cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
     const suicide = SUICIDE.test(clause)
     const selfHarm = SELF_HARM.test(clause)
     if (!suicide && !selfHarm) return []
@@ -85,7 +87,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
     const denial = /\b(no|nunca|jamas)\b/i.test(clause)
     const uncertainNegation = /\b(no puedo dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
-    const clearDenial = denial && /\b(no quiero|no pienso|no estoy pensando|no tengo)\b/i.test(clause) && !uncertainNegation
+    const clearDenial = denial && /\b(no quiero|no pienso|no estoy pensando|no tengo)\b/i.test(clause) && !uncertainNegation && !/\b(no quiero vivir)\b/i.test(clause)
     const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
     const explicit = !context && !past && !uncertainNegation && !clearDenial && (
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
@@ -93,13 +95,15 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
       (!denial && /\b(quiero|estoy pensando|pienso|me estoy)\b/i.test(clause) && !/\b(a veces|a menudo)\b/i.test(clause))
     )
     const disposition = explicit ? 'explicit_current' : (context || past || clearDenial ? 'contextual' : 'ambiguous')
-    return [{ disposition, riskType }]
+    return [{ disposition, riskType } as ClauseClassification]
   })
   if (!results.length) return { disposition: 'none', riskType: null }
-  const explicit = results.find(result => result.disposition === 'explicit_current')
+  const explicit: ClauseClassification | undefined = results.find(result => result.disposition === 'explicit_current')
   if (explicit) return explicit
-  if (results.some(result => result.disposition === 'ambiguous')) return { disposition: 'ambiguous', riskType: results[0].riskType }
-  return results[0]
+  const ambiguous: ClauseClassification | undefined = results.find(result => result.disposition === 'ambiguous')
+  if (ambiguous) return ambiguous
+  const contextual: ClauseClassification = results[0]
+  return contextual
 }
 
 export function classifySafetyClarificationReply(text: string): SafetyClarificationReply {

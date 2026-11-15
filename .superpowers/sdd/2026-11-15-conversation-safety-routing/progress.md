@@ -40,3 +40,21 @@ No internal contradiction found. Existing branch was clean at base before adding
 - The first sandboxed Docker attempt exited 1 because access to the local Docker socket was denied. The documented ephemeral PostgreSQL harness then ran with the narrow approved elevation; it uses --network none and synthetic fixtures. One initial fixture run exposed the one-open-session-per-user constraint and was corrected by using a distinct synthetic owner per session.
 - The harness validates SQL behavior against PostgreSQL 17.6 with an auth.uid() shim; it does not validate JWT, GoTrue, PostgREST, hosted migration history, or clinical acceptance.
 
+### Task 2 independent review follow-up
+
+- Added defaulted `p_safety_answer_prompt_request_id` to both begin-turn RPCs. Under the session lock, the database now compares it with the request id of the immediately preceding completed turn that contains the server-stored prompt marker. The caller still cannot submit marker content. Non-direct answers require a complete matching candidate; direct signals remain admissible and only store a simultaneous answer when its type and predecessor id match.
+- Added same-topic consecutive-prompt coverage: an answer classified against prompt A is rejected for prompt B, while B's own predecessor id is accepted. Added explicit persisted category/topic and completed replay assertions, no duplicate affirmative event, prompt-id payload assertion, forged/unprompted candidate rejection, and exact SQLSTATE checks.
+- Added `--safety-red`, which replays all migrations except the Task 2 migration and runs the focused SQL assertions. Historical `--baseline-chat`, `--baseline-flows` and `--baseline-security` now omit both this migration and its schema-dependent assertions.
+- RED: `rtk npm run db:test -- --safety-red` exited 1 at `Prompt-bound begin_chat_turn signature missing`, the intended pre-migration failure.
+- GREEN: final `rtk npm run db:test` exited 0, including `PASS prompt-bound safety answer validation, replay, typed provisional events and RPC grants` and the existing concurrency/profile gates. `rtk npm run db:test -- --baseline-chat` exited 0.
+- `rtk git diff --check` exited 0. Current `rtk npm run typecheck` exits 1 only in unchanged Task 1 file `lib/shared/chat/crisis-detector.ts:100-102` (`string` not assignable to `CrisisDisposition`/`CrisisRiskType`); no Task 2 type error was reported, and the classifier is outside this follow-up scope.
+- These DB runs used the repository's ephemeral PostgreSQL 17.6 harness (`--network none`, synthetic fixtures, auth.uid shim). No hosted schema, Vercel configuration, paid model, push, merge or deploy was touched.
+- Review-fix commit: `fd65c57` (`fix: bind safety answers to prompt requests`).
+
+### Task 1 follow-up: grooming, risk type and TypeScript
+
+- Added RED coverage for ordinary hair/nail grooming mentions, contextual-plus-ambiguous topic precedence, `No quiero vivir`, and unequivocal denials. Six new assertions failed before the fix.
+- Grooming phrases now remain `none`; explicit current cutting remains `self_harm`. An ambiguous clause retains its own `riskType`; `No quiero vivir` is ambiguous rather than a clear denial.
+- Added explicit clause-result types to fix the Task 1 TypeScript inference error.
+- Focused suite passes 51/51; `rtk npm run typecheck` passes. Full suite: 99 files pass, 1 fails; 1,315 pass and 4 fail because `tests/tooling/dependency-integration.test.ts` child processes receive `listen EPERM: operation not permitted 127.0.0.1`. Details: `task-1-report.md`.
+

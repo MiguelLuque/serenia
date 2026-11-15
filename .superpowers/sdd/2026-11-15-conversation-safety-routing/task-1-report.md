@@ -24,6 +24,15 @@
 - Full suite: `rtk npm test` had 99 files pass and 1 fail; 1,308 tests passed and 4 failed. All four remain `tests/tooling/dependency-integration.test.ts` child-process localhost bind failures (`listen EPERM: operation not permitted 127.0.0.1`).
 - Routing remains heuristic conversation triage, non-diagnostic, and not a validated screener.
 
+## Task 1 follow-up: ordinary grooming and type narrowing
+
+- Added failing cases for hair/nail grooming, mixed-context risk type, `No quiero vivir`, and unequivocal denials.
+- RED: 6 assertions failed before the changes. Added grooming exclusions for ordinary `cortarme`/`me corto` language; current self-harm cases (`me corto ahora`, `me estoy cortando`) remain covered and pass.
+- Ambiguous classification now preserves the risk type of the ambiguous clause, so an earlier contextual clause cannot overwrite it. `No quiero vivir` is ambiguous; direct denials such as `No quiero suicidarme` stay contextual.
+- Added explicit `ClauseClassification`/`CrisisDisposition` typing to remove the prior TypeScript inference error.
+- Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 51 tests. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,315 tests passed and 4 failed in `tests/tooling/dependency-integration.test.ts`. Each failure is a child Node server bind error, `listen EPERM: operation not permitted 127.0.0.1`.
+
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.
