@@ -284,6 +284,10 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal('No solo quiero suicidarme').disposition).toBe('explicit_current')
   })
 
+  it('does not treat a general wish to talk about suicide as direct intent', () => {
+    expect(classifyCrisisSignal('No solo quiero hablar de suicidio').disposition).toBe('contextual')
+  })
+
   it.each([
     ['Estoy pensando en hacerme daño', 'self_harm'],
     ['Voy a autolesionarme', 'self_harm'],

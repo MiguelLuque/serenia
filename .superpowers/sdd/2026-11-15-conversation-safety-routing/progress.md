@@ -102,3 +102,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Clear-denial matching is scoped to specified negative predicates; uncertainty stays ambiguous. Combined cues consistently select `suicidal_ideation`.
 - Focused tests pass 103/103 and typecheck passes. Full suite: 99 files pass, 1 fails; 1,367 pass and 4 fail due `listen EPERM: operation not permitted 127.0.0.1` in dependency integration. See Task 1 report.
 
+### Task 1 follow-up: narrow `no solo quiero`
+
+- Added regression preserving direct `No solo quiero suicidarme` and making `No solo quiero hablar de suicidio` contextual; RED reproduced the false explicit classification.
+- Limited that explicit pattern to direct self-directed actions and recognized ordinary suicide discussion as contextual. Focused suite 104/104, typecheck and diff check pass. Full suite not rerun for this narrow follow-up; details in the report.
+

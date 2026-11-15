@@ -80,3 +80,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Clear denial now requires a narrowly matched negative predicate; uncertainty remains ambiguous. When both cue families occur in one clause, suicidal ideation wins consistently.
 - Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 103 tests. `rtk npm run typecheck` passed.
 - Full suite: 99 files passed, 1 failed; 1,367 passed and 4 failed in dependency integration. Child listeners return `listen EPERM: operation not permitted 127.0.0.1`.
+
+## Task 1 follow-up: restrict `no solo quiero` intent
+
+- Added regression coverage preserving `No solo quiero suicidarme` as explicit while routing `No solo quiero hablar de suicidio` as contextual conversation content. RED reproduced the second case as incorrectly explicit.
+- Narrowed the `no solo quiero` direct-intent alternative to recognized self-directed acts and marked ordinary discussion about suicide as contextual.
+- Focused suite: 104 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. The full suite was not rerun for this regex-only follow-up.
