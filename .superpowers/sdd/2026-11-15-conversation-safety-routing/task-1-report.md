@@ -122,3 +122,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for two intents coordinated inside a third-party quote, quoted intent followed by a separate self-harm clause, and the equivalent speaker-owned coordinated intent.
 - Clause splitting now respects quote boundaries, so conjunctions inside quotes do not create artificial clauses. Shared `quiero` inheritance is also disabled when its source clause has a third-party attribution lead.
 - Focused suite: 123 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted change.
+
+## Task 1 follow-up: postposed quote attribution
+
+- Added RED cases for quote-first clauses followed by a reporting verb and third-party subject, plus a later direct personal disclosure after that attribution.
+- A quote clause is now linked to the immediately following clause only when it is quote-delimited and that clause begins with a supported reporting verb plus third-party subject. This keeps attributed content contextual without suppressing later direct personal intent.
+- Focused suite: 126 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow change.

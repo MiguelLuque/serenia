@@ -137,3 +137,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED cases for coordination inside attributed quotes, a following self-harm clause, and an equivalent first-person coordinated statement.
 - Clause splitting now respects quote boundaries; shared `quiero` is not inherited from a third-party attributed clause. Focused 123/123, typecheck and diff check pass; full suite not rerun. See Task 1 report.
 
+### Task 1 follow-up: postposed third-party quote attribution
+
+- Added RED tests for a quote followed by `dijo/contó + third party`, and a direct personal statement after that quote attribution.
+- A quote is linked to the next clause only when quote-delimited and followed immediately by a supported reporting-verb/subject structure. Later direct intent stays explicit. Focused 126/126, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+

@@ -113,7 +113,10 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const riskType = suicide ? 'suicidal_ideation' : 'self_harm'
     const attributionClause = clause.replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, '')
     const attributionLead = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.exec(attributionClause)
-    const attributedQuote = Boolean(attributionLead && /^(dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)$/i.test(attributionLead[1]))
+    const quotedClause = /^[\s"'“‘«][\s\S]*["'”’»]\s*$/.test(clause)
+    const followingAttribution = clauses[index + 1]?.text ?? ''
+    const postposedQuoteAttribution = quotedClause && /^(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\b/i.test(followingAttribution)
+    const attributedQuote = Boolean((attributionLead && /^(dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)$/i.test(attributionLead[1])) || postposedQuoteAttribution)
     const attributedBelief = Boolean(attributionLead && /^(cree|piensa)$/i.test(attributionLead[1]))
     const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|vimos|guia|articulo|dijo|dice|hablo|cita|personaje|antes|cuando era)\b/i.test(clause) || attributedQuote || /\b(hablar|hablo|tema|conversar)\s+(?:de|sobre)\s+suicid/i.test(clause)
     const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
