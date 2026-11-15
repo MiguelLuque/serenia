@@ -367,6 +367,20 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
     })
   })
+
+  it('does not propagate a quoted speaker intention into a coordinated topic', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme y autolesionarme”»').disposition).toBe('contextual')
+  })
+
+  it('does not propagate intention from a quote into the next clause', () => {
+    expect(classifyCrisisSignal('Mi amigo me dijo: “quiero matarme” y autolesionarme me da miedo').disposition).not.toBe('explicit_current')
+  })
+
+  it('retains speaker intention across coordinated self-harm topics', () => {
+    expect(classifyCrisisSignal('Quiero suicidarme y autolesionarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

@@ -132,3 +132,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED cases for quotes wrapped in typographic quotation marks and reporting clauses followed by a colon; both failed pre-fix. Added a quote-followed-by-personal-disclosure regression.
 - Attribution matching trims only surrounding quote marks before testing the anchored lead. Later personal clauses remain explicit. Focused 120/120, typecheck and diff check pass; full suite not rerun. See Task 1 report.
 
+### Task 1 follow-up: quoted clauses do not pass intent forward
+
+- Added RED cases for coordination inside attributed quotes, a following self-harm clause, and an equivalent first-person coordinated statement.
+- Clause splitting now respects quote boundaries; shared `quiero` is not inherited from a third-party attributed clause. Focused 123/123, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+

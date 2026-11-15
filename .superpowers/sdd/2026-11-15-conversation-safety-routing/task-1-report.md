@@ -116,3 +116,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for third-party quotes wrapped in Spanish/typographic quotation marks and introduced with a colon; both initially classified as explicit.
 - Attribution matching now trims only surrounding quotation marks before checking the clause-leading subject/reporting verb. A direct personal clause after the quote remains explicit.
 - Focused suite: 120 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow adjustment.
+
+## Task 1 follow-up: prevent intent propagation from quotes
+
+- Added RED cases for two intents coordinated inside a third-party quote, quoted intent followed by a separate self-harm clause, and the equivalent speaker-owned coordinated intent.
+- Clause splitting now respects quote boundaries, so conjunctions inside quotes do not create artificial clauses. Shared `quiero` inheritance is also disabled when its source clause has a third-party attribution lead.
+- Focused suite: 123 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted change.

@@ -82,6 +82,16 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   let previousSeparator: 'start' | 'and' | 'other' = 'start'
   for (const match of normalized.matchAll(separators)) {
     const separatorIndex = match.index ?? 0
+    let quoteCloser = ''
+    for (const character of normalized.slice(0, separatorIndex)) {
+      if (quoteCloser) {
+        if (character === quoteCloser) quoteCloser = ''
+      } else if (character === '«') quoteCloser = '»'
+      else if (character === '“') quoteCloser = '”'
+      else if (character === '‘') quoteCloser = '’'
+      else if (character === '"' || character === "'") quoteCloser = character
+    }
+    if (quoteCloser) continue
     const clauseText = normalized.slice(previousEnd, separatorIndex).trim()
     if (clauseText) clauses.push({ text: clauseText, separator: previousSeparator })
     previousEnd = separatorIndex + match[0].length
@@ -93,7 +103,8 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const results = clauses.flatMap<ClauseClassification>((item, index) => {
     const previous = clauses[index - 1]?.text ?? ''
     const previousDenies = /\b(no|nunca|jamas)\b/i.test(previous)
-    const sharedWant = item.separator === 'and' && /\bquiero\b/i.test(previous) && !previousDenies && /\b(quitarme la vida|suicid|autolesion|matarme)\b/i.test(item.text)
+    const previousIsAttributed = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.test(previous.replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, ''))
+    const sharedWant = item.separator === 'and' && /\bquiero\b/i.test(previous) && !previousDenies && !previousIsAttributed && /\b(quitarme la vida|suicid|autolesion|matarme)\b/i.test(item.text)
     const clause = sharedWant ? `quiero ${item.text}` : item.text
     if (/\b(?:me estoy cortando|cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
     const suicide = SUICIDE.test(clause)
