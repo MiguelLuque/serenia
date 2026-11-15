@@ -511,6 +511,54 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'contextual', riskType: 'suicidal_ideation',
     })
   })
+
+  it('recognizes a root intention frame after the quoted sentence', () => {
+    expect(classifyCrisisSignal('“Voy a suicidarme esta noche” es mi intención')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not assign third-party provenance from an outer quote around nested speech', () => {
+    expect(classifyCrisisSignal('«Mi amigo me dijo: “quiero matarme”, pero yo me estoy haciendo daño»')).toEqual({
+      disposition: 'ambiguous', riskType: 'self_harm',
+    })
+  })
+
+  it('preserves speaker self-harm when third-party speech is quoted without an outer wrapper', () => {
+    expect(classifyCrisisSignal('Mi amigo me dijo: “quiero matarme”, pero yo me estoy haciendo daño')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
+  it('keeps uncertain outer quotes and their own suicidal topic evidence', () => {
+    expect(classifyCrisisSignal('«Quiero suicidarme»')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps direct attributed speech contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme”')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('preserves direct self-harm after postposed attribution', () => {
+    expect(classifyCrisisSignal('“Quiero matarme”, dijo mi amigo; yo me estoy haciendo daño')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
+  it('does not treat a speaker statement inside a third-party quote as endorsed', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo: «quiero matarme, pero yo me estoy haciendo daño»')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('recognizes a thought frame around an attributed-style quote as the speaker own', () => {
+    expect(classifyCrisisSignal('Estoy pensando: «quiero suicidarme»')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

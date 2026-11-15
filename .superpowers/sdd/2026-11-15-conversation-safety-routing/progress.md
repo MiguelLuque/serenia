@@ -171,3 +171,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Media context now requires a nearby title relation; `No pienso:` and third-party `dice que` remain ambiguous; open quotes after a clear reporting lead remain contextual.
 - Focused 161/161, typecheck and diff check pass. Full suite not rerun for this targeted fix. Details in Task 1 report.
 
+### Task 1 follow-up: nested quote spans and evidence reduction
+
+- Added RED coverage for root own-intent endorsement, uncertain outer wrapper with nested reporting, direct reporting, postposed attribution, and evidence/risk-type separation; two cases failed before the fix.
+- Attribution now binds per nested quote span after excluding child spans; root wrappers cannot confer third-party provenance on the entire envelope. Supported own-intent root endorsement is handled separately; results preserve disposition and riskType from one evidence item.
+- Focused 169/169, typecheck and diff check pass; full suite not rerun. Details in Task 1 report.
+

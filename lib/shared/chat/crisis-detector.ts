@@ -77,44 +77,70 @@ type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   let normalized = normalize(text)
   const quotedContexts: ClauseClassification[] = []
-  const quotePattern = /«[^»]*»|“[^”]*”|‘[^’]*’|"[^"]*"|'[^']*'|«[^»]*$|“[^”]*$|‘[^’]*$|"[^"]*$|'[^']*$/g
-  const quoteRanges: Array<{ start: number; end: number; replacement: string }> = []
+  type QuoteSpan = { start: number; end: number; opener: string; closer: string; closed: boolean; parent: QuoteSpan | null; children: QuoteSpan[] }
+  const quotePairs: Record<string, string> = { '«': '»', '“': '”', '‘': '’', '"': '"', "'": "'" }
+  const quoteSpans: QuoteSpan[] = []
+  const quoteStack: QuoteSpan[] = []
+  for (let i = 0; i < normalized.length; i++) {
+    const character = normalized[i]
+    const current = quoteStack[quoteStack.length - 1]
+    if (current && character === current.closer) {
+      current.end = i + 1
+      current.closed = true
+      quoteStack.pop()
+      continue
+    }
+    if (quotePairs[character]) {
+      const span: QuoteSpan = { start: i, end: normalized.length, opener: character, closer: quotePairs[character], closed: false, parent: current ?? null, children: [] }
+      if (current) current.children.push(span)
+      quoteSpans.push(span)
+      quoteStack.push(span)
+    }
+  }
   const reportingLead = /(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\s*[:,]?\s*$/i
-  const embeddedLead = /^(?:(?:hoy|ayer|ahora)\s+)?(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s*[:,]?\s*[“‘"']?/i
   const reportingTail = /^\s*[,;]?\s*(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|el|ella)\b/i
-  for (const match of normalized.matchAll(quotePattern)) {
-    const start = match.index ?? 0
-    const end = start + match[0].length
-    const closer = ({ '«': '»', '“': '”', '‘': '’', '"': '"', "'": "'" } as Record<string, string>)[match[0][0]]
-    const closed = match[0].endsWith(closer)
-    const quoteText = match[0].slice(1, closed ? -1 : undefined)
+  const quoteRanges: Array<{ start: number; end: number; replacement: string }> = []
+  for (const span of quoteSpans) {
+    const innerStart = span.start + 1
+    const innerEnd = span.end - (span.closed ? 1 : 0)
+    let quoteText = normalized.slice(innerStart, innerEnd)
+    for (const child of [...span.children].reverse()) {
+      quoteText = `${quoteText.slice(0, child.start - innerStart)} ${quoteText.slice(child.end - innerStart)}`
+    }
     const suicideCue = SUICIDE.test(quoteText)
     const selfHarmCue = SELF_HARM.test(quoteText)
     if (!suicideCue && !selfHarmCue) continue
-    const prefix = normalized.slice(0, start)
-    const suffix = normalized.slice(end)
+    const prefix = normalized.slice(0, span.start)
+    const suffix = normalized.slice(span.end)
     const leadMatch = reportingLead.exec(prefix)
     const tailMatch = reportingTail.exec(suffix)
-    const embeddedAttribution = embeddedLead.test(quoteText)
-    const attributed = Boolean(leadMatch || tailMatch || embeddedAttribution)
+    const innerPrefix = span.parent ? normalized.slice(span.parent.start + 1, span.start) : ''
+    const innerSuffix = span.parent ? normalized.slice(span.end, span.parent.end - (span.parent.closed ? 1 : 0)) : ''
+    const internallyAttributed = Boolean(span.parent && (reportingLead.test(innerPrefix) || reportingTail.test(innerSuffix)))
+    const attributed = Boolean(leadMatch || tailMatch || internallyAttributed)
     const recentPrefix = prefix.slice(Math.max(prefix.lastIndexOf(';'), prefix.lastIndexOf('.'), prefix.lastIndexOf('!'), prefix.lastIndexOf('?')) + 1)
     const mediaContext = /\b(?:pelicula|serie|cancion|libro|titulo)\s+(?:se llama|trata de|es|lleva por titulo)\s*$/i.test(recentPrefix)
     const thirdPartyFrame = /\b(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:cree|piensa|dice)\s+que\s+(?:yo\s+)?estoy pensando\s*:\s*$/i.test(prefix)
     const negativeSelfFrame = /\bno\s+(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix)
     const affirmativeSelfFrame = /\b(?:yo\s+)?(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix) && !negativeSelfFrame && !thirdPartyFrame
-    if (attributed || mediaContext) {
-      quotedContexts.push({ disposition: 'contextual', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
-    } else if (affirmativeSelfFrame) {
-      quoteRanges.push({ start, end, replacement: ` ${quoteText} ` })
-      continue
-    } else {
-      quotedContexts.push({ disposition: 'ambiguous', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
+    const suffixEndorsement = !span.parent && /^\s*es mi intencion\b/i.test(suffix)
+    const ownFrame = !span.parent && (affirmativeSelfFrame || suffixEndorsement)
+    if (attributed || mediaContext) quotedContexts.push({ disposition: 'contextual', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
+    else if (ownFrame) continue
+    else quotedContexts.push({ disposition: 'ambiguous', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
+
+    if (!span.parent) {
+      const removeTail = tailMatch ? tailMatch[0].length : 0
+      const removeLead = leadMatch ? leadMatch[0].length : 0
+      if (ownFrame) {
+        const ownContent = quoteText
+        if (suffixEndorsement) {
+          quoteRanges.push({ start: span.start, end: span.end + /^\s*es mi intencion\b/i.exec(suffix)![0].length, replacement: ` ${ownContent} ` })
+        } else quoteRanges.push({ start: span.start, end: span.end, replacement: ` ${ownContent} ` })
+      } else {
+        quoteRanges.push({ start: span.start - removeLead, end: span.end + removeTail, replacement: ' ' })
+      }
     }
-    quoteRanges.push({
-      start: leadMatch ? start - leadMatch[0].length : start,
-      end: tailMatch ? end + tailMatch[0].length : end,
-      replacement: ' ',
-    })
   }
   for (const range of quoteRanges.reverse()) normalized = `${normalized.slice(0, range.start)}${range.replacement}${normalized.slice(range.end)}`
   normalized = normalized.trim()

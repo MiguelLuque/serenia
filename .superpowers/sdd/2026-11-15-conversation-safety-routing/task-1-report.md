@@ -159,3 +159,10 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for remote media context, own affirmative and negative thought frames, `dice que` third-party framing, and an unclosed quote after a reporting lead. Five assertions failed before the fix.
 - Media context now requires a nearby title relation rather than any earlier media noun. `No pienso:` is treated as a negative frame and remains ambiguous; third-party `dice que` is likewise uncertain. Unclosed quotes are parsed as spans, allowing a clear third-party reporting lead to establish contextual attribution.
 - Focused suite: 161 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this scoped follow-up.
+
+## Task 1 follow-up: nested quote spans and evidence reduction
+
+- Added the requested matrix for root intent endorsement, uncertain outer wrappers around nested reporting, direct reporting inside/outside wrappers, postposed attribution, speaker intent after a quote, and risk-type separation. Two cases failed before the span-level fix.
+- Replaced whole-envelope attribution with nested quote spans. Each span is classified after masking child spans; a report only attributes the immediately contained quote. Root own-intent endorsement is handled separately, and the final reducer keeps disposition and risk type from the same evidence.
+- Verified root own-intention suffixes only in the supported `es mi intención` frame; generic suffix words such as `es` do not become media context. Media titles remain contextual.
+- Focused suite: 169 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this scoped update.
