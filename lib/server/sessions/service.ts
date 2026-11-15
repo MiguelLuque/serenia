@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/shared/supabase/types'
 import { enqueueAssessmentGeneration } from '@/lib/server/workflows'
+import { createServiceRoleClient } from '@/lib/server/supabase/server'
+import { z } from 'zod'
 import type { ProtocolPhase } from '@/lib/shared/protocol/render-phase'
 import { SESSION_MAX_DURATION_MS, isSessionInactive } from '@/lib/shared/chat/session-time'
 export { SESSION_MAX_DURATION_MS, SESSION_INACTIVITY_MS } from '@/lib/shared/chat/session-time'
@@ -12,6 +14,75 @@ export type SessionRow = Database['public']['Tables']['clinical_sessions']['Row'
 // Constants
 
 export type CloseReason = 'user_request' | 'time_limit' | 'crisis_detected' | 'inactivity'
+
+const ViewCloseResultSchema = z.union([
+  z.object({ closed: z.literal(true), newlyClosed: z.boolean().optional() }),
+  z.object({
+    closed: z.literal(false),
+    reason: z.enum(['not_expired', 'turn_pending']),
+    timing: z.object({ serverNow: z.number(), expiresAt: z.number() }),
+  }),
+  z.object({
+    closed: z.literal(false),
+    reason: z.literal('turn_unresolved'),
+    requestId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+    attempt: z.number().int().min(1).max(3),
+    timing: z.object({ serverNow: z.number(), expiresAt: z.number() }),
+  }),
+])
+
+export type ViewCloseResult = z.infer<typeof ViewCloseResultSchema>
+export type UnresolvedTurnConfirmation = { requestId: string; attempt: number }
+const UnresolvedTurnConfirmationSchema = z.object({
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+  attempt: z.number().int().min(1).max(3),
+}).strict()
+
+/** Start the assessment workflow after a close RPC has committed. */
+export async function enqueueAssessmentForClosedSession(sessionId: string): Promise<void> {
+  // The database outbox remains the durable fallback if Vercel Workflow is
+  // unavailable. This best-effort kick only reduces the time to processing.
+  try {
+    await enqueueAssessmentGeneration({ sessionId })
+  } catch (err) {
+    console.error('[closeSession] workflow enqueue failed', {
+      sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+/** Close a patient-owned view session with server-side time/turn rechecks. */
+export async function requestOwnedSessionClosure(
+  supabase: Supabase,
+  sessionId: string,
+  reason: 'user_request' | 'time_limit',
+  confirmUnresolved: UnresolvedTurnConfirmation | null = null,
+): Promise<ViewCloseResult> {
+  if (reason !== 'user_request' && reason !== 'time_limit') throw new Error('Invalid closure reason')
+  if (confirmUnresolved !== null && !UnresolvedTurnConfirmationSchema.safeParse(confirmUnresolved).success) throw new Error('Invalid closure confirmation')
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) throw new Error('No authenticated user')
+  const { data: session, error: readError } = await supabase
+    .from('clinical_sessions')
+    .select('id,user_id,status')
+    .eq('id', sessionId)
+    .eq('user_id', user.id)
+    .single()
+  if (readError || !session || session.id !== sessionId || session.user_id !== user.id) throw new Error('Owned session required')
+  if (session.status !== 'open') return { closed: true }
+
+  const { data, error } = await supabase.rpc('close_session_from_chat_view', {
+    p_session_id: sessionId,
+    p_reason: reason,
+    p_confirm_request_id: confirmUnresolved?.requestId ?? null,
+    p_confirm_attempt: confirmUnresolved?.attempt ?? null,
+  })
+  if (error) throw new Error('Session close unavailable')
+  const result = ViewCloseResultSchema.parse(data)
+  if (result.closed && result.newlyClosed) await enqueueAssessmentForClosedSession(sessionId)
+  return result
+}
 
 /**
  * Return the user's currently active session if still valid.
@@ -38,9 +109,9 @@ export async function getOrResolveActiveSession(
   if (isSessionInactive(session)) {
     try { await closeSession(supabase, session.id, 'inactivity') }
     catch (error) {
-      if (typeof error !== 'object' || !error || !('code' in error) || error.code !== '23514' || !('message' in error) || error.message !== 'Session activity resumed') throw error
-      // Activity may have resumed after the first read. SQL rejected the
-      // stale closure under lock; return the current authorized open session.
+      if (typeof error !== 'object' || !error || !('code' in error) || error.code !== '23514' || !('message' in error) || !['Session activity resumed', 'Unresolved chat turn'].includes(String(error.message))) throw error
+      // Activity may have resumed or a turn may still need recovery. SQL
+      // rejected the stale close under lock; return the authorized open row.
       const { data: current, error: readError } = await supabase.from('clinical_sessions').select().eq('id', session.id).eq('user_id', userId).eq('status', 'open').maybeSingle()
       if (readError) throw readError
       return current
@@ -109,28 +180,23 @@ export async function touchSession(
 }
 
 /**
- * Mark session as closed with the given reason. Sets status='closed',
- * closed_at=now(), closure_reason=reason. Also sets conversations.ended_at
- * and status='closed' on the parent conversation.
+ * Close a patient-requested session through its safe owner RPC. Operational
+ * closures use the service-only atomic RPC after authenticating the caller.
  *
- * Plan 8 Bloque 2 Fix 3 — atomicidad: antes hacíamos 2 UPDATEs separados
- * (clinical_sessions luego conversations). Si el segundo fallaba la BD
- * quedaba inconsistente. Ahora delegamos a la función Postgres
- * `close_session_atomic` que envuelve ownership-check + ambos UPDATEs en
- * la misma transacción plpgsql. Ver migration 20260502000006.
- *
- * Mantiene la firma pública: si la RPC falla (incluyendo
- * "session not found for user"), throw-ea como antes.
- *
- * After the close commits, enqueues the background `generateAssessmentWorkflow`
- * (Vercel WDK). The workflow is idempotent — duplicate fires from the cron or
- * lazy-close path become no-ops via the closure assessment unique check.
+ * User-request and time-limit closures require the same serialized check used
+ * by ChatView. Inactivity/crisis closures are server operations; the service
+ * RPC is not executable by ordinary authenticated clients.
  */
 export async function closeSession(
   supabase: Supabase,
   sessionId: string,
   reason: CloseReason,
 ): Promise<void> {
+  if (reason === 'user_request' || reason === 'time_limit') {
+    const result = await requestOwnedSessionClosure(supabase, sessionId, reason)
+    if (!result.closed) throw new Error(`Session close not completed: ${result.reason}`)
+    return
+  }
   // Necesitamos el user_id para pasarlo a la RPC. La RPC también valida
   // ownership server-side (`raise exception` si no encuentra match), pero
   // hacemos el SELECT primero para que un sessionId desconocido devuelva
@@ -141,7 +207,8 @@ export async function closeSession(
   } = await supabase.auth.getUser()
   if (authError || !user) throw new Error('No authenticated user')
 
-  const { error: rpcError } = await supabase.rpc('close_session_atomic', {
+  const service = createServiceRoleClient()
+  const { error: rpcError } = await service.rpc('close_session_atomic', {
     p_session_id: sessionId,
     p_user_id: user.id,
     p_reason: reason,
@@ -149,18 +216,9 @@ export async function closeSession(
 
   if (rpcError) throw rpcError
 
-  // Plan 7 T6 — fire-and-forget enqueue. Errors here MUST NOT bubble up:
-  // the session is already closed in BD, and the user-facing response should
-  // not 500 because Vercel Workflow is unreachable. The cron stale-session
-  // sweep will eventually re-enqueue any session whose workflow never started.
-  try {
-    await enqueueAssessmentGeneration({ sessionId })
-  } catch (err) {
-    console.error('[closeSession] workflow enqueue failed', {
-      sessionId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
+  // Plan 7 T6 — errors MUST NOT bubble up: closure is already durable and the
+  // database outbox/cron remains the fallback if Vercel Workflow is offline.
+  await enqueueAssessmentForClosedSession(sessionId)
 }
 
 /**

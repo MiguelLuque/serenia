@@ -760,6 +760,9 @@ isOneToOne: false
 "close_session_atomic":
 { Args: { "p_reason": string,"p_session_id": string,"p_user_id": string }; Returns: undefined
                            },
+"close_session_from_chat_view":
+{ Args: { "p_confirm_attempt"?: number,"p_confirm_request_id"?: string,"p_reason": string,"p_session_id": string }; Returns: Json
+                           },
 "close_stale_sessions":
 { Args: { "threshold_minutes"?: number }; Returns: number
                            },

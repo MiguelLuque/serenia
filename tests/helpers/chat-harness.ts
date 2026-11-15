@@ -35,6 +35,7 @@ export async function chatHarness(configuration: { model?: LanguageModel; direct
   }
   const service = { from: vi.fn(chain), rpc: vi.fn(async (name: string, args: any) => {
     state.writes.push({ name, args })
+    if (name === 'close_session_atomic') { state.session.status = 'closed'; return { data: null, error: null } }
     if (name === 'begin_chat_turn') {
       const prior = state.turns.get(args.p_request_id)
       if (prior?.text !== undefined && prior.text !== args.p_text) return { error: { code: '23514' }, data: null }
@@ -62,7 +63,11 @@ export async function chatHarness(configuration: { model?: LanguageModel; direct
     }
     return { data: null, error: null }
   }) }
-  const authClient = { rpc: vi.fn(async (name: string): Promise<{ data: unknown; error: unknown }> => { if (name === 'close_session_atomic') { state.session.status = 'closed'; return { data: null, error: null } }; return { data: state.onboardingReady, error: null } }), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
+  const authClient = { rpc: vi.fn(async (name: string): Promise<{ data: unknown; error: unknown }> => {
+    if (name === 'get_onboarding_ready') return { data: state.onboardingReady, error: null }
+    if (name === 'get_chat_turn_recovery') return { data: null, error: null }
+    throw new Error(`Unexpected authenticated RPC in chat harness: ${name}`)
+  }), auth: { getUser: vi.fn(async () => ({ data: { user: state.user }, error: null })) }, from: vi.fn(chain) }
   vi.doMock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => authClient, createServiceRoleClient: () => service }))
   vi.doMock('@/lib/server/llm/prompts', () => ({ getSessionTherapistPrompt: () => { if (state.promptFailure) throw new Error('prompt unavailable'); return state.prompt } }))
   vi.doMock('@/lib/shared/llm/task-policy', async importOriginal => {

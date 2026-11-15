@@ -11,9 +11,12 @@ import uuid
 import json
 import shutil
 import hashlib
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from chat_lease_regression import run_chat_lease_regressions
 from chat_turn_resolution_regression import run_chat_turn_resolution_regressions
+from chat_view_close_concurrency import run_chat_view_close_concurrency
+from database_test_processes import cleanup_container, finish_query_session, run_timed_process
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -23,22 +26,43 @@ parser.add_argument('--baseline-flows', action='store_true', help='Task 2 schema
 parser.add_argument('--profile-history', action='store_true', help='Focused profile history regression on the full migrated ephemeral schema')
 args = parser.parse_args()
 name = 'serenia-sql-test-' + uuid.uuid4().hex[:12]
+container_started = False
+container_start_attempted = False
 
-def docker(*argv, sql=None, check=True):
+def docker(*argv, sql=None, check=True, timeout=None):
     executable = ['rtk', 'proxy', 'docker'] if shutil.which('rtk') else ['docker']
-    result = subprocess.run([*executable, *argv], input=sql, text=True, capture_output=True)
+    command = [*executable, *argv]
+    if timeout is None:
+        result = subprocess.run(command, input=sql, text=True, capture_output=True)
+    else:
+        result = run_timed_process(command, input_text=sql, timeout=timeout)
     if check and result.returncode:
         raise RuntimeError('Docker failed (exit ' + str(result.returncode) + '):\n' + result.stdout + result.stderr)
     return result
 
-def query(sql):
-    result = docker('exec', '-i', name, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=False)
+def query(sql, timeout=None):
+    result = docker('exec', '-i', name, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', sql=sql, check=False, timeout=timeout)
     if result.returncode:
         raise RuntimeError(result.stdout + result.stderr)
     return result.stdout
 
+def open_query_session(sql):
+    executable = ['rtk', 'proxy', 'docker'] if shutil.which('rtk') else ['docker']
+    process = subprocess.Popen(
+        [*executable, 'exec', '-i', name, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'],
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, bufsize=1,
+        start_new_session=True,
+    )
+    if process.stdin is None:
+        raise RuntimeError('Could not open the PostgreSQL holder input stream')
+    process.stdin.write("set statement_timeout='15s'; set idle_in_transaction_session_timeout='30s';\n" + sql + '\n')
+    process.stdin.flush()
+    return process
+
 try:
+    container_start_attempted = True
     docker('run', '--detach', '--rm', '--name', name, '--network', 'none', '--tmpfs', '/var/lib/postgresql/data:rw', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:17.6-bookworm')
+    container_started = True
     import time
     for _ in range(80):
         # The image's temporary initialization server uses sockets only, then
@@ -341,6 +365,8 @@ try:
     print('PASS concurrent confirm/modify and duplicate modify retry')
     query((ROOT / 'supabase/tests/chat-questionnaire-recovery.sql').read_text())
     print('PASS atomic questionnaire validation/retry/rollback, CSSRS priority, chat consent/leases and durable recovery')
+    run_chat_view_close_concurrency(query, open_query_session, finish_query_session)
+    print('PASS concurrent chat-view close/admission in both lock acquisition orders')
     if not (args.baseline_security or args.baseline_chat or args.baseline_flows):
         run_chat_lease_regressions(query)
         run_chat_turn_resolution_regressions(query)
@@ -536,4 +562,10 @@ try:
     query((ROOT / 'supabase/tests/read-policy-equivalence.sql').read_text())
     print('PASS baseline/new read rowsets across owner, foreign, clinician, anon and inherited authenticated role')
 finally:
-    docker('rm', '--force', name, check=False)
+    if container_start_attempted:
+        active_error = sys.exc_info()[1]
+        cleanup_error = cleanup_container(
+            docker, name, active_error=active_error, timeout=10, allow_missing=not container_started,
+        )
+        if cleanup_error:
+            print(cleanup_error, file=sys.stderr)

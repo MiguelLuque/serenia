@@ -106,6 +106,7 @@ export function ChatView({
   const [draft, setDraft] = useState('')
   const [closing, setClosing] = useState(false)
   const [closeUncertain, setCloseUncertain] = useState(false)
+  const [closeConfirmation, setCloseConfirmation] = useState<{ requestId: string; attempt: number } | null>(null)
   const [closeNotice, setCloseNotice] = useState('')
   const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
@@ -302,6 +303,7 @@ export function ChatView({
       if (state.closed) {
         closeUncertainRef.current = false
         setCloseUncertain(false)
+        setCloseConfirmation(null)
         setCloseNotice('')
         completedRecoveryRef.current = null
         setRecoveryUnconfirmed(false)
@@ -376,7 +378,7 @@ export function ChatView({
     const operation = ++transitionRef.current
     setClosing(true); setCloseNotice('')
     try {
-      const closeRequest = closeOwnedSessionFromView(sessionId, isTimeExpired ? 'time_limit' : 'user_request')
+      const closeRequest = closeOwnedSessionFromView(sessionId, isTimeExpired ? 'time_limit' : 'user_request', closeConfirmation)
       closeActionPendingRef.current = sessionId
       let timeout: ReturnType<typeof setTimeout> | undefined
       const outcome = await Promise.race([
@@ -405,12 +407,24 @@ export function ChatView({
       const result = outcome.result
       closeUncertainRef.current = false
       setCloseUncertain(false)
-      if (result.closed) { transitionRef.current += 1; completedRecoveryRef.current = null; setExternallyClosed(true); setRecovery(null); setUrgentMode(false) }
+      if (result.closed) { transitionRef.current += 1; completedRecoveryRef.current = null; setExternallyClosed(true); setRecovery(null); setUrgentMode(false); setCloseConfirmation(null) }
       else {
         syncClock(result.timing)
-        setCloseNotice(result.reason === 'turn_pending'
-          ? 'Hay una respuesta en curso. Espera o comprueba su estado antes de cerrar.'
-          : 'El servidor indica que aún queda tiempo. Puedes continuar o terminar la sesión.')
+        if (result.reason === 'turn_unresolved') {
+          const confirmationChanged = closeConfirmation !== null && (closeConfirmation.requestId !== result.requestId || closeConfirmation.attempt !== result.attempt)
+          setCloseConfirmation({ requestId: result.requestId, attempt: result.attempt })
+          setCloseNotice(confirmationChanged
+            ? 'El turno pendiente ha cambiado desde la confirmación. Comprueba el estado guardado y confirma otra vez antes de terminar.'
+            : 'El último mensaje está guardado, pero no hay una respuesta confirmada. Comprueba su estado y, si el reintento está disponible, repite el mismo mensaje. Para terminar sin respuesta, confirma de nuevo.')
+        } else {
+          setCloseConfirmation(null)
+          if (result.reason === 'turn_pending') {
+            setCloseNotice('Hay una respuesta en curso. Estamos comprobando su estado guardado; puedes volver a comprobarlo antes de cerrar.')
+            void rehydrate(false)
+          } else {
+            setCloseNotice('El servidor indica que aún queda tiempo. Puedes continuar o terminar la sesión.')
+          }
+        }
       }
     } catch {
       if (closeActionPendingRef.current === sessionId) closeActionPendingRef.current = null
@@ -511,6 +525,8 @@ export function ChatView({
 
   async function retry() {
     if (!recovery?.canRetry || retrying) return
+    setCloseConfirmation(null)
+    setCloseNotice('')
     questionnaireRefreshPendingRef.current = true
     generatingRefreshRef.current = null
     const operation = ++transitionRef.current
@@ -549,6 +565,8 @@ export function ChatView({
     const isStoredReplay = replay !== undefined && localSubmissionsRef.current.some(item => item.requestId === replay.requestId && item.text === replay.text)
     if (closing || isClosed || ((recovery || recoveryChecking || isTimeExpired) && !urgentMode && !isStoredReplay)) return false
     const operation = ++transitionRef.current
+    setCloseConfirmation(null)
+    setCloseNotice('')
     const messagesBeforeReplay = replay ? messages : null
     const recoveryBeforeReplay = replay ? recovery : null
     completedRecoveryRef.current = null
@@ -701,7 +719,8 @@ export function ChatView({
           ? `${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de continuar.`
           : unresolvedSubmission ? `No hemos podido confirmar el envío. ${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de continuar.`
             : status === 'error' ? 'Estamos comprobando cómo terminó el turno.'
-              : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'
+              : closeNotice ? isTimeExpired ? 'El tiempo se ha agotado; falta confirmar el cierre guardado.' : 'La sesión sigue activa; puedes continuar o terminar cuando quieras.'
+                : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'
 
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -728,7 +747,7 @@ export function ChatView({
                 onClick={() => void finishSession()}
                 className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-100"
               >
-                {closing ? 'Confirmando cierre…' : closeUncertain ? 'Cierre sin confirmar' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
+                {closing ? 'Confirmando cierre…' : closeUncertain ? 'Cierre sin confirmar' : closeConfirmation ? 'Terminar sin respuesta' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
               </button>
           )}
         </div>
@@ -805,7 +824,7 @@ export function ChatView({
                 }}
               />
             )}
-          {(isTimeExpired || closeUncertain || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div className="space-y-2 border-t p-3 text-sm">
+          {(isTimeExpired || closeUncertain || closeConfirmation || closeNotice || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div className="space-y-2 border-t p-3 text-sm">
             <p role="status" aria-live="polite">{recoveryStatus}</p>
             {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || resolvingTurn || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
             {recovery?.attempt !== undefined && !urgentMode && <><p>Comprobar y resolver puede detener una respuesta pendiente que aún no se haya guardado.</p><button type="button" disabled={resolvingTurn || closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void resolveTurn()} className="block underline">Comprobar y resolver turno pendiente</button></>}

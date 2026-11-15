@@ -2,10 +2,9 @@
 import { safeValidateUIMessages } from 'ai'
 import { createAuthenticatedClient, createServiceRoleClient } from '@/lib/server/supabase/server'
 import { z } from 'zod'
-import { ChatRecoverySchema } from '@/lib/shared/chat/recovery'
 import { readOwnedChatSnapshot } from '@/lib/server/chat/owned-snapshot'
 import { sessionTiming } from '@/lib/shared/chat/session-time'
-import { closeSession } from '@/lib/server/sessions/service'
+import { requestOwnedSessionClosure, type UnresolvedTurnConfirmation } from '@/lib/server/sessions/service'
 
 async function ownedSession(sessionId: string) {
   const client = await createAuthenticatedClient()
@@ -67,23 +66,7 @@ export async function getOwnedChatState(sessionId: string, requestId?: string) {
 }
 
 /** Explicit user action. Never make the browser timer a persistence trigger. */
-export async function closeOwnedSessionFromView(sessionId: string, mode: 'user_request' | 'time_limit') {
-  if (mode !== 'user_request' && mode !== 'time_limit') throw new Error('Invalid closure mode')
-  const { client, session } = await ownedSession(sessionId)
-  if (session.status !== 'open') return { closed: true as const }
-  const { data, error } = await client.rpc('get_chat_turn_recovery', { p_session_id: sessionId })
-  if (error) throw error
-  const recovery = data === null ? null : ChatRecoverySchema.parse(data)
-  const timing = sessionTiming(session.opened_at)
-  if (recovery?.status === 'generating' && !recovery.canRetry && Date.parse(recovery.leaseUntil) > timing.serverNow) {
-    return { closed: false as const, reason: 'turn_pending' as const, timing }
-  }
-  if (mode === 'time_limit' && timing.serverNow < timing.expiresAt) {
-    return { closed: false as const, reason: 'not_expired' as const, timing }
-  }
-  // The database still owns authorization and durable close/outbox. This
-  // read guard avoids interrupting an observed pending turn; it is not a new
-  // cross-device lock. No automatic closure runs on mount, focus or a timer.
-  await closeSession(client, sessionId, mode)
-  return { closed: true as const }
+export async function closeOwnedSessionFromView(sessionId: string, mode: 'user_request' | 'time_limit', confirmUnresolved: UnresolvedTurnConfirmation | null = null) {
+  const client = await createAuthenticatedClient()
+  return requestOwnedSessionClosure(client, sessionId, mode, confirmUnresolved)
 }

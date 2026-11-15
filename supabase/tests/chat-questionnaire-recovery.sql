@@ -271,4 +271,182 @@ drop trigger test_outbox_failure on assessment_jobs;
 set local role service_role;
 select finish_chat_turn('20000000-0000-0000-0000-000000000017','own-close',(select token from chat_turns where session_id='20000000-0000-0000-0000-000000000017'),'[{"type":"text","text":"Línea 024"}]','[]',null,'crisis_detected');
 reset role;
+-- Inactivity closure must leave an unanswered turn available for recovery.
+insert into conversations(id,user_id) values('10000000-0000-0000-0000-000000000019','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id,last_activity_at) values('20000000-0000-0000-0000-000000000019','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000019',now()-interval '31 minutes');
+set local role service_role;
+do $$ declare sid uuid:='20000000-0000-0000-0000-000000000019'; claim jsonb; begin
+ claim=begin_chat_turn(sid,'00000000-0000-0000-0000-000000000002','inactive-unresolved','Synthetic unanswered turn',false);
+ update chat_turns set status='failed',error_code='synthetic_failure' where session_id=sid;
+ update clinical_sessions set last_activity_at=clock_timestamp()-interval '31 minutes' where id=sid;
+ perform pg_temp.expect_failure(format('select close_session_atomic(%L,%L,%L)',sid,'00000000-0000-0000-0000-000000000002','inactivity'));
+ if (select status from clinical_sessions where id=sid) is distinct from 'open' or exists(select 1 from assessment_jobs where session_id=sid) then raise exception 'Inactivity discarded an unresolved turn'; end if;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare recovery jsonb; begin
+ recovery=get_chat_turn_recovery('20000000-0000-0000-0000-000000000019');
+ if recovery->>'status' is distinct from 'failed' or (recovery->>'canRetry')::boolean is distinct from true then raise exception 'Unresolved turn was not available for recovery'; end if;
+end $$;
+reset role;
+set local role service_role;
+select close_session_atomic('20000000-0000-0000-0000-000000000019','00000000-0000-0000-0000-000000000002','user_request');
+reset role;
+-- The view can read no recovery, then a turn can be admitted before the
+-- explicit close. The close RPC must recheck under the session-row lock.
+insert into conversations(id,user_id) values('10000000-0000-0000-0000-000000000018','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id) values('20000000-0000-0000-0000-000000000018','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000018');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ begin
+ if close_session_from_chat_view('20000000-0000-0000-0000-000000000018','time_limit',null,null)->>'reason' is distinct from 'not_expired' then raise exception 'Time-limit close ran before the server deadline'; end if;
+ if (select status from clinical_sessions where id='20000000-0000-0000-0000-000000000018') is distinct from 'open' then raise exception 'Premature time-limit check closed the session'; end if;
+ if get_chat_turn_recovery('20000000-0000-0000-0000-000000000018') is not null then raise exception 'Expected no turn in the initial view check'; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ declare claim jsonb; sid uuid:='20000000-0000-0000-0000-000000000018'; begin
+ claim=begin_chat_turn(sid,'00000000-0000-0000-0000-000000000002','view-close-race','Synthetic accepted turn',false);
+ if claim->>'userMessageId' is null then raise exception 'Turn was not admitted'; end if;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; sid uuid:='20000000-0000-0000-0000-000000000018'; begin
+ result=close_session_from_chat_view(sid,'user_request',null,null);
+ if result->>'closed' is distinct from 'false' or result->>'reason' is distinct from 'turn_pending' then raise exception 'Close ignored a turn admitted after the view check: %',result; end if;
+ result=close_session_from_chat_view(sid,'user_request','view-close-race',1);
+ if result->>'closed' is distinct from 'false' or result->>'reason' is distinct from 'turn_pending' then raise exception 'Explicit close bypassed a live turn: %',result; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ begin
+ if (select status from clinical_sessions where id='20000000-0000-0000-0000-000000000018') is distinct from 'open'
+   or (select status from chat_turns where session_id='20000000-0000-0000-0000-000000000018') is distinct from 'generating' then
+   raise exception 'Pending turn was changed during refused close';
+ end if;
+end $$;
+update chat_turns set status='failed',token=gen_random_uuid(),lease_until=clock_timestamp(),error_code='synthetic_failure' where session_id='20000000-0000-0000-0000-000000000018';
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; sid uuid:='20000000-0000-0000-0000-000000000018'; begin
+ result=close_session_from_chat_view(sid,'user_request',null,null);
+ if result->>'closed' is distinct from 'false' or result->>'reason' is distinct from 'turn_unresolved'
+   or result->>'requestId' is distinct from 'view-close-race' or result->>'attempt' is distinct from '1' then
+   raise exception 'Retryable failure was not returned with its identity: %',result;
+ end if;
+ result=close_session_from_chat_view(sid,'user_request','view-close-race',1);
+ if result->>'closed' is distinct from 'true' or result->>'newlyClosed' is distinct from 'true' then raise exception 'Confirmed close without response failed: %',result; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ begin
+ if (select status from chat_turns where session_id='20000000-0000-0000-0000-000000000018') is distinct from 'interrupted' then raise exception 'Confirmed close did not preserve the failed turn as interrupted'; end if;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; begin
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000018','user_request',null,null);
+ if result->>'closed' is distinct from 'true' or result->>'newlyClosed' is distinct from 'false' then raise exception 'Repeated close was not idempotent: %',result; end if;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+select pg_temp.expect_failure($q$select close_session_from_chat_view('20000000-0000-0000-0000-000000000018','user_request',null,null)$q$);
+reset role;
+set local role anon;
+select pg_temp.expect_failure($q$select close_session_from_chat_view('20000000-0000-0000-0000-000000000018','user_request',null,null)$q$);
+reset role;
+insert into conversations(id,user_id) values
+ ('10000000-0000-0000-0000-000000000024','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id,opened_at) values
+ ('20000000-0000-0000-0000-000000000024','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000024',now());
+set local role service_role;
+do $$ begin
+ perform begin_chat_turn('20000000-0000-0000-0000-000000000024','00000000-0000-0000-0000-000000000002','expired-lease','Synthetic expired lease',false);
+ update chat_turns set lease_until=clock_timestamp()-interval '1 second' where session_id='20000000-0000-0000-0000-000000000024';
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; begin
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000024','user_request',null,null);
+ if result->>'closed' is distinct from 'false' or result->>'reason' is distinct from 'turn_unresolved'
+   or result->>'requestId' is distinct from 'expired-lease' or result->>'attempt' is distinct from '1' then
+   raise exception 'Expired generating turn identity was not returned: %',result;
+ end if;
+end $$;
+reset role;
+set local role service_role;
+update chat_turns set attempts=2 where session_id='20000000-0000-0000-0000-000000000024' and request_id='expired-lease';
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; begin
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000024','user_request','expired-lease',1);
+ if result->>'closed' is distinct from 'false' or result->>'reason' is distinct from 'turn_unresolved'
+   or result->>'requestId' is distinct from 'expired-lease' or result->>'attempt' is distinct from '2' then
+   raise exception 'Stale attempt confirmation closed a retried turn: %',result;
+ end if;
+end $$;
+reset role;
+set local role service_role;
+update chat_turns set request_id='expired-lease-replacement' where session_id='20000000-0000-0000-0000-000000000024' and request_id='expired-lease';
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; begin
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000024','user_request','expired-lease',2);
+ if result->>'closed' is distinct from 'false' or result->>'reason' is distinct from 'turn_unresolved'
+   or result->>'requestId' is distinct from 'expired-lease-replacement' or result->>'attempt' is distinct from '2' then
+   raise exception 'Stale request confirmation closed a replacement turn: %',result;
+ end if;
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000024','user_request','expired-lease-replacement',2);
+ if result->>'closed' is distinct from 'true' or result->>'newlyClosed' is distinct from 'true' then raise exception 'Confirmed expired turn closure failed: %',result; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ begin
+ if (select status from chat_turns where session_id='20000000-0000-0000-0000-000000000024') is distinct from 'interrupted' then raise exception 'Expired generation remained active after confirmed close'; end if;
+end $$;
+reset role;
+insert into conversations(id,user_id) values('10000000-0000-0000-0000-000000000025','00000000-0000-0000-0000-000000000002');
+insert into clinical_sessions(id,user_id,conversation_id,opened_at) values('20000000-0000-0000-0000-000000000025','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000025',now()-interval '61 minutes');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+do $$ declare result jsonb; begin
+ result=close_session_from_chat_view('20000000-0000-0000-0000-000000000025','time_limit',null,null);
+ if result->>'closed' is distinct from 'true' or result->>'newlyClosed' is distinct from 'true' then raise exception 'Expired time-limit closure failed: %',result; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ begin
+ if (select closure_reason from clinical_sessions where id='20000000-0000-0000-0000-000000000025') is distinct from 'time_limit' then raise exception 'Expired time-limit closure reason not persisted'; end if;
+end $$;
+reset role;
+-- A stale open session must not rewrite or enqueue work for a conversation
+-- that was already closed by another valid path.
+insert into conversations(id,user_id,status,ended_at) values
+ ('10000000-0000-0000-0000-000000000026','00000000-0000-0000-0000-000000000002','closed','2025-01-01 00:00:00+00');
+insert into clinical_sessions(id,user_id,conversation_id,opened_at) values
+ ('20000000-0000-0000-0000-000000000026','00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000026',now());
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+select pg_temp.expect_failure($q$select close_session_from_chat_view('20000000-0000-0000-0000-000000000026','user_request',null,null)$q$);
+reset role;
+set local role service_role;
+do $$ begin
+ if (select status from clinical_sessions where id='20000000-0000-0000-0000-000000000026') is distinct from 'open'
+   or (select closed_at from clinical_sessions where id='20000000-0000-0000-0000-000000000026') is not null
+   or (select closure_reason from clinical_sessions where id='20000000-0000-0000-0000-000000000026') is not null
+   or (select status from conversations where id='10000000-0000-0000-0000-000000000026') is distinct from 'closed'
+   or (select ended_at from conversations where id='10000000-0000-0000-0000-000000000026') is distinct from '2025-01-01 00:00:00+00'::timestamptz
+   or exists(select 1 from assessment_jobs where session_id='20000000-0000-0000-0000-000000000026') then
+   raise exception 'Closed conversation was mutated by stale session close';
+ end if;
+end $$;
+reset role;
 rollback;

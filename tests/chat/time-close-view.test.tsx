@@ -20,7 +20,7 @@ it('confirms closure explicitly and retains an unsent urgent draft without navig
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }))
   const draft = await screen.findByRole('textbox', { name: 'Borrador sin enviar' }) as HTMLTextAreaElement
   expect(draft.value).toBe('Un detalle sin enviar')
-  expect(f.close).toHaveBeenCalledWith('timed', 'time_limit')
+  expect(f.close).toHaveBeenCalledWith('timed', 'time_limit', null)
   expect(f.refresh).not.toHaveBeenCalled(); expect(f.push).not.toHaveBeenCalled()
 })
 it('keeps closure uncertain after an action failure until saved state is checked', async () => {
@@ -64,7 +64,50 @@ it('respects a pending admitted response and a corrected server deadline', async
   await screen.findByText(/Hay una respuesta en curso/)
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }))
   await screen.findByText('2 min restantes')
+  expect(f.close).toHaveBeenNthCalledWith(1, 'timed', 'time_limit', null)
+  expect(f.close).toHaveBeenNthCalledWith(2, 'timed', 'time_limit', null)
   expect(screen.getByRole('button', { name: 'Terminar sesión' })).toBeTruthy()
+})
+it('offers saved-state recovery when a manual close finds a turn from another tab', async () => {
+  f.close.mockResolvedValueOnce({ closed: false, reason: 'turn_pending', timing: { serverNow: now, expiresAt: now + 60 * 60_000 } })
+  f.state.mockResolvedValue({ closed: false, recovery: null, messages: [], timing: { serverNow: now, expiresAt: now + 60 * 60_000 } })
+  render(<ChatView sessionId="open-pending" initialMessages={[]} serverNow={new Date(now)} expiresAt={new Date(now + 60 * 60_000)} />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Terminar sesión' }))
+  await screen.findByText(/Hay una respuesta en curso/)
+
+  expect(screen.getByText('60 min restantes')).toBeTruthy()
+  expect(screen.queryByText('El contador indica el fin del tiempo; falta confirmar el cierre guardado.')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Comprobar estado guardado' })).toBeTruthy()
+  expect(f.state).toHaveBeenCalledWith('open-pending', undefined)
+})
+it('asks for a second explicit confirmation before closing with an unresolved turn', async () => {
+  f.close.mockResolvedValueOnce({ closed: false, reason: 'turn_unresolved', requestId: 'turn-A', attempt: 1, timing: { serverNow: now, expiresAt: now } })
+    .mockResolvedValueOnce({ closed: true, newlyClosed: true })
+  view()
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }))
+  await screen.findByText(/El último mensaje está guardado, pero no hay una respuesta confirmada/)
+  fireEvent.click(screen.getByRole('button', { name: 'Terminar sin respuesta' }))
+  await screen.findAllByText('La sesión ha terminado.')
+  expect(f.close).toHaveBeenNthCalledWith(1, 'timed', 'time_limit', null)
+  expect(f.close).toHaveBeenNthCalledWith(2, 'timed', 'time_limit', { requestId: 'turn-A', attempt: 1 })
+})
+it('requires a fresh confirmation if the unresolved turn changes between clicks', async () => {
+  f.close.mockResolvedValueOnce({ closed: false, reason: 'turn_unresolved', requestId: 'turn-A', attempt: 1, timing: { serverNow: now, expiresAt: now } })
+    .mockResolvedValueOnce({ closed: false, reason: 'turn_unresolved', requestId: 'turn-B', attempt: 1, timing: { serverNow: now, expiresAt: now } })
+    .mockResolvedValueOnce({ closed: true, newlyClosed: true })
+  view()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre por tiempo' }))
+  await screen.findByText(/El último mensaje está guardado, pero no hay una respuesta confirmada/)
+  fireEvent.click(screen.getByRole('button', { name: 'Terminar sin respuesta' }))
+  await screen.findByText(/El turno pendiente ha cambiado desde la confirmación/)
+  fireEvent.click(screen.getByRole('button', { name: 'Terminar sin respuesta' }))
+  await screen.findAllByText('La sesión ha terminado.')
+
+  expect(f.close).toHaveBeenNthCalledWith(1, 'timed', 'time_limit', null)
+  expect(f.close).toHaveBeenNthCalledWith(2, 'timed', 'time_limit', { requestId: 'turn-A', attempt: 1 })
+  expect(f.close).toHaveBeenNthCalledWith(3, 'timed', 'time_limit', { requestId: 'turn-B', attempt: 1 })
 })
 it('resynchronizes elapsed time and saved state on focus after a suspended tab', async () => {
   f.state.mockResolvedValue({ closed: false, recovery: null, messages: [], timing: { serverNow: now + 61 * 60_000, expiresAt: now + 60 * 60_000 } })

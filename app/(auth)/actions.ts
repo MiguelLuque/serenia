@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { RegisterSchema, LoginSchema } from '@/lib/shared/auth/schemas'
-import { closeSession, getOrResolveActiveSession } from '@/lib/server/sessions/service'
+import { getOrResolveActiveSession, requestOwnedSessionClosure } from '@/lib/server/sessions/service'
 
 type ActionState = { error?: string } | undefined
 
@@ -59,7 +59,7 @@ export async function logoutAction() {
   } = await supabase.auth.getUser()
   if (user) {
     const active = await getOrResolveActiveSession(supabase, user.id)
-    if (active) await closeSession(supabase, active.id, 'user_request')
+    if (active) await requestOwnedSessionClosure(supabase, active.id, 'user_request')
   }
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')

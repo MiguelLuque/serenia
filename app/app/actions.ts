@@ -3,9 +3,9 @@
 import { redirect } from 'next/navigation'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import {
-  closeSession,
   createSession,
   getOrResolveActiveSession,
+  requestOwnedSessionClosure,
 } from '@/lib/server/sessions/service'
 
 export async function startSessionAction() {
@@ -43,7 +43,8 @@ export async function endSessionAction(formData: FormData) {
     .maybeSingle()
 
   if (session?.status === 'open') {
-    await closeSession(supabase, session.id, 'user_request')
+    const result = await requestOwnedSessionClosure(supabase, session.id, 'user_request')
+    if (!result.closed) redirect(`/app/sesion/${session.id}`)
   }
 
   redirect('/app')

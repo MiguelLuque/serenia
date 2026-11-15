@@ -851,6 +851,26 @@ it('removes the local copy only after its completed receipt has a visible saved 
  expect(screen.getAllByText('Señal A completada')).toHaveLength(1)
 })
 
+it('keeps an uncertain local message when its completed receipt is absent from the transcript', async () => {
+ const receiptMessageId = '40000000-0000-4000-8000-000000000009'
+ fixture.failed = false; fixture.omitUser = true; fixture.receipt = 'completed'; fixture.receiptMessageId = receiptMessageId
+ fixture.messageRows = [{ id: 'other-user-message', role: 'user', parts: [{ type: 'text', text: 'Otro mensaje guardado' }] }]
+ const fetch = vi.fn().mockResolvedValue(new Response('temporarily unavailable', { status: 503 }))
+ vi.stubGlobal('fetch', fetch)
+
+ render(<ChatView {...props} initialMessages={[]} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' }))
+ fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Señal A aún no conciliada' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+
+ await screen.findByText(/No hemos podido confirmar el envío/i)
+ await screen.findByText('Otro mensaje guardado')
+ const submittedRequestId = JSON.parse(fetch.mock.calls[0][1].body).requestId
+ await waitFor(() => expect(fixture.receiptRequestId).toBe(submittedRequestId))
+ expect(screen.getByText('Señal A aún no conciliada')).toBeTruthy()
+ expect(screen.getByRole('button', { name: 'Reintentar la misma señal guardada' })).toBeTruthy()
+})
+
 it('replays completed A by its persisted message ID while preserving pending B and the next draft', async () => {
  fixture.failed = false; fixture.generating = 'waiting'; fixture.requestId = recoveryB.requestId; fixture.messageId = recoveryB.userMessageId; fixture.text = recoveryB.text
  fixture.receipt = 'completed'; fixture.receiptMessageId = '40000000-0000-4000-8000-000000000004'

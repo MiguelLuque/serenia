@@ -126,7 +126,7 @@ def run_chat_turn_resolution_regressions(query):
     recovery = value(owner + f"select get_chat_turn_recovery('{sid}')->>'canRetry';")
     if recovery != 'false':
         raise RuntimeError('Exhausted turn became retryable')
-    query(f"set role authenticated; set request.jwt.claim.sub='{uid}'; select close_session_atomic('{sid}','{uid}','user_request');")
+    query(f"set role service_role; select close_session_atomic('{sid}','{uid}','user_request');")
     if resolve('exhausted') != 'closed':
         raise RuntimeError('Closed session not reported')
 
