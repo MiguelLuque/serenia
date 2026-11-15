@@ -153,3 +153,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for an unattributed quote (ambiguous), an affirmative own-thought frame (explicit), a negated/third-party thought frame (ambiguous), and nested explicit third-party attribution (contextual). Four cases failed before the fix.
 - Quoted risk cues are no longer contextual by default. The helper checks adjacent/embedded third-party reporting, known media framing, and affirmative/negative own-thought framing before assigning a candidate. Only attributed or media quote spans are contextual; uncertain provenance is ambiguous; an affirmative own frame is evaluated with its quoted content.
 - Focused suite: 156 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted follow-up.
+
+## Task 1 follow-up: context scope, thought frames, and open quotes
+
+- Added RED cases for remote media context, own affirmative and negative thought frames, `dice que` third-party framing, and an unclosed quote after a reporting lead. Five assertions failed before the fix.
+- Media context now requires a nearby title relation rather than any earlier media noun. `No pienso:` is treated as a negative frame and remains ambiguous; third-party `dice que` is likewise uncertain. Unclosed quotes are parsed as spans, allowing a clear third-party reporting lead to establish contextual attribution.
+- Focused suite: 161 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this scoped follow-up.

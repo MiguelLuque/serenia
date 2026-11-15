@@ -481,6 +481,36 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'contextual', riskType: 'suicidal_ideation',
     })
   })
+
+  it('does not carry a remote media mention across punctuation', () => {
+    expect(classifyCrisisSignal('Tengo un libro y “me estoy cortando”')).toEqual({
+      disposition: 'ambiguous', riskType: 'self_harm',
+    })
+  })
+
+  it('keeps affirmative own-thought framing explicit after a media clause', () => {
+    expect(classifyCrisisSignal('Tengo un libro; estoy pensando: “voy a suicidarme esta noche”')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps a negated own-thought frame ambiguous', () => {
+    expect(classifyCrisisSignal('No pienso: “voy a suicidarme”')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps reported thinking introduced by dice que ambiguous', () => {
+    expect(classifyCrisisSignal('Mi amigo dice que estoy pensando: “voy a suicidarme”')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('handles an unclosed quote after a third-party reporting lead', () => {
+    expect(classifyCrisisSignal('Hoy mi amigo dijo: “quiero matarme')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

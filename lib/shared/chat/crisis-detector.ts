@@ -77,7 +77,7 @@ type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   let normalized = normalize(text)
   const quotedContexts: ClauseClassification[] = []
-  const quotePattern = /«[^»]*»|“[^”]*”|‘[^’]*’|"[^"]*"|'[^']*'/g
+  const quotePattern = /«[^»]*»|“[^”]*”|‘[^’]*’|"[^"]*"|'[^']*'|«[^»]*$|“[^”]*$|‘[^’]*$|"[^"]*$|'[^']*$/g
   const quoteRanges: Array<{ start: number; end: number; replacement: string }> = []
   const reportingLead = /(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\s*[:,]?\s*$/i
   const embeddedLead = /^(?:(?:hoy|ayer|ahora)\s+)?(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s*[:,]?\s*[“‘"']?/i
@@ -85,7 +85,9 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   for (const match of normalized.matchAll(quotePattern)) {
     const start = match.index ?? 0
     const end = start + match[0].length
-    const quoteText = match[0].slice(1, -1)
+    const closer = ({ '«': '»', '“': '”', '‘': '’', '"': '"', "'": "'" } as Record<string, string>)[match[0][0]]
+    const closed = match[0].endsWith(closer)
+    const quoteText = match[0].slice(1, closed ? -1 : undefined)
     const suicideCue = SUICIDE.test(quoteText)
     const selfHarmCue = SELF_HARM.test(quoteText)
     if (!suicideCue && !selfHarmCue) continue
@@ -95,9 +97,10 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const tailMatch = reportingTail.exec(suffix)
     const embeddedAttribution = embeddedLead.test(quoteText)
     const attributed = Boolean(leadMatch || tailMatch || embeddedAttribution)
-    const mediaContext = /\b(pelicula|serie|cancion|libro|titulo)\b[^.!?]*$/i.test(prefix) || /^\s*(?:es|se llama|el titulo es)\b/i.test(suffix)
-    const thirdPartyFrame = /\b(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:cree|piensa)\s+que\s+(?:yo\s+)?estoy pensando\s*:\s*$/i.test(prefix)
-    const negativeSelfFrame = /\bno\s+estoy pensando\s*:\s*$/i.test(prefix)
+    const recentPrefix = prefix.slice(Math.max(prefix.lastIndexOf(';'), prefix.lastIndexOf('.'), prefix.lastIndexOf('!'), prefix.lastIndexOf('?')) + 1)
+    const mediaContext = /\b(?:pelicula|serie|cancion|libro|titulo)\s+(?:se llama|trata de|es|lleva por titulo)\s*$/i.test(recentPrefix)
+    const thirdPartyFrame = /\b(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:cree|piensa|dice)\s+que\s+(?:yo\s+)?estoy pensando\s*:\s*$/i.test(prefix)
+    const negativeSelfFrame = /\bno\s+(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix)
     const affirmativeSelfFrame = /\b(?:yo\s+)?(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix) && !negativeSelfFrame && !thirdPartyFrame
     if (attributed || mediaContext) {
       quotedContexts.push({ disposition: 'contextual', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
@@ -163,7 +166,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const uncertainNegation = /\b(no puedo dejar de|no quiero dejar de|no voy a dejar de|no dejo de|no me atrevo a|no creo que quiera|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
     const clearDenial = /\b(?:no|nunca|jamas)\s+(?:(?:me\s+)?(?:quiero|voy a)\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|estoy pensando en (?:suicidarme|autolesionarme|hacerme dan[oó]|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto(?: ahora)?|tengo pensamientos? de (?:suicidio|autolesion|hacerme dan[oó]))\b/i.test(clause)
     const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
-    const directIntentOrBehavior = /\b(no solo quiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?quiero\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?voy a (?:suicidar(?:me)?|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|(?<!no )estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme|cortarme|hacerme dan[oó])|tengo un plan para (?:quitarme la vida|suicidarme|hacerme dan[oó]|autolesionarme|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto ahora)\b/i.test(clause)
+    const directIntentOrBehavior = /\b(no solo quiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?quiero\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?voy a (?:suicidar(?:me)?|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|(?<!no )estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme|cortarme|hacerme dan[oó])|estoy pensando\s*:\s*voy a (?:suicidarme|autolesionarme|hacerme dan[oó]|cortarme)|tengo un plan para (?:quitarme la vida|suicidarme|hacerme dan[oó]|autolesionarme|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto ahora)\b/i.test(clause)
     const explicit = !attributedQuote && !attributedBelief && !past && !uncertainNegation && !clearDenial && !/\b(me hice dano hoy)\b/i.test(clause) && (
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
       directIntentOrBehavior

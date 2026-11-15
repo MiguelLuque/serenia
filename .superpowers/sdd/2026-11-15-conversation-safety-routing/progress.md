@@ -165,3 +165,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Quote cues are now classified by provenance: attributed/media quotes contextual, affirmative own frames evaluated with their content, uncertain source ambiguous.
 - Focused suite 156/156; typecheck and diff check pass. Full suite not rerun for this targeted fix. See Task 1 report.
 
+### Task 1 follow-up: context scope, negated frames, and open quotes
+
+- Added RED for remote media mentions, affirmative/negative own-thought frames, third-party `dice que`, and a reporting quote without a closing mark; five assertions failed pre-fix.
+- Media context now requires a nearby title relation; `No pienso:` and third-party `dice que` remain ambiguous; open quotes after a clear reporting lead remain contextual.
+- Focused 161/161, typecheck and diff check pass. Full suite not rerun for this targeted fix. Details in Task 1 report.
+
