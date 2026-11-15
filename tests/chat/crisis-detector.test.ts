@@ -386,6 +386,10 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
   })
 
+  it.each(['«Quiero matarme», me dijo mi amigo', '«Quiero suicidarme», me contó mi pareja'])('links a following indirect-object attribution: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
   it('keeps later direct personal intent after a postposed quote attribution', () => {
     expect(classifyCrisisSignal('«Quiero matarme», dijo mi amigo, y yo también quiero suicidarme')).toEqual({
       disposition: 'explicit_current', riskType: 'suicidal_ideation',

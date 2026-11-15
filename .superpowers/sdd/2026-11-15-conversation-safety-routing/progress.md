@@ -142,3 +142,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED tests for a quote followed by `dijo/contó + third party`, and a direct personal statement after that quote attribution.
 - A quote is linked to the next clause only when quote-delimited and followed immediately by a supported reporting-verb/subject structure. Later direct intent stays explicit. Focused 126/126, typecheck and diff check pass; full suite not rerun. See Task 1 report.
 
+### Task 1 follow-up: indirect-object postposed attribution
+
+- Added RED cases for quoted intent followed by `me dijo mi amigo` / `me contó mi pareja`; both failed pre-fix. Existing coordinated first-person intent cases remain green.
+- Postposed attribution now allows an immediate `me` before the reporting verb, still requiring a third-party subject. Focused 128/128, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+

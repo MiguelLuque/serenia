@@ -128,3 +128,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for quote-first clauses followed by a reporting verb and third-party subject, plus a later direct personal disclosure after that attribution.
 - A quote clause is now linked to the immediately following clause only when it is quote-delimited and that clause begins with a supported reporting verb plus third-party subject. This keeps attributed content contextual without suppressing later direct personal intent.
 - Focused suite: 126 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow change.
+
+## Task 1 follow-up: indirect-object postposed attribution
+
+- Added RED cases for `me dijo mi amigo` and `me contó mi pareja` following a quoted clause; both failed before the update. Existing positive coordinated first-person intent remains covered.
+- The postposed attribution lead now allows an immediate indirect-object `me` before the reporting verb while still requiring a following third-party subject.
+- Focused suite: 128 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow update.
