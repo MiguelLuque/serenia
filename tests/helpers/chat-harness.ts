@@ -16,7 +16,7 @@ export async function chatHarness(configuration: { model?: LanguageModel; direct
     safetyOptions: [] as Array<{ strict?: boolean } | undefined>,
     captured: [] as any[], writes: [] as any[],
     activeQuestionnaire: false, questionnaireCreations: [] as any[],
-    persistFailures: 0, generationFailure: false, urgentReply: false, criticalQuestionnaireEvidence: false, markerReadFailure: false,
+    persistFailures: 0, persistAfterCommitFailures: 0, generationFailure: false, urgentReply: false, criticalQuestionnaireEvidence: false, markerReadFailure: false,
     prompt: 'Active prompt', promptFailure: false, historyFailure: false, safetyFailure: false, omitAdmittedMessage: false,
     hook: async (_options: any) => { void _options },
     contextHook: async () => {},
@@ -54,8 +54,12 @@ export async function chatHarness(configuration: { model?: LanguageModel; direct
       state.proposal = args.p_proposal ? { requestId: args.p_request_id, reason: args.p_proposal } : null
       state.previousRequest = args.p_request_id
       if (args.p_close_reason) state.session.status = 'closed'
+      if (state.persistAfterCommitFailures-- > 0) return { error: { code: 'XX000' }, data: null }
     }
-    if (name === 'fail_chat_turn') state.turns.get(args.p_request_id).status = 'failed'
+    if (name === 'fail_chat_turn') {
+      const turn = state.turns.get(args.p_request_id)
+      if (turn.status === 'generating') turn.status = 'failed'
+    }
     if (name === 'close_chat_turn') {
       const turn = state.turns.get(args.p_request_id)
       const crisisAllowed = turn.lexicalEvent || state.criticalQuestionnaireEvidence

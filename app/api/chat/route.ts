@@ -127,6 +127,7 @@ export async function POST(req: Request) {
     })
   }
   const token = turn.token
+  let finalWriteStarted = false
   let createdQuestionnaire: { code: QuestionnaireCode; reason: string; instanceId: string } | null = null
   let closureClarification: string | null = null
   let closeReason: string | null = null
@@ -159,6 +160,7 @@ export async function POST(req: Request) {
         { type: 'tool-output-available', toolCallId, output })
     }
     if (closeReason) markClosed(response.parts, response.chunks, closeReason)
+    finalWriteStarted = true
     const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: response.parts as Json, p_chunks: response.chunks as unknown as Json, p_close_reason: closeReason ?? undefined })
     if (error) throw error
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
@@ -358,12 +360,13 @@ export async function POST(req: Request) {
       markClosed(responseMessage.parts, chunks, closeReason)
     }
     awaitingGeneration = false
+    finalWriteStarted = true
     const { error } = await service.rpc('finish_chat_turn', { p_session_id: sessionId, p_request_id: requestId, p_token: token, p_parts: responseMessage.parts as Json, p_chunks: chunks as unknown as Json, p_proposal: proposal ?? undefined, p_close_reason: closeReason ?? undefined })
     if (error) throw error
     if (closeReason) void enqueueAssessmentGeneration({ sessionId }).catch(() => console.error('[chat] outbox recovery pending'))
     return replay(chunks)
   } catch (error) {
-    if ((awaitingGeneration && generationTimeExpired) || isSessionExpired(session)) {
+    if (!finalWriteStarted && ((awaitingGeneration && generationTimeExpired) || isSessionExpired(session))) {
       awaitingGeneration = false
       try { return await finishStaticReply('time_limit', directSignal ? `${timeClosureText}\n\n${crisisResourcesText}` : timeClosureText) }
       catch { /* Ambiguous persistence follows the same fenced recovery path. */ }

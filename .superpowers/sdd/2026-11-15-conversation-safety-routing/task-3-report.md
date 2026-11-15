@@ -69,6 +69,15 @@ GREEN: `rtk npx vitest run tests/chat/cross-session-context.test.ts tests/chat/s
 - `rtk git diff --check` — passed.
 - Full suite / `rtk npm run verify` were not rerun in this follow-up; parent requested focused GREEN before rerunning repository gates. No hosted DB, Vercel, model/provider, push, merge, or deploy operations were performed.
 
+## Review follow-up — durable finish error and uncertain intent — 2026-11-15
+
+- Added a harness scenario where `finish_chat_turn` commits the response and then returns an error. RED exposed that an expired session let the catch block attempt a second static finish, returning different chunks than the durable response. The route now permits the time-limit static fallback only before any `finish_chat_turn` attempt; the harness models `fail_chat_turn` as a state-conditional update and preserves a completed durable turn. The regression verifies the original completed chunks replay unchanged.
+- Added RED for `No creo que voy a matarme esta noche`; it was `explicit_current`. The uncertainty matcher now treats `no creo que voy a` as uncertain while preserving positive `Voy a matarme`, direct denial `No voy a matarme`, and attributed third-party quotes.
+- RED: `rtk npx vitest run tests/chat/crisis-detector.test.ts tests/api/chat-safety-routing.test.ts` — **2 failed, 194 passed**.
+- GREEN: same focused command — **2 files passed, 196 tests passed**.
+- `rtk npm run typecheck`, `rtk npm run lint`, and `rtk git diff --check` — passed.
+- Full verify intentionally not run pending independent review. No hosted or external operations were performed.
+
 
 ## Full-verify behavioral follow-up — 2026-11-15
 

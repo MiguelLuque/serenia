@@ -202,6 +202,12 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added direct `voy a matarme` recognition while retaining direct denial and attributed-quote behavior; optional patient context now degrades to ordinary chat; deadline errors recheck expiry and close by `time_limit`; corrected completed ordinary replay expectation to prevent duplicate profile extraction.
 - Focused GREEN: 5 files / 232 tests passed. Typecheck, lint, and diff check passed. Full suite/verify deferred as requested for parent rerun. Detailed evidence in `task-3-report.md`.
 
+### Task 3 review follow-up: durable finish error and uncertain intent
+
+- Added regression for a `finish_chat_turn` that commits before returning an error. RED showed a second static finish could replace the durable replay after deadline expiry. Fallback now only runs before final write begins; harness retry/fail behavior preserves completed turns, and replay retains the committed chunks.
+- Added RED for `No creo que voy a matarme esta noche` (incorrectly explicit); uncertainty pattern now keeps it ambiguous while existing positive, clear denial, and attributed-quote cases remain covered.
+- Focused RED: 2 failed / 194 passed. Focused GREEN: 2 files / 196 tests passed. Typecheck, lint, and diff check passed. Full verify deferred for independent review; details in `task-3-report.md`.
+
 
 
 ### Task 3 full-verify behavioral follow-up

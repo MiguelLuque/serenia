@@ -326,6 +326,12 @@ describe('classifyCrisisSignal — conversation routing', () => {
     expect(classifyCrisisSignal('No creo que quiera suicidarme').disposition).toBe('ambiguous')
   })
 
+  it('keeps uncertain voy-a negation ambiguous rather than treating it as direct intent', () => {
+    expect(classifyCrisisSignal('No creo que voy a matarme esta noche')).toEqual({
+      disposition: 'ambiguous', riskType: 'suicidal_ideation',
+    })
+  })
+
   it.each([
     'Estoy pensando en hacerme daño o suicidarme',
     'Estoy pensando en suicidarme o hacerme daño',

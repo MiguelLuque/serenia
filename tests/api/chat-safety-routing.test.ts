@@ -230,4 +230,21 @@ describe('conversation safety routing', () => {
     expect(h.state.session.status).toBe('closed')
     expect(h.state.captured).toHaveLength(0)
   })
+
+  it('does not replace a durably committed deadline response after finish reports an error', async () => {
+    const h = await chatHarness()
+    h.state.persistAfterCommitFailures = 1
+    h.state.hook = async () => { h.state.session.opened_at = new Date(Date.now() - 61 * 60_000).toISOString() }
+    const first = await h.post('Estoy leyendo un artículo sobre suicidio', 'durable-deadline-turn')
+    expect(first.status).toBe(503)
+    expect(h.state.writes.filter(write => write.name === 'finish_chat_turn')).toHaveLength(1)
+    const durableChunks = h.state.turns.get('durable-deadline-turn').chunks
+    expect(durableChunks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'data-session-closed', data: { closed: true, reason: 'time_limit' } })]))
+
+    const retry = await h.post('Estoy leyendo un artículo sobre suicidio', 'durable-deadline-turn')
+    expect(retry.status).toBe(200)
+    expect(await retry.text()).toContain('Respuesta sintética')
+    expect(h.state.turns.get('durable-deadline-turn').chunks).toEqual(durableChunks)
+    expect(h.state.writes.filter(write => write.name === 'finish_chat_turn')).toHaveLength(1)
+  })
 })
