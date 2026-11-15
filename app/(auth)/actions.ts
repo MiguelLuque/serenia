@@ -4,11 +4,16 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { RegisterSchema, LoginSchema } from '@/lib/shared/auth/schemas'
+import { isPublicRegistrationEnabled } from '@/lib/shared/auth/registration-policy'
 import { getOrResolveActiveSession, requestOwnedSessionClosure } from '@/lib/server/sessions/service'
 
 type ActionState = { error?: string } | undefined
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  if (!isPublicRegistrationEnabled()) {
+    return { error: 'El registro está cerrado. Si ya tienes una cuenta, inicia sesión.' }
+  }
+
   const parsed = RegisterSchema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
