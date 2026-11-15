@@ -413,6 +413,22 @@ describe('classifyCrisisSignal — conversation routing', () => {
     })
   })
 
+  it('does not let quote attribution suppress a separate intent after porque', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme” porque yo también quiero matarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('keeps the attributed quote contextual when porque adds no personal intent', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme” porque está preocupado')).toEqual({
+      disposition: 'contextual', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it.each(['«Quiero matarme», dijo ella', '«Quiero suicidarme», dijo él'])('recognizes postposed third-person pronoun attribution: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
   it('keeps later direct personal intent after a postposed quote attribution', () => {
     expect(classifyCrisisSignal('«Quiero matarme», dijo mi amigo, y yo también quiero suicidarme')).toEqual({
       disposition: 'explicit_current', riskType: 'suicidal_ideation',

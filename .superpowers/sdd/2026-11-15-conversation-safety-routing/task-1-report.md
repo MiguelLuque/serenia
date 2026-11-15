@@ -135,3 +135,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - The postposed attribution lead now allows an immediate indirect-object `me` before the reporting verb while still requiring a following third-party subject.
 - Focused suite: 128 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this narrow update.
 - Expanded follow-up verification covered adjacent `dijo/dice`, `contó/cuenta`, and `comentó/comenta` in both attribution orders, with and without `me`, including quote wrappers. A later incidental reporting verb still preserves direct intent. Final focused suite: 141 tests passed; typecheck and diff check passed.
+
+## Task 1 follow-up: causal clauses and postposed pronouns
+
+- Added RED cases for quoted third-party intent followed by personal intent after `porque`, the same quote without personal intent, and postposed `dijo él/ella` attribution. The mixed-intent and pronoun cases failed before implementation.
+- `porque` now separates clauses so quote attribution cannot suppress a separate personal signal. Postposed reporting clauses also recognize `él/ella` as third-party subjects.
+- Focused suite: 145 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted change.

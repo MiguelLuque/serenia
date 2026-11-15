@@ -148,3 +148,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Postposed attribution now allows an immediate `me` before the reporting verb, still requiring a third-party subject. Focused 128/128, typecheck and diff check pass; full suite not rerun. See Task 1 report.
 - Expanded verification covers adjacent `dijo/dice`, `contó/cuenta`, `comentó/comenta`, pre/postposed forms, optional `me`, and quotation wrappers. A later incidental report verb does not suppress direct intent. Final focused 141/141, typecheck and diff check pass.
 
+### Task 1 follow-up: causal clause and pronoun attribution
+
+- Added RED for quoted intent plus personal intent after `porque`, a quote without personal intent, and postposed `dijo él/ella` attribution.
+- `porque` clauses split so attribution does not suppress a separate direct personal signal; postposed `él/ella` is recognized as a third-party subject. Focused 145/145, typecheck and diff check pass; full suite not rerun. See report.
+

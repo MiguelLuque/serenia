@@ -77,7 +77,7 @@ type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const normalized = normalize(text)
   const clauses: Array<{ text: string; separator: 'start' | 'and' | 'other' }> = []
-  const separators = /([;,]|\s+(y|pero|aunque|sin embargo)\s+)/g
+  const separators = /([;,]|\s+(y|pero|aunque|sin embargo|porque)\s+)/g
   let previousEnd = 0
   let previousSeparator: 'start' | 'and' | 'other' = 'start'
   for (const match of normalized.matchAll(separators)) {
@@ -115,7 +115,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const attributionLead = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.exec(attributionClause)
     const quotedClause = /^[\s"'“‘«][\s\S]*["'”’»]\s*$/.test(clause)
     const followingAttribution = clauses[index + 1]?.text ?? ''
-    const postposedQuoteAttribution = quotedClause && /^(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\b/i.test(followingAttribution)
+    const postposedQuoteAttribution = quotedClause && /^(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|el|ella)\b/i.test(followingAttribution)
     const attributedQuote = Boolean((attributionLead && /^(dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)$/i.test(attributionLead[1])) || postposedQuoteAttribution)
     const attributedBelief = Boolean(attributionLead && /^(cree|piensa)$/i.test(attributionLead[1]))
     const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|vimos|guia|articulo|dijo|dice|hablo|cita|personaje|antes|cuando era)\b/i.test(clause) || attributedQuote || /\b(hablar|hablo|tema|conversar)\s+(?:de|sobre)\s+suicid/i.test(clause)
