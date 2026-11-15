@@ -73,3 +73,10 @@
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.
+
+## Task 1 follow-up: categorical negation and combined topics
+
+- Added RED tests for `nunca/jamás` denials, uncertain `no creo que quiera`, both orders of combined suicidal-ideation/self-harm cues in one clause, and retained `no solo quiero` affirmation.
+- Clear denial now requires a narrowly matched negative predicate; uncertainty remains ambiguous. When both cue families occur in one clause, suicidal ideation wins consistently.
+- Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 103 tests. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,367 passed and 4 failed in dependency integration. Child listeners return `listen EPERM: operation not permitted 127.0.0.1`.

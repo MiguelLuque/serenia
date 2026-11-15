@@ -295,6 +295,21 @@ describe('classifyCrisisSignal — conversation routing', () => {
   it.each(['Quiero hacerme daño y matarme', 'Quiero matarme y hacerme daño'])('prioritizes explicit suicide topic across mixed direct signals: %s', text => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
   })
+
+  it.each(['Nunca me voy a suicidar', 'Jamás quiero autolesionarme'])('recognizes scoped categorical denial: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it('leaves uncertain negation ambiguous', () => {
+    expect(classifyCrisisSignal('No creo que quiera suicidarme').disposition).toBe('ambiguous')
+  })
+
+  it.each([
+    'Estoy pensando en hacerme daño o suicidarme',
+    'Estoy pensando en suicidarme o hacerme daño',
+  ])('prefers suicidal ideation when a single clause contains both topics: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

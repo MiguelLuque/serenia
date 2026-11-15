@@ -96,3 +96,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Negation now uses narrowly scoped clear-denial patterns. Uncertain/other negatives remain ambiguous; positive clause wins after denial. Added direct self-harm ideation and plan wording; explicit suicidal topic wins when both risk types are present.
 - Focused suite passes 98/98; typecheck passes. Full suite: 99 files pass, 1 fails; 1,362 pass and 4 fail due `listen EPERM: operation not permitted 127.0.0.1` in dependency integration. Details in Task 1 report.
 
+### Task 1 follow-up: categorical negation and combined topics
+
+- Added RED tests for `nunca/jamás` denials, uncertain `no creo que quiera`, mixed suicidal/self-harm cues in either order, and affirmative `no solo quiero`.
+- Clear-denial matching is scoped to specified negative predicates; uncertainty stays ambiguous. Combined cues consistently select `suicidal_ideation`.
+- Focused tests pass 103/103 and typecheck passes. Full suite: 99 files pass, 1 fails; 1,367 pass and 4 fail due `listen EPERM: operation not permitted 127.0.0.1` in dependency integration. See Task 1 report.
+
