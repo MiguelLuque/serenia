@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectCrisis } from '@/lib/shared/chat/crisis-detector'
+import { classifyCrisisSignal, classifySafetyClarificationReply, detectCrisis } from '@/lib/shared/chat/crisis-detector'
 
 describe('detectCrisis — positive cases', () => {
   it('detects "suicidio" stem', () => {
@@ -102,5 +102,46 @@ describe('detectCrisis — known trade-offs', () => {
     const result = detectCrisis("La película se llama 'Suicide Squad'")
     // This IS detected — document it as expected behavior, not a bug.
     expect(result.detected).toBe(true)
+  })
+})
+
+describe('classifyCrisisSignal — conversation routing', () => {
+  it.each([
+    'La película se llama Suicide Squad',
+    'En clase estudiamos la prevención del suicidio',
+    'Mi amigo dijo "quiero matarme"',
+    'Mi hermana se autolesionó el año pasado',
+    'No tengo pensamientos de suicidio',
+    'Hace años pensé en suicidarme',
+  ])('keeps contextual mention ordinary: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).toBe('contextual')
+  })
+
+  it.each([
+    ['Estoy pensando en suicidarme ahora', 'suicidal_ideation'],
+    ['Quiero hacerme daño ahora', 'self_harm'],
+  ] as const)('routes direct current personal disclosure: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it('does not let context mask a separate current personal disclosure', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo que quiere matarse, y yo estoy pensando en suicidarme ahora.').disposition).toBe('explicit_current')
+  })
+
+  it('does not let a denial mask a contradictory current statement', () => {
+    expect(classifyCrisisSignal('No quiero hacerme daño, pero ahora estoy pensando en cortarme.').disposition).toBe('explicit_current')
+  })
+
+  it('marks uncertain first-person cues ambiguous', () => {
+    expect(classifyCrisisSignal('A veces pienso en desaparecer para siempre').disposition).toBe('ambiguous')
+  })
+})
+
+describe('classifySafetyClarificationReply', () => {
+  it.each([['sí', 'affirmative'], ['No', 'negative'], ['no lo sé', 'unclear'], ['cambiemos de tema', 'skip']] as const)(
+    'classifies %s as %s', (text, category) => expect(classifySafetyClarificationReply(text)).toBe(category),
+  )
+  it.each(['maybe', 'sí y no', 'sí, pero no estoy seguro'])('leaves unsupported or compound reply unclear: %s', text => {
+    expect(classifySafetyClarificationReply(text)).toBe('unclear')
   })
 })
