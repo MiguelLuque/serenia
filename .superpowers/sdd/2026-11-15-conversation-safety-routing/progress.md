@@ -84,3 +84,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Temporal markers alone no longer elevate broad figurative expressions. Explicit current plan, intent, cutting, harm and self-injury phrases route to their topic; `me hice daño hoy` remains ambiguous.
 - Focused tests pass 77/77 and typecheck passes. Full suite: 99 files pass, 1 fails; 1,341 pass and 4 fail due dependency integration child Node binds denied with `listen EPERM: operation not permitted 127.0.0.1`. Details in Task 1 report.
 
+### Task 1 follow-up: direct denial and intent wording
+
+- Added RED tests for six negated conduct/intent phrases, six positive plan/intent phrases, and a negative clause followed by positive intent; 11 assertions failed pre-fix.
+- Explicit routing requires a direct affirmative intent, plan or current behavior pattern. Direct negations cannot elevate; a separate positive clause still retains priority. Added common first-person Spanish variants for suicide and self-harm plans/behavior.
+- Focused suite passes 90/90; typecheck passes. Full suite: 99 files pass, 1 fails; 1,354 pass and 4 fail because dependency integration child servers receive `listen EPERM: operation not permitted 127.0.0.1`. See Task 1 report.
+

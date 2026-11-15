@@ -56,6 +56,13 @@
 - Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 77 tests. `rtk npm run typecheck` passed.
 - Full suite: 99 files passed, 1 failed; 1,341 passed and 4 failed in `tests/tooling/dependency-integration.test.ts`. All failures report `listen EPERM: operation not permitted 127.0.0.1` for child Node servers.
 
+## Task 1 follow-up: direct denials and additional explicit statements
+
+- Added RED tests for six direct negations, six additional personal intent/plan statements, and a denial followed by a positive clause. Eleven assertions failed before implementation.
+- Explicit routing now requires an affirmative, direct intent/plan/behavior pattern; direct negation cannot satisfy it. Positive clauses after a separate denial remain eligible and retain priority. Added Spanish patterns for first-person suicide intent, planned self-harm, and stated current behavior.
+- Focused suite: `rtk npx vitest run tests/chat/crisis-detector.test.ts` passed, 90 tests. `rtk npm run typecheck` passed.
+- Full suite: 99 files passed, 1 failed; 1,354 passed and 4 failed in dependency integration. Child processes fail binding localhost with exact error `listen EPERM: operation not permitted 127.0.0.1`.
+
 ## Scope and limitations
 
 The classifier uses deterministic lexical/context patterns. It does not infer clinical severity and is not a validated screener. The broad linguistic limits of those heuristics remain for later review; this task intentionally does not modify persistence, route behavior, migrations, or protocol documentation.

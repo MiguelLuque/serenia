@@ -247,6 +247,34 @@ describe('classifyCrisisSignal — conversation routing', () => {
   ] as const)('recognizes explicit intent, plan, or behavior: %s', (text, riskType) => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
   })
+
+  it.each([
+    'No me estoy haciendo daño',
+    'No me estoy autolesionando',
+    'No me estoy cortando',
+    'No me corto ahora',
+    'No me quiero suicidar',
+    'No me voy a suicidar',
+  ])('does not treat a direct negation as explicit current: %s', text => {
+    expect(classifyCrisisSignal(text).disposition).not.toBe('explicit_current')
+  })
+
+  it.each([
+    ['Me quiero suicidar', 'suicidal_ideation'],
+    ['Me voy a suicidar', 'suicidal_ideation'],
+    ['Voy a quitarme la vida', 'suicidal_ideation'],
+    ['Voy a hacerme daño esta noche', 'self_harm'],
+    ['Tengo un plan para hacerme daño', 'self_harm'],
+    ['Tengo un plan para cortarme', 'self_harm'],
+  ] as const)('recognizes explicit personal intent or plan: %s', (text, riskType) => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it('lets a positive clause retain priority after a separate direct denial', () => {
+    expect(classifyCrisisSignal('No me quiero suicidar, pero me voy a suicidar')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

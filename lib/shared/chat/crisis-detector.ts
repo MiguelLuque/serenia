@@ -70,7 +70,7 @@ export function detectCrisis(text: string): CrisisDetection {
 }
 
 const SUICIDE = /suicid|quitar(me|se)\s+la\s+vida|matar(me|se)|no\s+(quiero|merezco)\s+vivir|mejor\s+no\s+estar|acabar\s+con\s+todo|desaparecer\s+para\s+siempre|tirarme\s+(desde|por)|voy\s+a\s+suicidarme/i
-const SELF_HARM = /hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse|ando)?|cortarme|\bme\s+(?:estoy\s+)?cortando\b|\bme\s+corto\b|\bme\s+hice\s+dan[oó]\b|\bme\s+estoy\s+haciendo\s+dan[oó]\b|\bvoy\s+a\s+cortarme\b/i
+const SELF_HARM = /hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse|ando)?|cortarme|\bme\s+(?:estoy\s+)?cortando\b|\bme\s+corto\b|\bme\s+hice\s+dan[oó]\b|\bme\s+estoy\s+haciendo\s+dan[oó]\b|\bvoy\s+a\s+cortarme\b|\bvoy\s+a\s+hacerme\s+dan[oó]\b|\bplan\s+para\s+(?:hacerme\s+dan[oó]|cortarme)\b/i
 type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<CrisisRiskType, null> }
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
@@ -104,10 +104,10 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
     const denial = /\b(no|nunca|jamas)\b/i.test(clause)
     const uncertainNegation = /\b(no puedo dejar de|no quiero dejar de|no voy a dejar de|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
-    const clearDenial = denial && (/\b(no quiero|no pienso|no estoy pensando|no tengo|no voy a)\b/i.test(clause)) && !uncertainNegation && !/\b(no quiero vivir)\b/i.test(clause)
+    const clearDenial = denial && !uncertainNegation && !/\b(no quiero vivir)\b/i.test(clause)
     const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
-    const directIntentOrBehavior = /\b(quiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme|cortarme)|voy a (?:suicidarme|cortarme)|tengo un plan para (?:quitarme la vida|suicidarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto ahora)\b/i.test(clause)
-    const explicit = !context && !past && !uncertainNegation && !clearDenial && !/\b(me hice dano hoy)\b/i.test(clause) && (
+    const directIntentOrBehavior = /\b((?:me\s+)?quiero\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?:me\s+)?voy a (?:suicidar(?:me)?|quitarme la vida|hacerme dan[oó]|cortarme)|estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme|cortarme)|tengo un plan para (?:quitarme la vida|suicidarme|hacerme dan[oó]|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto ahora)\b/i.test(clause)
+    const explicit = !context && !past && !denial && !uncertainNegation && !clearDenial && !/\b(me hice dano hoy)\b/i.test(clause) && (
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
       directIntentOrBehavior
     )
