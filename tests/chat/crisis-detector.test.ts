@@ -324,6 +324,18 @@ describe('classifyCrisisSignal — conversation routing', () => {
   ])('prefers suicidal ideation when a single clause contains both topics: %s', text => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
   })
+
+  it.each(['Quiero suicidarme con mi amigo', 'Mi amigo está conmigo, quiero suicidarme'])('does not let a companion mention suppress personal intent: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it('keeps a direct third-party quote contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo "quiero matarme"').disposition).toBe('contextual')
+  })
+
+  it('does not resolve a third-party attribution about the user as explicit or contextual', () => {
+    expect(classifyCrisisSignal('Mi amigo cree que quiero suicidarme').disposition).toBe('ambiguous')
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

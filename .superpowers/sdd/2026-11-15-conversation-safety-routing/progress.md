@@ -112,3 +112,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED cases for personal intent during discussion of suicide, ordinary topic discussion, and third-party quoted speech; both personal-intent contextual cases failed before the fix.
 - Topic context no longer suppresses direct personal intent; attributed third-party speech remains contextual. Focused suite 107/107, typecheck and diff check pass. Full suite not rerun for this narrow follow-up; see report.
 
+### Task 1 follow-up: structured third-party attribution
+
+- Added RED tests for companion mentions, direct third-party quotes, and a third-party belief about the user's intent. Companion and belief cases exposed false contextual routing.
+- Attribution requires a third-party subject plus a speech/belief verb. Quotes stay contextual; third-party beliefs about user risk stay ambiguous; incidental companion mentions do not suppress personal intent. Focused suite 111/111, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+

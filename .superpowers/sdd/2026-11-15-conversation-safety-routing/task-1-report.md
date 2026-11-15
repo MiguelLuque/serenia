@@ -92,3 +92,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED coverage for direct suicidal ideation embedded in a conversational-topic phrase, ordinary talk about suicide, and an attributed third-party quote. The two personal-intent cases failed before the fix.
 - Split broad conversational context from third-party attribution. Topic mentions no longer suppress a separate direct personal intent in the same clause; explicit attribution to another person still routes contextually.
 - Focused suite: 107 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. The full suite was not rerun for this narrow classifier follow-up.
+
+## Task 1 follow-up: attribution structure
+
+- Added RED coverage for a companion mention alongside personal intent, an attributed direct quote, and a third-party belief about the user's intent. The companion and belief cases failed before the change.
+- Attribution now requires a third-party subject followed by a speech/belief verb. A quote remains contextual; a third-party belief about the user's risk remains ambiguous; incidental companion mentions no longer suppress explicit personal intent.
+- Focused suite: 111 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite was not rerun for this narrow classifier follow-up.
