@@ -434,6 +434,30 @@ describe('classifyCrisisSignal — conversation routing', () => {
       disposition: 'explicit_current', riskType: 'suicidal_ideation',
     })
   })
+
+  it.each(['Hoy mi amigo dijo “quiero matarme”', 'Mi amigo dijo, “quiero matarme”'])('attributes reported speech with introductory context or pause: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it('preserves direct intent in a new sentence after quoted third-party speech', () => {
+    expect(classifyCrisisSignal('Mi amigo dijo “quiero matarme”. Ahora quiero suicidarme')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
+
+  it('does not pass a quoted speaker desire into the next clause', () => {
+    expect(classifyCrisisSignal('Hoy mi amigo dijo “quiero descansar” y matarme me da miedo').disposition).not.toBe('explicit_current')
+  })
+
+  it('does not pass a topic-discussion desire into a separate risk cue', () => {
+    expect(classifyCrisisSignal('Quiero hablar de suicidio y matarme me da miedo').disposition).not.toBe('explicit_current')
+  })
+
+  it('keeps the speaker risk type separate from an attributed quote', () => {
+    expect(classifyCrisisSignal('Quiero hacerme daño desde que mi amigo dijo “quiero matarme”')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

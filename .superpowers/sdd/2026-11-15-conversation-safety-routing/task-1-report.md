@@ -141,3 +141,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED cases for quoted third-party intent followed by personal intent after `porque`, the same quote without personal intent, and postposed `dijo él/ella` attribution. The mixed-intent and pronoun cases failed before implementation.
 - `porque` now separates clauses so quote attribution cannot suppress a separate personal signal. Postposed reporting clauses also recognize `él/ella` as third-party subjects.
 - Focused suite: 145 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted change.
+
+## Task 1 follow-up: quote spans and speaker-owned intent
+
+- Added RED cases for introductory/punctuated quote attribution, quote then a new sentence with personal intent, quoted non-risk wording followed by a risk cue, topic-discussion intent sharing, and speaker self-harm plus a third-party suicide quote.
+- Quoted cue spans now contribute contextual evidence, then only adjacent reporting lead/tail is removed before classifying speaker clauses. Sentence punctuation is a boundary. Shared `quiero` inheritance is limited to direct speaker intent or grooming; quoted intent and broad topic discussion cannot authorize it.
+- The `porque` own-intent case and direct coordinated signals remain covered and pass. Focused suite: 151 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite not rerun for this targeted follow-up.

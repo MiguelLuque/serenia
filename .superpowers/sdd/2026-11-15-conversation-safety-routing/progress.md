@@ -153,3 +153,9 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED for quoted intent plus personal intent after `porque`, a quote without personal intent, and postposed `dijo él/ella` attribution.
 - `porque` clauses split so attribution does not suppress a separate direct personal signal; postposed `él/ella` is recognized as a third-party subject. Focused 145/145, typecheck and diff check pass; full suite not rerun. See report.
 
+### Task 1 follow-up: quote spans and speaker-owned intent
+
+- Added RED cases for leading/punctuated quotes, a later own-intent sentence, a non-risk quote followed by a cue, topic-discussion intent sharing, and risk-type separation.
+- Quoted cues contribute contextual candidates and adjacent reporting leads/tails are removed before classifying speaker clauses. Punctuation splits sentences. `sharedWant` only inherits from a direct own-intent or grooming predicate.
+- Focused suite 151/151, typecheck and diff check pass. Full suite not rerun for this targeted fix. Details in report.
+

@@ -75,9 +75,32 @@ type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
-  const normalized = normalize(text)
+  let normalized = normalize(text)
+  const quotedContexts: ClauseClassification[] = []
+  const quotePattern = /«[^»]*»|“[^”]*”|‘[^’]*’|"[^"]*"|'[^']*'/g
+  const quoteRanges: Array<{ start: number; end: number }> = []
+  const reportingLead = /(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\s*[:,]?\s*$/i
+  const reportingTail = /^\s*[,;]?\s*(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|el|ella)\b/i
+  for (const match of normalized.matchAll(quotePattern)) {
+    const start = match.index ?? 0
+    const end = start + match[0].length
+    const quoteText = match[0].slice(1, -1)
+    const suicideCue = SUICIDE.test(quoteText)
+    const selfHarmCue = SELF_HARM.test(quoteText)
+    if (suicideCue || selfHarmCue) {
+      quotedContexts.push({ disposition: 'contextual', riskType: suicideCue ? 'suicidal_ideation' : 'self_harm' })
+    }
+    const leadMatch = reportingLead.exec(normalized.slice(0, start))
+    const tailMatch = reportingTail.exec(normalized.slice(end))
+    quoteRanges.push({
+      start: leadMatch ? start - leadMatch[0].length : start,
+      end: tailMatch ? end + tailMatch[0].length : end,
+    })
+  }
+  for (const range of quoteRanges.reverse()) normalized = `${normalized.slice(0, range.start)} ${normalized.slice(range.end)}`
+  normalized = normalized.trim()
   const clauses: Array<{ text: string; separator: 'start' | 'and' | 'other' }> = []
-  const separators = /([;,]|\s+(y|pero|aunque|sin embargo|porque)\s+)/g
+  const separators = /([;,.!?]|\s+(y|pero|aunque|sin embargo|porque)\s+)/g
   let previousEnd = 0
   let previousSeparator: 'start' | 'and' | 'other' = 'start'
   for (const match of normalized.matchAll(separators)) {
@@ -100,11 +123,11 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   const lastClause = normalized.slice(previousEnd).trim()
   if (lastClause) clauses.push({ text: lastClause, separator: previousSeparator })
 
-  const results = clauses.flatMap<ClauseClassification>((item, index) => {
+  const results = [...quotedContexts, ...clauses.flatMap<ClauseClassification>((item, index) => {
     const previous = clauses[index - 1]?.text ?? ''
     const previousDenies = /\b(no|nunca|jamas)\b/i.test(previous)
     const previousIsAttributed = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.test(previous.replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, ''))
-    const sharedWant = item.separator === 'and' && /\bquiero\b/i.test(previous) && !previousDenies && !previousIsAttributed && /\b(quitarme la vida|suicid|autolesion|matarme)\b/i.test(item.text)
+    const sharedWant = item.separator === 'and' && /\bquiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme (?:el pelo|las unas|el cabello))\b/i.test(previous) && !previousDenies && !previousIsAttributed && /\b(quitarme la vida|suicid|autolesion|matarme)\b/i.test(item.text)
     const clause = sharedWant ? `quiero ${item.text}` : item.text
     if (/\b(?:me estoy cortando|cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
     const suicide = SUICIDE.test(clause)
@@ -131,7 +154,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     )
     const disposition = explicit ? 'explicit_current' : (context || past || clearDenial ? 'contextual' : 'ambiguous')
     return [{ disposition, riskType } as ClauseClassification]
-  })
+  })]
   if (!results.length) return { disposition: 'none', riskType: null }
   const explicit: ClauseClassification | undefined = results.find(result => result.disposition === 'explicit_current' && result.riskType === 'suicidal_ideation')
     ?? results.find(result => result.disposition === 'explicit_current')
