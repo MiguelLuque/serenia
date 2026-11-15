@@ -98,3 +98,9 @@ The classifier uses deterministic lexical/context patterns. It does not infer cl
 - Added RED coverage for a companion mention alongside personal intent, an attributed direct quote, and a third-party belief about the user's intent. The companion and belief cases failed before the change.
 - Attribution now requires a third-party subject followed by a speech/belief verb. A quote remains contextual; a third-party belief about the user's risk remains ambiguous; incidental companion mentions no longer suppress explicit personal intent.
 - Focused suite: 111 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite was not rerun for this narrow classifier follow-up.
+
+## Task 1 follow-up: attributed quote boundaries
+
+- Added RED tests for quotes introduced by `mi amigo me dijo` / `mi madre dijo`, plus direct intent followed by a friend's belief about the speaker. All three assertions failed before the fix.
+- Quote attribution now requires a third-party subject at clause start followed by a reporting verb, including a first-person recipient (`me dijo`). Belief attribution only applies when it leads the clause. A later attribution about another matter no longer suppresses direct intent.
+- Focused suite: 114 tests passed. `rtk npm run typecheck` and `rtk git diff --check` passed. Full suite was not rerun for this bounded change.

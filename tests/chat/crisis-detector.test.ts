@@ -336,6 +336,16 @@ describe('classifyCrisisSignal — conversation routing', () => {
   it('does not resolve a third-party attribution about the user as explicit or contextual', () => {
     expect(classifyCrisisSignal('Mi amigo cree que quiero suicidarme').disposition).toBe('ambiguous')
   })
+
+  it.each(['Mi amigo me dijo "quiero matarme"', 'Mi madre dijo "quiero suicidarme"'])('keeps quoted third-party intent contextual: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'suicidal_ideation' })
+  })
+
+  it('does not let attribution about someone else suppress the speaker direct intent', () => {
+    expect(classifyCrisisSignal('Quiero suicidarme porque mi amigo cree que exagero')).toEqual({
+      disposition: 'explicit_current', riskType: 'suicidal_ideation',
+    })
+  })
 })
 
 describe('classifySafetyClarificationReply', () => {

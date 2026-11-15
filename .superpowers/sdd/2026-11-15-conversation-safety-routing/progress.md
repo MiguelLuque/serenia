@@ -117,3 +117,8 @@ No internal contradiction found. Existing branch was clean at base before adding
 - Added RED tests for companion mentions, direct third-party quotes, and a third-party belief about the user's intent. Companion and belief cases exposed false contextual routing.
 - Attribution requires a third-party subject plus a speech/belief verb. Quotes stay contextual; third-party beliefs about user risk stay ambiguous; incidental companion mentions do not suppress personal intent. Focused suite 111/111, typecheck and diff check pass; full suite not rerun. See Task 1 report.
 
+### Task 1 follow-up: quoted attribution scope
+
+- Added RED regressions for `Mi amigo me dijo`/`Mi madre dijo` quotes and direct user intent followed by another person's belief; all three assertions failed pre-fix.
+- Quote attribution now requires a leading third-party subject/reporting verb; beliefs only suppress when they lead the clause. Later unrelated attribution no longer masks speaker intent. Focused 114/114, typecheck and diff check pass; full suite not rerun. See Task 1 report.
+
