@@ -120,6 +120,8 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const attributed = Boolean(leadMatch || tailMatch || internallyAttributed)
     const recentPrefix = prefix.slice(Math.max(prefix.lastIndexOf(';'), prefix.lastIndexOf('.'), prefix.lastIndexOf('!'), prefix.lastIndexOf('?')) + 1)
     const mediaContext = /\b(?:pelicula|serie|cancion|libro|titulo)\s+(?:se llama|trata de|es|lleva por titulo)\s*$/i.test(recentPrefix)
+      || /\b(?:oyo|escucho|vio|leyo)\s+(?:en|de)\s+(?:(?:una|la|esta|esa)\s+)?(?:pelicula|serie|cancion|libro)\s+(?:la\s+)?(?:frase|linea|letra|expresion)\s*$/i.test(recentPrefix)
+      || /\b(?:en|de)\s+(?:(?:una|la|esta|esa)\s+)?(?:pelicula|serie|cancion|libro)\b.*\b(?:personaje\s+(?:dice|dijo|oye|oyo|escucha|escucho)|(?:la\s+)?(?:frase|linea|letra|expresion))\s*$/i.test(recentPrefix)
     const thirdPartyFrame = /\b(?:mi|un|una|el|la)\s+(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:cree|piensa|dice)\s+que\s+(?:yo\s+)?estoy pensando\s*:\s*$/i.test(prefix)
     const negativeSelfFrame = /\bno\s+(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix)
     const affirmativeSelfFrame = /\b(?:yo\s+)?(?:estoy pensando|pienso)\s*:\s*$/i.test(prefix) && !negativeSelfFrame && !thirdPartyFrame
@@ -213,7 +215,11 @@ export function classifySafetyClarificationReply(text: string): SafetyClarificat
   const value = normalize(text).trim().replace(/[.!?¿¡]+$/g, '')
   if (/^(?:cambiemos de tema|cambiar de tema|prefiero hablar de otra cosa|pasemos a otra cosa)(?:$|[,;.!?:]\s+)|^(?:skip|saltar)$/.test(value)) return 'skip'
   if (classifyCrisisSignal(value).disposition !== 'explicit_current' && /^(?:(?:quiero|prefiero|me gustaria)\s+hablar\s+(?:de|del|sobre)|(?:quiero|prefiero)\s+conversar\s+(?:de|sobre)|hablemos\s+(?:de|sobre)|podemos hablar\s+(?:de|sobre))\s+.+$/.test(value)) return 'skip'
-  if (/^no,? no estoy pensando en eso$/.test(value)) return 'negative'
+  const signal = classifyCrisisSignal(value)
+  const uncertain = /\b(?:no se|no lo se|no estoy seguro|no estoy segura|quizas|quiza|no puedo afirmar|no lo tengo claro)\b/.test(value)
+  const conflictsWithYes = /^(?:si|sí)\s+y\s+no\b/.test(value) || /\bpero\s+no\s+(?:estoy pensando|pienso|tengo pensamientos?|quiero)\b/.test(value)
+  if (/^no\b/.test(value) && !uncertain && signal.disposition !== 'explicit_current') return 'negative'
+  if (/^(?:si|sí)\b/.test(value) && !uncertain && !conflictsWithYes) return 'affirmative'
   if (/^(si|sí|no|no lo se|no se|no estoy seguro|no estoy segura|quizas|quizá)$/.test(value)) {
     if (value === 'si' || value === 'sí') return 'affirmative'
     if (value === 'no') return 'negative'
