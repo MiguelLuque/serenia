@@ -123,7 +123,7 @@ def run_chat_lease_regressions(query):
             query(f"""update chat_turns set lease_until=clock_timestamp()+interval '2 seconds'
                 where session_id='{sid}' and request_id='lease-race';""")
         if claim == "profile wait":
-            query(f"insert into profile_settings(user_id,enabled) values('{uid}',false);")
+            query(f"insert into profile_settings(user_id,enabled) values('{uid}',true);")
             lock_sql = f"select user_id from profile_settings where user_id='{uid}' for update;"
         else:
             lock_sql = f"select id from clinical_sessions where id='{sid}' for update;"
@@ -131,8 +131,9 @@ def run_chat_lease_regressions(query):
             blocker = start_blocker(pool, lock_sql)
             try:
                 wait_until_sleeping()
+                eligibility_arg = ",p_profile_memory_eligible=>true" if claim == "profile wait" else ""
                 claimant = pool.submit(query, f"""set application_name='lease-worker'; set role service_role;
-                    select begin_chat_turn('{sid}','{uid}','lease-race','Sí');""")
+                    select begin_chat_turn('{sid}','{uid}','lease-race','Sí'{eligibility_arg});""")
                 wait_for(blocked('lease-worker', 'lease-blocker'), f'{claim} waits for row')
                 wait_for("""exists(select 1 from pg_stat_activity where application_name='lease-worker'
                     and clock_timestamp()-xact_start>=interval '3 seconds')""", 'claim lock consumes time')
@@ -149,7 +150,13 @@ def run_chat_lease_regressions(query):
         if fresh != 't':
             raise RuntimeError(f'Chat {claim} used time before releasing its blocker or changed retry identity')
         if claim == "profile wait":
-            query(f"delete from profile_settings where user_id='{uid}';")
+            source_eligible = value(f"""select m.profile_memory_eligible and exists(
+                select 1 from profile_extraction_jobs j where j.source_message_id=m.id and j.status='pending')
+                from chat_turns t join messages m on m.id=t.user_message_id
+                where t.session_id='{sid}' and t.request_id='lease-race';""")
+            if source_eligible != 't':
+                raise RuntimeError('Profile consent wait did not admit exactly one eligible durable source')
+        query(f"delete from auth.users where id='{uid}';")
 
     # Pause creation after authorization at INSERT, while the turn lock must
     # prevent the independent fail transaction from publishing a terminal state.
