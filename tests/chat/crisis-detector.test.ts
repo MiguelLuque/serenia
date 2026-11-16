@@ -300,6 +300,23 @@ describe('classifyCrisisSignal — conversation routing', () => {
     })
   })
 
+  it('keeps a quoted line explicitly attributed to a film contextual', () => {
+    expect(classifyCrisisSignal('Caso ficticio: el personaje oyó en una película la frase «quiero hacerme daño». No se siente así ni tiene intención de hacerse daño; solo le impresionó la escena y quiere entender por qué.')).toEqual({
+      disposition: 'contextual', riskType: 'self_harm',
+    })
+  })
+  it.each([
+    'En la película, el personaje dice «quiero hacerme daño».',
+    'La película se llama «Quiero hacerme daño».',
+  ])('keeps a media-attributed quotation contextual: %s', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'contextual', riskType: 'self_harm' })
+  })
+  it('does not let a media quotation hide a later personal current signal', () => {
+    expect(classifyCrisisSignal('En una película el personaje dice «quiero hacerme daño». Ahora yo estoy pensando en hacerme daño.')).toEqual({
+      disposition: 'explicit_current', riskType: 'self_harm',
+    })
+  })
+
   it('keeps an attributed voy-a-matarme quote contextual', () => {
     expect(classifyCrisisSignal('Mi amigo dijo "voy a matarme esta noche"')).toEqual({
       disposition: 'contextual', riskType: 'suicidal_ideation',
@@ -584,6 +601,16 @@ describe('classifySafetyClarificationReply', () => {
   })
   it('recognizes a negated safety clarification as negative', () => {
     expect(classifySafetyClarificationReply('No, no estoy pensando en eso')).toBe('negative')
+  })
+  it('classifies a natural explanatory denial as negative', () => {
+    expect(classifySafetyClarificationReply('No. Como indiqué, es una cita de una película, no una experiencia actual. Prefiero hablar de por qué la escena me impresionó.')).toBe('negative')
+  })
+  it('classifies a natural affirmative with fictional framing as affirmative', () => {
+    expect(classifySafetyClarificationReply('Sí, dentro del caso ficticio. No tiene un plan concreto, pero no quiere quedarse solo ahora mismo.')).toBe('affirmative')
+  })
+  it('keeps contradictory and uncertain answers unclear', () => {
+    expect(classifySafetyClarificationReply('No, pero sí estoy pensando en hacerme daño')).toBe('unclear')
+    expect(classifySafetyClarificationReply('Sí, pero no estoy seguro')).toBe('unclear')
   })
   it('classifies an explicit topic change with a new topic as skip', () => {
     expect(classifySafetyClarificationReply('Cambiemos de tema; quiero hablar del trabajo')).toBe('skip')
