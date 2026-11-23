@@ -59,7 +59,7 @@ from generate_series(90, 99) n;
 
 do $acl$
 declare public_signature text :=
-  'public.begin_chat_turn(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text)';
+  'public.begin_chat_turn(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text,boolean)';
 begin
   if to_regprocedure(public_signature) is null then
     raise exception 'Prompt-bound begin_chat_turn signature missing';
@@ -69,6 +69,9 @@ begin
   end if;
   if to_regprocedure('public.begin_chat_turn(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean)') is not null then
     raise exception 'Ambiguous ten-argument begin_chat_turn overload remains';
+  end if;
+  if to_regprocedure('public.begin_chat_turn(uuid,uuid,text,text,boolean,boolean,public.risk_type,text,public.risk_type,boolean,text)') is not null then
+    raise exception 'Ambiguous eleven-argument begin_chat_turn overload remains';
   end if;
   if has_function_privilege('anon', public_signature, 'EXECUTE')
     or has_function_privilege('authenticated', public_signature, 'EXECUTE')

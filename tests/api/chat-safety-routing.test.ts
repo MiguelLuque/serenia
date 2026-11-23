@@ -157,6 +157,7 @@ describe('conversation safety routing', () => {
     await h.post('No lo sé', 'answer', { safetyPromptRequestId: 'prompt-turn' })
     expect(h.state.profileAfter).toHaveLength(0)
     expect(h.enqueueProfileExtraction).not.toHaveBeenCalled()
+    expect(h.state.writes.filter(write => write.name === 'begin_chat_turn').map(write => write.args.p_profile_memory_eligible)).toEqual([false, false, false])
   })
 
   it('retries an admitted answer with the stored category and prompt id, then replays the completed response', async () => {

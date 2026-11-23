@@ -14,9 +14,9 @@ beforeEach(() => {
   vi.stubEnv('LLM_PROFILE_EXTRACTION_PROVIDER', '')
   vi.stubEnv('LLM_PROFILE_EXTRACTION_MODEL', '')
   vi.stubEnv('FEATURE_PROGRESSIVE_PROFILE', 'on')
-  loadedJob = job; source = { role: 'user', parts: [{ type: 'text', text: 'Me cuesta' }, { type: 'text', text: 'dormir' }] }; targets = []
+  loadedJob = job; source = { role: 'user', profile_memory_eligible: true, parts: [{ type: 'text', text: 'Me cuesta' }, { type: 'text', text: 'dormir' }] }; targets = []
   queries = []; useStoredTargets = false
-  rpc = vi.fn(async (name: string) => ({ error: null, data: name === 'start_profile_job' ? true : null }))
+  rpc = vi.fn(async (name: string) => ({ error: null, data: name === 'start_profile_job' || name === 'authorize_profile_model_call' ? true : null }))
   const from = (table: string) => {
     const operations: any[] = []; queries.push({ table, operations })
     const chain: any = {}
@@ -62,7 +62,7 @@ describe('single-step private profile Workflow', () => {
   it('queries exact source identity and confirmed correction targets owned by job owner, older than source, bounded to twenty', async () => {
     await extractProfileStep({ jobId: 'job', token: 'claim' })
     expect(queries.find(query => query.table === 'messages')?.operations).toEqual(expect.arrayContaining([
-      ['eq', 'id', 'message'], ['eq', 'role', 'user'], ['eq', 'session_id', 'session'], ['eq', 'conversation_id', 'conversation'], ['eq', 'created_at', job.source_created_at],
+      ['select', 'parts, role, profile_memory_eligible'], ['eq', 'id', 'message'], ['eq', 'role', 'user'], ['eq', 'session_id', 'session'], ['eq', 'conversation_id', 'conversation'], ['eq', 'created_at', job.source_created_at],
     ]))
     expect(queries.find(query => query.table === 'profile_observations')?.operations).toEqual(expect.arrayContaining([
       ['eq', 'user_id', 'owner'], ['eq', 'status', 'confirmed'], ['lt', 'source_created_at', job.source_created_at], ['limit', 20],
@@ -81,13 +81,34 @@ describe('single-step private profile Workflow', () => {
     expect(rpc.mock.calls.map(call => call[0])).toEqual(['start_profile_job'])
     expect(extractProfileObservations).not.toHaveBeenCalled()
   })
+  it('revalidates consent after source reads and never calls the provider when final authorization is denied', async () => {
+    rpc.mockImplementation(async (name: string) => name === 'start_profile_job'
+      ? { data: true, error: null }
+      : name === 'authorize_profile_model_call'
+        ? { data: null, error: { code: '42501', message: 'PRIVATE' } }
+        : { data: null, error: null })
+    const result = await extractProfileStep({ jobId: 'job', token: 'claim' })
+    expect(result).toMatchObject({ status: 'failed', count: 0 })
+    expect(rpc.mock.calls.map(call => call[0])).toEqual(['start_profile_job', 'authorize_profile_model_call', 'update_profile_job'])
+    expect(extractProfileObservations).not.toHaveBeenCalled()
+  })
+  it('never sends a source to the provider if durable eligibility is absent', async () => {
+    source.profile_memory_eligible = false
+    expect(await extractProfileStep({ jobId: 'job', token: 'claim' })).toMatchObject({ status: 'failed', count: 0 })
+    expect(rpc.mock.calls.map(call => call[0])).toEqual(['start_profile_job', 'update_profile_job'])
+    expect(extractProfileObservations).not.toHaveBeenCalled()
+  })
   it.each(['model', 'finish', 'missing-source', 'malformed'])('records %s failure for SQL backoff and returns no source/error payload', async failure => {
     if (failure === 'model') extractProfileObservations.mockRejectedValue(new Error('PRIVATE SOURCE'))
-    if (failure === 'finish') rpc.mockImplementation(async (name: string) => ({ data: name === 'start_profile_job', error: name === 'finish_profile_job' ? { code: '42501', message: 'PRIVATE SOURCE' } : null }))
+    if (failure === 'finish') rpc.mockImplementation(async (name: string) => ({ data: name === 'start_profile_job' || name === 'authorize_profile_model_call', error: name === 'finish_profile_job' ? { code: '42501', message: 'PRIVATE SOURCE' } : null }))
     if (failure === 'missing-source') source = null
     if (failure === 'malformed') extractProfileObservations.mockResolvedValue({ observations: [{ ...observation, quote: 'not in source' }] })
     expect(await extractProfileStep({ jobId: 'job', token: 'claim' })).toEqual({ jobId: 'job', status: 'failed', count: 0 })
     expect(rpc).toHaveBeenCalledWith('update_profile_job', { p_job_id: 'job', p_token: 'claim', p_action: 'failed' })
+    if (failure === 'finish') {
+      expect(extractProfileObservations).toHaveBeenCalled()
+      expect(rpc.mock.calls.map(call => call[0])).toContain('finish_profile_job')
+    }
     if (failure !== 'finish') expect(rpc.mock.calls.map(call => call[0])).not.toContain('finish_profile_job')
     expect(enqueueProfileExtraction).toHaveBeenCalledWith('owner', 1)
   })
