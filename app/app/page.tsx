@@ -4,6 +4,8 @@ import { patientDisplayName } from '@/lib/shared/clinician/display-name'
 import { getPatientReports, REPORT_STATE_COPY, type PatientReport } from '@/lib/server/assessments/patient-reports'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { getOrResolveActiveSession } from '@/lib/server/sessions/service'
+import { getOpenSessionRiskSignals, type OpenSessionRiskSignal } from '@/lib/server/clinician/open-risk'
+import { OpenRiskSignals } from '@/components/clinician/open-risk-signals'
 import { getClinicianInboxPage } from '@/lib/server/clinician/inbox'
 import {
   getPatientOpenTasks,
@@ -97,6 +99,11 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
     const page = Math.max(1, Math.min(100_000, Number.parseInt(query?.page ?? '1', 10) || 1))
     const pendingOnly = query?.view !== 'all'
     const { rows, hasMore } = await getClinicianInboxPage(supabase, { page, pendingOnly })
+    // The inbox must stay usable if this supplementary read fails.
+    let openRiskSignals: OpenSessionRiskSignal[] = []
+    let openRiskUnavailable = false
+    try { openRiskSignals = await getOpenSessionRiskSignals(supabase) }
+    catch { openRiskUnavailable = true; console.error('[inbox] open-session risk signals unavailable') }
     return (
       <div className="space-y-6">
         <div>
@@ -105,6 +112,8 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
             Sesiones cerradas pendientes de revisión.
           </p>
         </div>
+        <OpenRiskSignals signals={openRiskSignals} />
+        {openRiskUnavailable && <p role="alert" className="text-sm text-red-800">No se pudieron comprobar las señales de riesgo de sesiones abiertas. Recarga para reintentar.</p>}
         <nav aria-label="Filtros de bandeja" className="flex gap-4"><Link href="/app" aria-current={pendingOnly ? 'page' : undefined}>Pendientes</Link><Link href="/app?view=all" aria-current={!pendingOnly ? 'page' : undefined}>Todas</Link></nav>
         <InboxList rows={rows} />
         <nav aria-label="Paginación de bandeja" className="flex gap-4">
