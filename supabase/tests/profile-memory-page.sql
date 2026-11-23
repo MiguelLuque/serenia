@@ -14,10 +14,10 @@ select pg_temp.page_assert((select prosecdef and provolatile='s' and proconfig=a
 insert into auth.users(id) values('00000000-0000-4000-8000-000000000201'),('00000000-0000-4000-8000-000000000202');
 insert into conversations(id,user_id) values('10000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000201'),('10000000-0000-4000-8000-000000000202','00000000-0000-4000-8000-000000000202');
 insert into clinical_sessions(id,conversation_id,user_id) select ('20000000-0000-4000-8000-'||right(id::text,12))::uuid,id,user_id from conversations where id::text like '10000000-0000-4000-8000-00000000020_';
-insert into messages(id,session_id,conversation_id,role,parts,created_at)
+insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible)
  select ('40000000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,'20000000-0000-4000-8000-000000000201','10000000-0000-4000-8000-000000000201','user',jsonb_build_array(jsonb_build_object('type','text','text',case when i<3 then 'Synthetic quote '||i else (select string_agg('Synthetic quote '||n,' ') from generate_series(3,205) n) end)),
- case when i=1 then '2026-10-01T12:00:00.123456Z'::timestamptz when i=2 then '2026-10-02T12:00:00.123456Z'::timestamptz else '2026-10-03T12:00:00.123456Z'::timestamptz end from generate_series(1,3) i;
-insert into messages(id,session_id,conversation_id,role,parts,created_at) values('40000000-0000-4000-8000-000000000204','20000000-0000-4000-8000-000000000202','10000000-0000-4000-8000-000000000202','user','[{"type":"text","text":"Foreign quote"}]','2026-10-04T12:00:00.123456Z');
+ case when i=1 then '2026-10-01T12:00:00.123456Z'::timestamptz when i=2 then '2026-10-02T12:00:00.123456Z'::timestamptz else '2026-10-03T12:00:00.123456Z'::timestamptz end,true from generate_series(1,3) i;
+insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible) values('40000000-0000-4000-8000-000000000204','20000000-0000-4000-8000-000000000202','10000000-0000-4000-8000-000000000202','user','[{"type":"text","text":"Foreign quote"}]','2026-10-04T12:00:00.123456Z',true);
 insert into profile_extraction_jobs(id,user_id,source_message_id,session_id,conversation_id,source_created_at,consent_epoch,status)
  select m.id,c.user_id,m.id,m.session_id,m.conversation_id,m.created_at,1,'completed' from messages m join conversations c on c.id=m.conversation_id where m.id::text like '40000000-0000-4000-8000-%';
 insert into profile_observations(id,job_id,user_id,source_message_id,source_created_at,category,quote,time_scope,status,supersedes_id)

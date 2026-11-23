@@ -29,11 +29,11 @@ export async function extractProfileStep(input: ExtractProfileInput): Promise<{ 
     // must never make another model call or release a different running worker.
     if (startError || !canStart) return { jobId, status: 'skipped', count: 0 }
     started = true
-    const { data: source, error: sourceError } = await service.from('messages').select('parts, role')
+    const { data: source, error: sourceError } = await service.from('messages').select('parts, role, profile_memory_eligible')
       .eq('id', job.source_message_id).eq('role', 'user')
       .eq('session_id', job.session_id).eq('conversation_id', job.conversation_id)
       .eq('created_at', job.source_created_at).maybeSingle()
-    if (sourceError || !source || source.role !== 'user') throw new Error('profile_source_unavailable')
+    if (sourceError || !source || source.role !== 'user' || source.profile_memory_eligible !== true) throw new Error('profile_source_unavailable')
     const { data: targets, error: targetsError } = await service.from('profile_observations')
       .select('id, category, quote, time_scope, status, source_created_at')
       .eq('user_id', job.user_id).eq('status', 'confirmed').lt('source_created_at', job.source_created_at)
@@ -42,6 +42,8 @@ export async function extractProfileStep(input: ExtractProfileInput): Promise<{ 
     const sourceText = canonicalProfileSource(source.parts)
     const knownTargets = targets ?? []
     const policy = resolveTaskPolicy('profileExtraction')
+    const { data: authorized, error: authorizationError } = await service.rpc('authorize_profile_model_call', { p_job_id: jobId, p_token: token })
+    if (authorizationError || authorized !== true) throw new Error('profile_model_call_not_authorized')
     const output = await extractProfileObservations(sourceText, knownTargets, policy)
     const validated = validateProfileExtraction(output, sourceText, knownTargets)
     // Ownership, source, epoch, lease and token are revalidated atomically in

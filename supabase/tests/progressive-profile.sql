@@ -22,7 +22,7 @@ insert into clinical_sessions(id,conversation_id,user_id) values('20000000-0000-
 -- Fail RED on missing schema before any permission assertion can mask it.
 select pg_temp.profile_assert((select count(*) from profile_settings)=0,'default disabled');
 do $$ declare signature text; begin
- foreach signature in array array['claim_profile_jobs(uuid,integer)','start_profile_job(uuid,uuid)','update_profile_job(uuid,uuid,text,text)','finish_profile_job(uuid,uuid,jsonb,text)'] loop
+ foreach signature in array array['claim_profile_jobs(uuid,integer)','start_profile_job(uuid,uuid)','update_profile_job(uuid,uuid,text,text)','finish_profile_job(uuid,uuid,jsonb,text)','authorize_profile_model_call(uuid,uuid)'] loop
   perform pg_temp.profile_assert(not has_function_privilege('anon',signature,'execute') and not has_function_privilege('authenticated',signature,'execute') and has_function_privilege('service_role',signature,'execute'),'service RPC grants');
  end loop;
  foreach signature in array array['set_profile_enabled(boolean)','get_profile_memory()','review_profile_observation(uuid,text,timestamp with time zone)'] loop
@@ -52,17 +52,21 @@ select set_profile_enabled(true);
 select pg_temp.profile_assert((select count(*) from profile_settings)=1,'settings owner RLS');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000101',true);
 reset role;
-insert into messages(id,session_id,conversation_id,role,parts,created_at) values
- ('40000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Vivo en Sevilla. Quiero dormir mejor. Me ayuda pasear."}]',now()-interval '1 minute'),
- ('40000000-0000-0000-0000-000000000102','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','assistant','[{"type":"text","text":"No source"}]',now()),
- ('40000000-0000-0000-0000-000000000103','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Ahora vivo en Cádiz. Ahora vivo en Málaga."}]',now()),
- ('40000000-0000-0000-0000-000000000104','20000000-0000-0000-0000-000000000102','10000000-0000-0000-0000-000000000102','user','[{"type":"text","text":"Soy otro usuario."}]',now());
+insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible) values
+ ('40000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Vivo en Sevilla. Quiero dormir mejor. Me ayuda pasear."}]',now()-interval '1 minute',true),
+ ('40000000-0000-0000-0000-000000000102','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','assistant','[{"type":"text","text":"No source"}]',now(),false),
+ ('40000000-0000-0000-0000-000000000103','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Ahora vivo en Cádiz. Ahora vivo en Málaga."}]',now(),true),
+ ('40000000-0000-0000-0000-000000000104','20000000-0000-0000-0000-000000000102','10000000-0000-0000-0000-000000000102','user','[{"type":"text","text":"Soy otro usuario."}]',now(),true);
 select pg_temp.profile_assert((select count(*) from profile_extraction_jobs)=3,'only new user messages enqueue');
 -- Immutable sources reject privileged edits but permit unrelated visibility updates.
 select pg_temp.profile_deny($q$update messages set parts='[]' where id='40000000-0000-0000-0000-000000000101'$q$);
 select pg_temp.profile_deny($q$update messages set role='assistant' where id='40000000-0000-0000-0000-000000000101'$q$);
 select pg_temp.profile_deny($q$update messages set created_at=now() where id='40000000-0000-0000-0000-000000000101'$q$);
 select pg_temp.profile_deny($q$update messages set session_id=null where id='40000000-0000-0000-0000-000000000101'$q$);
+select pg_temp.profile_deny($q$update messages set profile_memory_eligible=false where id='40000000-0000-0000-0000-000000000101'$q$);
+select pg_temp.profile_deny($q$insert into profile_extraction_jobs(user_id,source_message_id,session_id,conversation_id,source_created_at,consent_epoch)
+ select s.user_id,m.id,m.session_id,m.conversation_id,m.created_at,1 from messages m join clinical_sessions s on s.id=m.session_id
+ where m.id='40000000-0000-0000-0000-000000000100'$q$);
 update messages set visible_to_user=false where id='40000000-0000-0000-0000-000000000101';
 -- Compound FKs reject privileged foreign source/session/owner; timestamp is source-owned.
 select pg_temp.profile_deny($q$update profile_extraction_jobs set user_id='00000000-0000-0000-0000-000000000102' where source_message_id='40000000-0000-0000-0000-000000000101'$q$);
@@ -118,6 +122,7 @@ do $$ declare j profile_extraction_jobs%rowtype; target uuid; o jsonb; begin
  select id into target from profile_observations;
  select * into j from claim_profile_jobs('00000000-0000-0000-0000-000000000102',1);
  perform start_profile_job(j.id,j.token);
+ perform pg_temp.profile_assert(authorize_profile_model_call(j.id,j.token),'live eligible claim passes final provider authorization');
  o=jsonb_build_array(jsonb_build_object('category','context','quote','Soy otro usuario.','time_scope','current','supersedes_id',target));
  perform pg_temp.profile_deny(format('select finish_profile_job(%L,%L,%L,%L)',j.id,j.token,o,'synthetic'));
  perform finish_profile_job(j.id,j.token,'[]','synthetic');
@@ -184,9 +189,9 @@ do $$ declare o profile_observations%rowtype; begin
 end $$;
 reset role;
 -- Queue backoff, expiry and consent epochs. All timestamps manipulated only by test admin.
-insert into messages(id,session_id,conversation_id,role,parts,created_at) values
- ('40000000-0000-0000-0000-000000000105','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Me ayuda pasear."}]',now()+interval '1 second'),
- ('40000000-0000-0000-0000-000000000106','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Quiero dormir mejor."}]',now()+interval '2 seconds');
+insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible) values
+ ('40000000-0000-0000-0000-000000000105','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Me ayuda pasear."}]',now()+interval '1 second',true),
+ ('40000000-0000-0000-0000-000000000106','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user','[{"type":"text","text":"Quiero dormir mejor."}]',now()+interval '2 seconds',true);
 create temp table profile_old_claim as select id,token,consent_epoch from profile_extraction_jobs where false;
 grant all on profile_old_claim to service_role;
 set local role service_role;
@@ -221,13 +226,14 @@ select pg_temp.profile_assert((get_profile_memory()->>'enabled')::boolean=false 
 select set_profile_enabled(true);
 set local role service_role;
 select pg_temp.profile_deny(format('select finish_profile_job(%L,%L,%L,%L)',id,token,'[]','synthetic')) from profile_old_claim;
+select pg_temp.profile_deny(format('select authorize_profile_model_call(%L,%L)',id,token)) from profile_old_claim;
 select pg_temp.profile_assert((select count(*) from claim_profile_jobs('00000000-0000-0000-0000-000000000101',1))=0,'reenable no resurrection or backfill');
 reset role;
 select pg_temp.profile_assert((select status='cancelled' and token<>(select token from profile_old_claim) from profile_extraction_jobs where id=(select id from profile_old_claim)),'disable rotates active token');
 select pg_temp.profile_assert((select consent_epoch>(select consent_epoch from profile_old_claim) from profile_settings where user_id='00000000-0000-0000-0000-000000000101'),'disable epoch');
 -- Bounded canonical text, no assistant parts, no oversized source or quotes.
-insert into messages(id,session_id,conversation_id,role,parts,created_at) values
- ('40000000-0000-0000-0000-000000000107','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user',jsonb_build_array(jsonb_build_object('type','text','text',repeat('x',8001))),now()+interval '3 seconds');
+insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible) values
+ ('40000000-0000-0000-0000-000000000107','20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','user',jsonb_build_array(jsonb_build_object('type','text','text',repeat('x',8001))),now()+interval '3 seconds',true);
 set local role service_role;
 do $$ declare j profile_extraction_jobs%rowtype; begin
  select * into j from claim_profile_jobs('00000000-0000-0000-0000-000000000101',1);
@@ -237,8 +243,8 @@ do $$ declare j profile_extraction_jobs%rowtype; begin
 end $$;
 reset role;
 select pg_temp.profile_assert(profile_message_text('[{"type":"text","text":"Primera ñ"},{"type":"tool","text":"not source"},{"type":"text","text":"Segunda 😀"}]')=E'Primera ñ\nSegunda 😀','canonical Unicode source');
-insert into messages(id,session_id,conversation_id,role,parts,created_at) values
- ('40000000-0000-0000-0000-000000000108','20000000-0000-0000-0000-000000000102','10000000-0000-0000-0000-000000000102','user',jsonb_build_array(jsonb_build_object('type','text','text',repeat('x',8000))),now()+interval '4 seconds');
+insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible) values
+ ('40000000-0000-0000-0000-000000000108','20000000-0000-0000-0000-000000000102','10000000-0000-0000-0000-000000000102','user',jsonb_build_array(jsonb_build_object('type','text','text',repeat('x',8000))),now()+interval '4 seconds',true);
 set local role service_role;
 do $$ declare j profile_extraction_jobs%rowtype; o jsonb; begin
  select * into j from claim_profile_jobs('00000000-0000-0000-0000-000000000102',1);
@@ -248,6 +254,28 @@ do $$ declare j profile_extraction_jobs%rowtype; o jsonb; begin
  o=jsonb_build_array(jsonb_build_object('category','context','quote',repeat('x',400),'time_scope','current','supersedes_id',null));
  perform pg_temp.profile_deny(format('select finish_profile_job(%L,%L,%L,%L)',j.id,j.token,jsonb_set(o,'{0,user_id}','"00000000-0000-0000-0000-000000000101"'),'synthetic'));
  perform finish_profile_job(j.id,j.token,o,'synthetic');
+end $$;
+reset role;
+-- Admission persists memory eligibility and excludes safety turns from every later queue consumer.
+set local role service_role;
+do $$ declare ordinary jsonb; direct jsonb; ambiguous jsonb; defaulted jsonb; ordinary_id uuid; direct_id uuid; ambiguous_id uuid; defaulted_id uuid; begin
+ ordinary=begin_chat_turn(p_session_id=>'20000000-0000-0000-0000-000000000101',p_user_id=>'00000000-0000-0000-0000-000000000101',p_request_id=>'memory-ordinary',p_text=>'Quiero dormir mejor.',p_profile_memory_eligible=>true);
+ ordinary_id=(ordinary->>'userMessageId')::uuid;
+ perform finish_chat_turn('20000000-0000-0000-0000-000000000101','memory-ordinary',(ordinary->>'token')::uuid,'[{"type":"text","text":"Synthetic reply"}]','[]');
+ direct=begin_chat_turn(p_session_id=>'20000000-0000-0000-0000-000000000101',p_user_id=>'00000000-0000-0000-0000-000000000101',p_request_id=>'memory-direct',p_text=>'Voy a hacerme daño esta noche.',p_crisis=>true,p_urgent=>true,p_direct_risk_type=>'self_harm',p_profile_memory_eligible=>true);
+ direct_id=(direct->>'userMessageId')::uuid;
+ perform finish_chat_turn('20000000-0000-0000-0000-000000000101','memory-direct',(direct->>'token')::uuid,'[{"type":"text","text":"Synthetic reply"}]','[]');
+ ambiguous=begin_chat_turn(p_session_id=>'20000000-0000-0000-0000-000000000101',p_user_id=>'00000000-0000-0000-0000-000000000101',p_request_id=>'memory-ambiguous',p_text=>'No sé si quiero suicidarme.',p_profile_memory_eligible=>false);
+ ambiguous_id=(ambiguous->>'userMessageId')::uuid;
+ perform finish_chat_turn('20000000-0000-0000-0000-000000000101','memory-ambiguous',(ambiguous->>'token')::uuid,'[{"type":"text","text":"Synthetic reply"}]','[]');
+ defaulted=begin_chat_turn(p_session_id=>'20000000-0000-0000-0000-000000000101',p_user_id=>'00000000-0000-0000-0000-000000000101',p_request_id=>'memory-defaulted',p_text=>'Sin marca de elegibilidad.');
+ defaulted_id=(defaulted->>'userMessageId')::uuid;
+ perform finish_chat_turn('20000000-0000-0000-0000-000000000101','memory-defaulted',(defaulted->>'token')::uuid,'[{"type":"text","text":"Synthetic reply"}]','[]');
+ perform pg_temp.profile_assert((select profile_memory_eligible from messages where id=ordinary_id),'ordinary opted-in admission records eligibility');
+ perform pg_temp.profile_assert((select count(*)=1 from profile_extraction_jobs where source_message_id=ordinary_id),'ordinary opted-in admission creates one durable job');
+ perform pg_temp.profile_assert(not (select profile_memory_eligible from messages where id=direct_id) and not exists(select 1 from profile_extraction_jobs where source_message_id=direct_id),'SQL forces direct signal ineligible despite true input');
+ perform pg_temp.profile_assert(not (select profile_memory_eligible from messages where id=ambiguous_id) and not exists(select 1 from profile_extraction_jobs where source_message_id=ambiguous_id),'ambiguous server classification is durably excluded');
+ perform pg_temp.profile_assert(not (select profile_memory_eligible from messages where id=defaulted_id) and not exists(select 1 from profile_extraction_jobs where source_message_id=defaulted_id),'missing eligibility fails closed');
 end $$;
 reset role;
 -- Delete source cascades its observations; deleting the actor clears settings/jobs/observations.
