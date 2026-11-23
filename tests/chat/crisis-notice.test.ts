@@ -211,12 +211,13 @@ describe('buildCrisisNotice — cssrs_acute_risk + behaviorRecent (override 6b)'
     behaviorRecent: true,
   }
 
-  it('sin crisis → variante CONDUCTA RECIENTE (cierre inmediato + alerta URGENTE)', () => {
+  it('sin crisis → variante CONDUCTA RECIENTE (recursos urgentes, sin cierre ni alerta automática)', () => {
     const out = buildCrisisNotice({ safetyState: state, crisis: noCrisis() })
     expect(out).toContain('[RESULTADO C-SSRS — RIESGO AGUDO + CONDUCTA RECIENTE]')
     expect(out).toContain('últimos 3 meses')
-    expect(out).toContain('alerta URGENTE')
-    expect(out).toContain('close_session_crisis')
+    expect(out).toContain('Línea 024 o el 112')
+    expect(out).toContain('no se envía ninguna alerta automática')
+    expect(out).not.toContain('close_session_crisis')
   })
 
   it('crisis con alta señal NO degrada (acute reciente ya es máximo)', () => {

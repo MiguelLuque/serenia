@@ -103,22 +103,23 @@ describe('pilot safety notice — structured high and acute requirements', () =>
 
     expect(notice).toContain('[RESULTADO C-SSRS — RIESGO AGUDO]')
     expect(notice).toContain('Activa el protocolo de crisis AHORA')
-    expect(notice).toContain('close_session_crisis')
-    expect(notice).toContain('No pidas aceptación del paciente para el cierre por crisis')
+    expect(notice).not.toContain('close_session_crisis')
+    expect(notice).toContain('No cierres la sesión por crisis')
     expect(notice).not.toContain('[RESULTADO C-SSRS — RIESGO AGUDO + CONDUCTA RECIENTE]')
   })
 
-  it('preserves immediate closure for the structured recent-behavior override even with a correction', () => {
+  it('preserves urgent resources for the structured recent-behavior override even with a correction', () => {
     const notice = buildPilotSafetyNotice({
       crisis: detectCrisis('No, me refiero a cortarme el pelo.'),
       safetyState: { kind: 'cssrs_acute_risk', scoredAt: SCORED_AT, flags: [{ reason: 'acute_risk', itemOrder: 7 }], behaviorRecent: true },
     })
 
     expect(notice).toContain('[RESULTADO C-SSRS — RIESGO AGUDO + CONDUCTA RECIENTE]')
-    expect(notice).toContain('Llama a close_session_crisis inmediatamente')
+    expect(notice).toContain('Pide que contacte ahora con la Línea 024 o el 112')
+    expect(notice).not.toContain('close_session_crisis')
     expect(notice).toContain('NO continúes la exploración terapéutica')
-    expect(notice).toContain('No pidas aceptación del paciente para el cierre por crisis')
-    expect(notice).toMatch(/confirma el cierre solo si la herramienta/i)
+    expect(notice).toContain('No propongas ni confirmes un cierre por crisis')
+    expect(notice).toContain('La sesión no se cierra por esto y no se envía ninguna alerta automática')
   })
 
   it.each([
