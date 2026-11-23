@@ -64,3 +64,14 @@ describe('getSessionTherapistPrompt', () => {
     expect(prompt.length).toBeGreaterThan(0)
   })
 })
+
+describe('prompt and tool alignment', () => {
+  it.each([
+    'docs/agents/prompts/session-therapist.md',
+    'docs/agents/prompts/session-therapist.pilot.md',
+  ])('%s never instructs a tool the chat route does not register', path => {
+    const body = loadPromptFromMarkdown(path)
+    const mentioned = new Set([...body.matchAll(/`([a-z]+(?:_[a-z]+)+)\(?/g)].map(match => match[1]).filter(name => /^(?:propose|confirm|close)_/.test(name)))
+    expect([...mentioned].sort()).toEqual(['confirm_close_session', 'propose_close_session', 'propose_questionnaire'])
+  })
+})

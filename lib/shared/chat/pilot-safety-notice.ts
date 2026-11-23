@@ -5,16 +5,12 @@ import { SAFETY_RESOURCES } from '../safety-resources'
 
 // Clinical criteria/actions stay canonical. Only operational claims change:
 // - a review request is not a promise of delivery or a same-day SLA;
-// - a crisis tool needs no patient acceptance, but its success must be checked;
-// - requesting closure is not evidence of closure or clinician notification.
+// - there is no crisis-closure tool: a crisis never closes the session;
+// - nothing here is evidence of closure or clinician notification.
 const OPERATIONAL_REPLACEMENTS: Array<[string, string]> = [
   ['el psicólogo verá los resultados del C-SSRS', 'los resultados del C-SSRS quedan como información para la revisión clínica, sin garantizar cuándo se realizará'],
   ['Marca esta sesión para que el psicólogo referente la priorice.', 'Solicita revisión clínica prioritaria por el circuito disponible, sin afirmar que ya se ha realizado.'],
   ['Marca la sesión para REVISIÓN CLÍNICA EL MISMO DÍA por el psicólogo referente.', 'Solicita revisión clínica prioritaria por el circuito disponible, sin prometer un plazo de atención.'],
-  ['marca para revisión clínica inmediata', 'solicita revisión clínica urgente por el circuito disponible'],
-  ['La sesión se cierra en este turno; el psicólogo referente recibe alerta URGENTE.', 'Confirma el cierre solo si la herramienta devuelve closed: true; si no lo confirma, informa de que el cierre no se ha completado y mantén el apoyo urgente. No prometas una notificación al psicólogo.'],
-  ['NUNCA confirmes un cierre por crisis: es single-step.', 'No pidas aceptación del paciente para el cierre por crisis; confirma el resultado solo si la herramienta lo acredita.'],
-  ['NUNCA confirmes el cierre con el paciente: es single-step.', 'No pidas aceptación del paciente para el cierre por crisis; confirma el resultado solo si la herramienta lo acredita.'],
 ]
 
 function operationallyFaithfulNotice(notice: string): string {

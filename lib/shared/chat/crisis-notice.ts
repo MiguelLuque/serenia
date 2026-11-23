@@ -62,7 +62,7 @@ export function hasHighSignalTerm(matchedTerms: string[]): boolean {
 
 function reEscalationBlock(matchedTerms: string[]): string {
   return `[RE-ESCALADA — SEÑAL NUEVA POST-CRIBADO]
-El cribado anterior dio negativo o no agudo, pero la verbalización actual del paciente es categóricamente distinta y específica (términos detectados: ${matchedTerms.join(', ')}). Re-abre el tema de seguridad de forma focalizada, considera ofrecer la Línea 024 textualmente, y considera close_session_crisis si hay plan o medios.
+El cribado anterior dio negativo o no agudo, pero la verbalización actual del paciente es categóricamente distinta y específica (términos detectados: ${matchedTerms.join(', ')}). Re-abre el tema de seguridad de forma focalizada, considera ofrecer la Línea 024 textualmente, y, si hay plan o medios, insiste en la Línea 024 y el 112 sin cerrar la sesión.
 
 ---
 
@@ -71,7 +71,7 @@ El cribado anterior dio negativo o no agudo, pero la verbalización actual del p
 
 function neverAssessedBlock(matchedTerms: string[]): string {
   return `[AVISO DE SEGURIDAD — POSIBLE SEÑAL]
-El último mensaje contiene palabras que pueden indicar riesgo emocional (${matchedTerms.join(', ')}). Lee el contexto antes de decidir si hace falta un check de seguridad: si el paciente las usa hablando de estrés laboral, conflicto relacional o sobrecarga emocional general, NO conviertas eso en check de suicidio. Solo activa el protocolo de seguridad (validar, ofrecer la Línea 024 textualmente, marcar la sesión para revisión del psicólogo, considerar close_session_crisis) si la verbalización del paciente sugiere ideación suicida directa, plan, intención o medios concretos. NUNCA confirmes un cierre por crisis: es single-step.
+El último mensaje contiene palabras que pueden indicar riesgo emocional (${matchedTerms.join(', ')}). Lee el contexto antes de decidir si hace falta un check de seguridad: si el paciente las usa hablando de estrés laboral, conflicto relacional o sobrecarga emocional general, NO conviertas eso en check de suicidio. Solo activa el protocolo de seguridad (validar, ofrecer la Línea 024 textualmente, indicar que queda registrada para revisión profesional) si la verbalización del paciente sugiere ideación suicida directa, plan, intención o medios concretos. No cierres la sesión por crisis ni afirmes que se ha cerrado o que se ha avisado a alguien.
 
 ---
 
@@ -116,7 +116,7 @@ Reglas vinculantes:
 - Acknowledge la verbalización y profundiza sin alarmismo: "lo que me cuentas es muy importante, cuéntame más". Explora frecuencia, intensidad, factores protectores.
 - Refuerza activamente la red de apoyo del paciente (familia, amigos, otros profesionales). Identifica al menos UN contacto seguro al que podría llamar si los pensamientos se intensifican.
 - Marca esta sesión para que el psicólogo referente la priorice. NO cierres en crisis salvo señal nueva.
-- Solo activa protocolo agudo (Línea 024 + close_session_crisis) si aparece señal NUEVA de intención clara, plan específico o medios.
+- Solo activa protocolo agudo (Línea 024 y 112, sin cerrar la sesión) si aparece señal NUEVA de intención clara, plan específico o medios.
 
 ---
 
@@ -130,7 +130,7 @@ Hoy aplicaste un cribado C-SSRS y dio "Sí" en el ítem 4 (ideación con cierta 
 Reglas vinculantes:
 - Ofrece la Línea 024 textualmente AHORA. Valida sin alarmismo: "lo que me cuentas es serio y quiero asegurarme de que estés en buenas manos".
 - Marca la sesión para REVISIÓN CLÍNICA EL MISMO DÍA por el psicólogo referente.
-- Verifica explícitamente la red de apoyo del paciente y la posibilidad de que esté con alguien en las próximas horas. Si está solo/a y sin contacto, considera close_session_crisis.
+- Verifica explícitamente la red de apoyo del paciente y la posibilidad de que esté con alguien en las próximas horas. Si está solo/a y sin contacto, insiste en la Línea 024 y el 112 y sigue disponible.
 - NO propongas otros cuestionarios ni sigas la exploración normal.
 
 ---
@@ -140,7 +140,7 @@ Reglas vinculantes:
 
 function cssrsAcuteRiskBlock(): string {
   return `[RESULTADO C-SSRS — RIESGO AGUDO]
-Hoy aplicaste un cribado C-SSRS y dio "Sí" en el ítem 5 (intención clara con plan específico) y/o el ítem 6 (conducta suicida lifetime). Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, marca para revisión clínica inmediata, y considera llamar a close_session_crisis si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal. NUNCA confirmes un cierre por crisis: es single-step.
+Hoy aplicaste un cribado C-SSRS y dio "Sí" en el ítem 5 (intención clara con plan específico) y/o el ítem 6 (conducta suicida lifetime). Activa el protocolo de crisis AHORA: valida sin alarmismo, ofrece la Línea 024 textualmente, indica que queda registrado para revisión profesional, e insiste en el 112 si el riesgo es inmediato. NO propongas otros cuestionarios ni sigas la exploración normal. No cierres la sesión por crisis ni afirmes que se ha cerrado o que se ha avisado a alguien.
 
 ---
 
@@ -153,8 +153,8 @@ Hoy aplicaste un cribado C-SSRS y dio "Sí" al ítem 6b: el paciente reconoce co
 
 Acciones obligatorias en este turno:
 - Ofrece la Línea 024 textualmente. Valida sin alarmismo: "lo que has compartido es muy serio y me importa asegurarme de que estés en un lugar seguro ahora mismo".
-- Llama a close_session_crisis inmediatamente. La sesión se cierra en este turno; el psicólogo referente recibe alerta URGENTE.
-- NO propongas otros cuestionarios. NO continúes la exploración terapéutica. NUNCA confirmes el cierre con el paciente: es single-step.
+- Pide que contacte ahora con la Línea 024 o el 112 y sigue disponible. La sesión no se cierra por esto y no se envía ninguna alerta automática: no afirmes lo contrario.
+- NO propongas otros cuestionarios. NO continúes la exploración terapéutica. No propongas ni confirmes un cierre por crisis.
 
 ---
 
@@ -191,7 +191,7 @@ export function buildCrisisNotice(input: CrisisNoticeInput): string {
   switch (safetyState.kind) {
     case 'cssrs_acute_risk':
       // Acute prevalece sobre cualquier otra señal. Distinguimos el caso
-      // behaviorRecent (cierre INMEDIATO + alerta URGENTE) del lifetime.
+      // behaviorRecent (recursos urgentes, sin cierre automático) del lifetime.
       return safetyState.behaviorRecent
         ? cssrsAcuteRecentBlock()
         : cssrsAcuteRiskBlock()
