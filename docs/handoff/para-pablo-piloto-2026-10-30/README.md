@@ -1,6 +1,6 @@
 # Entrega enviada a Pablo: piloto de evaluación0.2
 
-30-10-2026. El usuario confirmó el destinatario y autorizó enviar acceso e instrucciones. Correo enviado a **preguera@us.es** desde la cuenta de Miguel, asunto **«Serenia: acceso y guía para validar evaluación y conversación (piloto 0.2)»**. Gmail confirmó SENT y se volvió a leer el mensaje para comprobar destinatario y ambos adjuntos. ID de mensaje `1a18d63994488bf5`; no equivale a confirmación de recepción o lectura por Pablo.
+30-10-2026. El usuario confirmó el destinatario y autorizó enviar acceso e instrucciones. Correo enviado a la dirección confirmada de Pablo (no se conserva en Git) desde la cuenta de Miguel, asunto **«Serenia: acceso y guía para validar evaluación y conversación (piloto 0.2)»**. Gmail confirmó SENT y se volvió a leer el mensaje para comprobar destinatario y ambos adjuntos. El identificador del mensaje no se conserva en Git; el envío no equivale a confirmación de recepción o lectura por Pablo.
 
 ## Versión disponible
 
