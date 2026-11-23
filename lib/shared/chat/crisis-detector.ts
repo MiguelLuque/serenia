@@ -69,8 +69,41 @@ export function detectCrisis(text: string): CrisisDetection {
   return { detected: matchedTerms.length > 0, matchedTerms }
 }
 
-const SUICIDE = /suicid|quitar(me|se)\s+la\s+vida|matar(me|se)|no\s+(quiero|merezco)\s+vivir|mejor\s+no\s+estar|acabar\s+con\s+todo|desaparecer\s+para\s+siempre|tirarme\s+(desde|por)|voy\s+a\s+suicidarme/i
-const SELF_HARM = /hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse|ando)?|cortarme|\bme\s+(?:estoy\s+)?cortando\b|\bme\s+corto\b|\bme\s+hice\s+dan[oó]\b|\bme\s+estoy\s+haciendo\s+dan[oó]\b|\bvoy\s+a\s+cortarme\b|\bvoy\s+a\s+hacerme\s+dan[oó]\b|\bplan\s+para\s+(?:hacerme\s+dan[oó]|cortarme)\b/i
+// Cue lists operate on accent-stripped lowercase text. A cue only routes the
+// turn to the safety flow; it never estimates severity. First-person wish or
+// plan wording is required for the broad "morir/matar" families so that
+// talking about a relative's death or another person does not match.
+const DEATH_WISH = String.raw`(?:quiero|quisiera|querria|prefiero|preferiria|deseo|desearia|necesito)`
+const SUICIDE_CUES = [
+  String.raw`suicid|quitar(me|se)\s+la\s+vida|matar(me|se)|no\s+(quiero|merezco)\s+vivir|mejor\s+no\s+estar|acabar\s+con\s+todo|desaparecer\s+para\s+siempre|tirarme\s+(desde|por)|voy\s+a\s+suicidarme`,
+  // morir: "quiero morir", "me quiero morir", "ganas de morirme", "ojalá me muriera"
+  String.raw`\b(?:me\s+)?${DEATH_WISH}\s+(?:morir(?:me)?|estar\s+muert[oa])\b|\bganas\s+de\s+(?:morir(?:me)?|matarme)\b|\bojala\s+(?:me\s+)?(?:muriera|muriese|estuviera\s+muert[oa]|estuviese\s+muert[oa]|no\s+despertar[a-z]*)\b`,
+  String.raw`\b(?:estaria|estare|estoy)\s+mejor\s+muert[oa]\b|\bmejor\s+muert[oa]\b|\b(?:estarian|estaran|estariais|estaria|estan)\s+(?:todos\s+)?mejor\s+sin\s+mi\b`,
+  String.raw`\b(?:pienso|pensando|pensado)\s+(?:mucho\s+)?en\s+(?:la\s+muerte|morir(?:me)?)\b|\bno\s+despertar(?:me)?\b`,
+  // matar with the pronoun before the verb: "me quiero matar", "me voy a matar", "me mato"
+  String.raw`\bme\s+(?:${DEATH_WISH}|voy\s+a)\s+matar\b|\bme\s+mato\b`,
+  String.raw`\b(?:acabar|terminar)\s+con\s+(?:mi\s+vida|todo)\b|\bquitar(?:me)?\s+de\s+en\s+medio\b|\bquiero\s+desaparecer\b`,
+  String.raw`\bno\s+quiero\s+seguir\s+(?:viviendo|vivo|viva|con\s+vida)\b|\bno\s+(?:tiene|le\s+veo|le\s+encuentro|encuentro)\s+sentido\s+(?:a\s+)?(?:vivir|la\s+vida|seguir\s+viv[a-z]+)\b`,
+  // method wording
+  String.raw`\btomar(?:me)?\s+(?:todas\s+las|todas\s+mis|un\s+bote\s+de|una\s+caja\s+de|muchas)\s+pastillas\b|\bsobredosis\b`,
+  String.raw`\b(?:ahorcar|colgar)me\b|\bme\s+(?:${DEATH_WISH}|voy\s+a)\s+(?:ahorcar|colgar)\b`,
+  String.raw`\b(?:saltar|tirarme|lanzarme|arrojarme)\s+(?:de|desde|por|a|al)\s+(?:(?:un|una|el|la|las|mi)\s+)?(?:puente|ventana|balcon|azotea|terraza|edificio|vias?|tren|metro|acantilado)\b`,
+  String.raw`\bcarta\s+de\s+despedida\b`,
+  // frequent non-Spanish wording
+  String.raw`\bkill\s+myself\b|\bwant\s+to\s+die\b|\bvull\s+morir\b|\bmatar-me\b`,
+]
+const SUICIDE = new RegExp(SUICIDE_CUES.join('|'), 'i')
+const SELF_HARM_CUES = [
+  String.raw`hacerme\s+dan[oó]|autolesi[oó]n?(arme|arse|ando)?|cortarme|\bme\s+(?:estoy\s+)?cortando\b|\bme\s+corto\b|\bme\s+hice\s+dan[oó]\b|\bme\s+estoy\s+haciendo\s+dan[oó]\b|\bvoy\s+a\s+cortarme\b|\bvoy\s+a\s+hacerme\s+dan[oó]\b|\bplan\s+para\s+(?:hacerme\s+dan[oó]|cortarme)\b`,
+  String.raw`\bme\s+(?:he\s+cortado|corte)\b|\bme\s+(?:hago|he\s+hecho)\s+dan[oó]\b|\bme\s+quemo\s+(?:con|a\s+proposito)\b|\bquemarme\s+(?:con|a\s+proposito)\b|\b(?:lastimar|herir)me\b|\bme\s+lastimo\b`,
+]
+const SELF_HARM = new RegExp(SELF_HARM_CUES.join('|'), 'i')
+// Everyday hyperbole and grooming that share words with the cues above.
+const IDIOMS = /\b(?:me\s+)?(?:(?:quiero|voy\s+a|queria)\s+)?(?:morir(?:me)?|muero|muriendo|moria)\s+de\s+(?:la\s+|el\s+)?(?:risa|verguenza|hambre|sueno|calor|frio|ganas|amor|pena|envidia|miedo|aburrimiento|cansancio|sed|nervios|curiosidad|asco|gusto|felicidad|alegria|ilusion)\b|\b(?:me\s+(?:voy\s+a\s+|quiero\s+)?matar|matarme|me\s+mato)\s+a\s+[a-z]+(?:ar|er|ir)\b|\bme\s+(?:he\s+cortado|corte)\s+(?:cocinando|afeitandome|sin\s+querer|con\s+(?:un|el)\s+(?:papel|folio))\b/gi
+const GROOMING = /\b(?:me estoy cortando|cortarme|me corto|me he cortado|me corte)\s+(?:el pelo|las unas|el cabello|la barba|el flequillo|las puntas)\b/i
+const DIRECT_METHOD = String.raw`matarme|quitarme la vida|acabar con mi vida|terminar con mi vida|ahorcarme|colgarme|quitarme de en medio|tomarme (?:todas las|todas mis|un bote de|una caja de) pastillas|(?:saltar|tirarme|lanzarme|arrojarme) (?:de|desde|por|a|al) (?:(?:un|una|el|la|las|mi) )?(?:puente|ventana|balcon|azotea|terraza|edificio|vias?|tren|metro|acantilado)`
+const DIRECT_EXTRA = new RegExp(String.raw`(?<!no )(?<!nunca )(?<!jamas )(?:\bme (?:quiero|voy a) (?:matar|ahorcar|colgar|tomar (?:todas las|todas mis|un bote de|una caja de) pastillas)\b|\b(?:quiero|voy a) (?:${DIRECT_METHOD})\b|\btengo un plan para (?:${DIRECT_METHOD})\b|\bkill myself\b)`, 'i')
+const DENIAL_EXTRA = new RegExp(String.raw`\b(?:no|nunca|jamas)\s+(?:(?:me\s+)?(?:quiero|voy a|quisiera|pienso|he querido|estoy pensando en)\s+(?:morir(?:me)?|matar(?:me)?|ahorcar(?:me)?|colgar(?:me)?|desaparecer|estar muert[oa]|${DIRECT_METHOD})|tengo ganas de (?:morir(?:me)?|matarme)|pienso en (?:la muerte|morir(?:me)?)|me (?:he cortado|corte|hago dan[oó]|he hecho dan[oó]|lastimo|quemo))\b`, 'i')
 type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<CrisisRiskType, null> }
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
@@ -175,8 +208,8 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const previousDenies = /\b(no|nunca|jamas)\b/i.test(previous)
     const previousIsAttributed = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.test(previous.replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, ''))
     const sharedWant = item.separator === 'and' && /\bquiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme (?:el pelo|las unas|el cabello))\b/i.test(previous) && !previousDenies && !previousIsAttributed && /\b(quitarme la vida|suicid|autolesion|matarme)\b/i.test(item.text)
-    const clause = sharedWant ? `quiero ${item.text}` : item.text
-    if (/\b(?:me estoy cortando|cortarme|me corto)\s+(?:el pelo|las unas|el cabello)\b/i.test(clause)) return []
+    const clause = (sharedWant ? `quiero ${item.text}` : item.text).replace(IDIOMS, ' ')
+    if (GROOMING.test(clause)) return []
     const suicide = SUICIDE.test(clause)
     const selfHarm = SELF_HARM.test(clause)
     if (!suicide && !selfHarm) return []
@@ -191,9 +224,9 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     const context = /\b(pelicula|serie|cancion|libro|clase|estudiamos|vimos|guia|articulo|dijo|dice|hablo|cita|personaje|antes|cuando era)\b/i.test(clause) || attributedQuote || /\b(hablar|hablo|tema|conversar)\s+(?:de|sobre)\s+suicid/i.test(clause)
     const past = /\b(hace anos|el ano pasado|en el pasado|antes|cuando era)\b/i.test(clause)
     const uncertainNegation = /\b(no puedo dejar de|no quiero dejar de|no voy a dejar de|no dejo de|no me atrevo a|no creo que (?:quiera|voy a)|no se si|no estoy seguro|no estoy segura)\b/i.test(clause)
-    const clearDenial = /\b(?:no|nunca|jamas)\s+(?:(?:me\s+)?(?:quiero|voy a)\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|estoy pensando en (?:suicidarme|autolesionarme|hacerme dan[oó]|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto(?: ahora)?|tengo pensamientos? de (?:suicidio|autolesion|hacerme dan[oó]))\b/i.test(clause)
+    const clearDenial = /\b(?:no|nunca|jamas)\s+(?:(?:me\s+)?(?:quiero|voy a)\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|estoy pensando en (?:suicidarme|autolesionarme|hacerme dan[oó]|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto(?: ahora)?|tengo pensamientos? de (?:suicidio|autolesion|hacerme dan[oó]))\b/i.test(clause) || DENIAL_EXTRA.test(clause)
     const currentAction = /\b(me estoy cortando|me corto|me hice dano hoy)\b/i.test(clause)
-    const directIntentOrBehavior = /\b(no solo quiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?quiero\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?voy a (?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|(?<!no )estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme|cortarme|hacerme dan[oó])|estoy pensando\s*:\s*voy a (?:suicidarme|autolesionarme|hacerme dan[oó]|cortarme)|tengo un plan para (?:quitarme la vida|suicidarme|hacerme dan[oó]|autolesionarme|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto ahora)\b/i.test(clause)
+    const directIntentOrBehavior = /\b(no solo quiero\s+(?:suicidarme|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?quiero\s+(?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme las venas)|(?<!no )(?:me\s+)?voy a (?:suicidar(?:me)?|matarme|quitarme la vida|hacerme dan[oó]|autolesionarme|cortarme)|(?<!no )estoy pensando en (?:suicidarme|matarme|quitarme la vida|autolesionarme|cortarme|hacerme dan[oó])|estoy pensando\s*:\s*voy a (?:suicidarme|autolesionarme|hacerme dan[oó]|cortarme)|tengo un plan para (?:quitarme la vida|suicidarme|hacerme dan[oó]|autolesionarme|cortarme)|me estoy (?:cortando|haciendo dan[oó]|autolesionando)|me corto ahora)\b/i.test(clause) || DIRECT_EXTRA.test(clause)
     const explicit = !attributedQuote && !attributedBelief && !past && !uncertainNegation && !clearDenial && !/\b(me hice dano hoy)\b/i.test(clause) && (
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
       directIntentOrBehavior
