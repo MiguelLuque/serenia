@@ -31,7 +31,8 @@ it('explains explicit activation, future sources, correction, clinical limits an
   expect(screen.getByText(/no recupera automáticamente conversaciones anteriores/i)).toBeTruthy()
   expect(screen.getByText(/para corregir.*conversación/i)).toBeTruthy()
   expect(screen.getByText(/no borra.*conversaciones/i)).toBeTruthy()
-  expect(screen.getByText(/petición.*ya.*comenzado/i)).toBeTruthy()
+  expect(screen.getByText(/petición ya autorizada y en curso/i)).toBeTruthy()
+  expect(screen.getByText(/su resultado no se guardará/i)).toBeTruthy()
 })
 it('activates explicitly and never changes consent optimistically', async () => {
   let finish!: (result: unknown) => void
