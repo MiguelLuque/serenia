@@ -98,6 +98,7 @@ export async function POST(req: Request) {
     promptRequestId: promptMarker.requestId,
   } : null)
   const isSafetyTurn = directSignal || classification.disposition === 'ambiguous' || safetyAnswer !== null
+  const profileMemoryEligible = !isSafetyTurn && progressiveProfileEnabled(process.env, user.id)
   // Resolve only NEW ordinary idle turns. Existing IDs must retain replay and
   // recovery, and safety signals must be recorded before any temporal closure.
   if (session.status === 'open' && !isSafetyTurn && !isSessionExpired(session) && isSessionInactive(session)) {
@@ -117,11 +118,12 @@ export async function POST(req: Request) {
     p_safety_answer_risk_type: safetyAnswer?.riskType ?? undefined,
     p_safety_answer_required: safetyAnswer !== null,
     p_safety_answer_prompt_request_id: safetyAnswer?.promptRequestId ?? undefined,
+    p_profile_memory_eligible: profileMemoryEligible,
   })
   if (claimError) return Response.json({ error: 'El turno no está disponible. Reintenta el mismo mensaje o recarga.', requestId }, { status: claimError.code === '55P03' ? 409 : 422 })
   const turn = claim as { replay: boolean; token: string; chunks?: UIMessageChunk[]; urgent?: boolean; userMessageId: string; safetyAnswer?: SafetyClarificationReply; safetyAnswerRiskType?: CrisisRiskType }
   if (turn.replay) return replay(turn.chunks ?? [])
-  if (!isSafetyTurn && progressiveProfileEnabled(process.env, user.id)) {
+  if (profileMemoryEligible) {
     after(async () => {
       try { await enqueueProfileExtraction(user.id, 1) } catch { /* Admission already persisted; the durable queue remains recoverable. */ }
     })

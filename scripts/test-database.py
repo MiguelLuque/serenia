@@ -82,6 +82,8 @@ try:
             continue
         if 'conversation_safety_answer' in path.name and (args.safety_red or historical_baseline):
             continue
+        if 'profile_memory_safety_and_revocation_hardening' in path.name and (args.safety_red or historical_baseline):
+            continue
         if args.baseline_flows and 'patient_flows_acceptance' in path.name:
             continue
         if args.baseline_security and (path.name.startswith('202610') or path.name.startswith('20260502000004') or path.name.startswith('20260502000005')):
@@ -338,7 +340,26 @@ try:
                 if query("select count(*) from risk_events where user_id='90000000-0000-0000-0000-000000000001';").splitlines()[2].strip() != '0':
                     raise RuntimeError('Safety-event duplicate rejection left fixture rows behind')
                 print('PASS conversation safety migration rejects duplicate index keys atomically')
+            if 'profile_memory_safety_and_revocation_hardening' in path.name:
+                # Seed a legacy active job before the new fail-closed column is
+                # added. The migration must cancel it, rotate its token, and
+                # preserve its message so no unproven source reaches the model.
+                query("""insert into auth.users(id) values('9b000000-0000-4000-8000-000000000001');
+                insert into conversations(id,user_id) values('1b000000-0000-4000-8000-000000000001','9b000000-0000-4000-8000-000000000001');
+                insert into clinical_sessions(id,conversation_id,user_id) values('2b000000-0000-4000-8000-000000000001','1b000000-0000-4000-8000-000000000001','9b000000-0000-4000-8000-000000000001');
+                insert into profile_settings(user_id,enabled) values('9b000000-0000-4000-8000-000000000001',true);
+                insert into messages(id,session_id,conversation_id,role,parts) values('4b000000-0000-4000-8000-000000000001','2b000000-0000-4000-8000-000000000001','1b000000-0000-4000-8000-000000000001','user','[{"type":"text","text":"Legacy source"}]');
+                update profile_extraction_jobs set status='running',token='5b000000-0000-4000-8000-000000000001',lease_until=clock_timestamp()+interval '1 minute'
+                where source_message_id='4b000000-0000-4000-8000-000000000001';""")
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'profile_memory_safety_and_revocation_hardening' in path.name:
+                if query("""select (j.status='cancelled' and j.token<>'5b000000-0000-4000-8000-000000000001' and j.lease_until is null and j.error_code='source_ineligible'
+                    and not m.profile_memory_eligible and m.id='4b000000-0000-4000-8000-000000000001'::uuid)::text
+                    from profile_extraction_jobs j join messages m on m.id=j.source_message_id
+                    where j.source_message_id='4b000000-0000-4000-8000-000000000001';""").splitlines()[2].strip() != 'true':
+                    raise RuntimeError('Profile hardening did not cancel/fence the legacy job while preserving its message')
+                print('PASS profile hardening cancels and fences unproven legacy jobs without deleting sources')
+                query("delete from auth.users where id='9b000000-0000-4000-8000-000000000001';")
             if 'chat_turn_lease_fencing' in path.name and query(lease_contract) != lease_before_metadata:
                 raise RuntimeError('Chat lease fencing changed routine metadata or grants')
             if 'assessment_observed_chronology' in path.name and query(chronology_contract) != chronology_before_metadata:
@@ -560,10 +581,10 @@ try:
       insert into clinical_sessions(id,conversation_id,user_id) values('{ps}','{pc}','{pu}'),('{pt}','{pd}','{pv}');""")
     query(owner + 'select set_profile_enabled(true);')
     query(other + 'select set_profile_enabled(true);')
-    query(f"""insert into messages(id,session_id,conversation_id,role,parts,created_at) values
-      ('40000000-0000-0000-0000-000000000201','{ps}','{pc}','user','[{{"type":"text","text":"Vivo en Sevilla."}}]',now()-interval '1 minute'),
-      ('40000000-0000-0000-0000-000000000202','{ps}','{pc}','user','[{{"type":"text","text":"Ahora vivo en Cádiz. Ahora vivo en Málaga."}}]',now()),
-      ('40000000-0000-0000-0000-000000000203','{pt}','{pd}','user','[{{"type":"text","text":"Otro usuario."}}]',now());""")
+    query(f"""insert into messages(id,session_id,conversation_id,role,parts,created_at,profile_memory_eligible) values
+      ('40000000-0000-0000-0000-000000000201','{ps}','{pc}','user','[{{"type":"text","text":"Vivo en Sevilla."}}]',now()-interval '1 minute',true),
+      ('40000000-0000-0000-0000-000000000202','{ps}','{pc}','user','[{{"type":"text","text":"Ahora vivo en Cádiz. Ahora vivo en Málaga."}}]',now(),true),
+      ('40000000-0000-0000-0000-000000000203','{pt}','{pd}','user','[{{"type":"text","text":"Otro usuario."}}]',now(),true);""")
     with ThreadPoolExecutor(max_workers=2) as pool:
         claims = list(pool.map(profile_value, [server + f"select count(*) from claim_profile_jobs('{pu}',1);"] * 2))
     if sorted(claims) != ['0', '1']:

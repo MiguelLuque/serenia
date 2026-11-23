@@ -50,7 +50,7 @@ export function ProfileMemoryView({ memory, replacementSources = {}, isOlderPage
         <p>Si activas la memoria, Serenia podrá extraer citas de tus mensajes nuevos para dar contexto a próximas conversaciones. Puede equivocarse o recoger algo que ya no sea actual. Activarla no recupera automáticamente conversaciones anteriores.</p>
         <p>Son palabras que has compartido, no diagnósticos. Confirmar una cita significa que la confirmas tú: no es una validación clínica ni una revisión de Pablo.</p>
         <p>Para corregir un dato, cuéntalo en la conversación. Se conservará como una nueva cita para revisar, sin editar tus palabras anteriores.</p>
-        <p>Desactivar detiene nuevas extracciones y el uso de estas citas como contexto. Conserva las citas para que puedas revisarlas o descartarlas y no borra tus conversaciones, escalas ni informes. No puede deshacer una petición al modelo que ya haya comenzado.</p>
+        <p>Desactivar detiene nuevas extracciones y el uso de estas citas como contexto. Conserva las citas para que puedas revisarlas o descartarlas y no borra tus conversaciones, escalas ni informes. No puede retirar una petición ya autorizada y en curso; si revocas el permiso mientras se procesa, su resultado no se guardará.</p>
       </div>
       {isOlderPage ? <Link href="/app/perfil" className="text-sm underline underline-offset-4">Volver a citas recientes</Link> : null}
       {memory === null ? (

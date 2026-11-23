@@ -237,14 +237,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "conversation_id": string,"created_at": string,"id": string,"parts": NonNullable<Json>,"role": Database["public"]['Enums']["message_role"],"session_id": string | null,"visible_to_user": boolean
+                    "conversation_id": string,"created_at": string,"id": string,"parts": NonNullable<Json>,"profile_memory_eligible": boolean,"role": Database["public"]['Enums']["message_role"],"session_id": string | null,"visible_to_user": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "conversation_id": string,"created_at"?: string,"id"?: string,"parts"?: NonNullable<Json>,"role": Database["public"]['Enums']["message_role"],"session_id"?: string | null,"visible_to_user"?: boolean
+                    "conversation_id": string,"created_at"?: string,"id"?: string,"parts"?: NonNullable<Json>,"profile_memory_eligible"?: boolean,"role": Database["public"]['Enums']["message_role"],"session_id"?: string | null,"visible_to_user"?: boolean
                   }
                   Update: {
-                    "conversation_id"?: string,"created_at"?: string,"id"?: string,"parts"?: NonNullable<Json>,"role"?: Database["public"]['Enums']["message_role"],"session_id"?: string | null,"visible_to_user"?: boolean
+                    "conversation_id"?: string,"created_at"?: string,"id"?: string,"parts"?: NonNullable<Json>,"profile_memory_eligible"?: boolean,"role"?: Database["public"]['Enums']["message_role"],"session_id"?: string | null,"visible_to_user"?: boolean
                   }
                   Relationships: [
                     {
@@ -702,8 +702,11 @@ isOneToOne: false
             "assessment_summary_valid_for_risk":
 { Args: { "doc": Json }; Returns: boolean
                            },
+"authorize_profile_model_call":
+{ Args: { "p_job_id": string,"p_token": string }; Returns: boolean
+                           },
 "begin_chat_turn":
-{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
+{ Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_profile_memory_eligible"?: boolean,"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
                            },
 "begin_chat_turn_after_onboarding":
 { Args: { "p_crisis"?: boolean,"p_direct_risk_type"?: Database["public"]['Enums']["risk_type"],"p_request_id": string,"p_safety_answer"?: string,"p_safety_answer_prompt_request_id"?: string,"p_safety_answer_required"?: boolean,"p_safety_answer_risk_type"?: Database["public"]['Enums']["risk_type"],"p_session_id": string,"p_text": string,"p_urgent"?: boolean,"p_user_id": string }; Returns: Json
