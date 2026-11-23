@@ -608,8 +608,10 @@ describe('classifySafetyClarificationReply', () => {
   it('classifies a natural affirmative with fictional framing as affirmative', () => {
     expect(classifySafetyClarificationReply('Sí, dentro del caso ficticio. No tiene un plan concreto, pero no quiere quedarse solo ahora mismo.')).toBe('affirmative')
   })
+  it('treats a "no" followed by stated intent as affirmative', () => {
+    expect(classifySafetyClarificationReply('No, pero sí estoy pensando en hacerme daño')).toBe('affirmative')
+  })
   it('keeps contradictory and uncertain answers unclear', () => {
-    expect(classifySafetyClarificationReply('No, pero sí estoy pensando en hacerme daño')).toBe('unclear')
     expect(classifySafetyClarificationReply('Sí, pero no estoy seguro')).toBe('unclear')
   })
   it('classifies an explicit topic change with a new topic as skip', () => {
