@@ -45,13 +45,8 @@ begin
 end
 $$;
 
--- Patient-facing closure must go through the serialized view RPC below.
-revoke all on function public.close_session_atomic(uuid,uuid,text) from public,anon,authenticated;
-grant execute on function public.close_session_atomic(uuid,uuid,text) to service_role;
-
--- PostgREST identifies RPC overloads by their argument names and types. Remove
--- the boolean acknowledgement contract so stale clients cannot retain it.
-drop function if exists public.close_session_from_chat_view(uuid,text,boolean);
+-- Expand only: close_session_atomic keeps its authenticated grant until the
+-- contract migration (20261115083553) revokes it.
 
 create function public.close_session_from_chat_view(
   p_session_id uuid,
@@ -64,8 +59,7 @@ declare
   s clinical_sessions%rowtype;
   stamp timestamptz;
   expires_at timestamptz;
-  has_live_turn boolean;
-  has_unresolved_turn boolean;
+  timing jsonb;
   unresolved_request_id text;
   unresolved_attempt integer;
 begin
@@ -107,29 +101,26 @@ begin
 
   stamp=clock_timestamp();
   expires_at=s.opened_at + interval '1 hour';
+  timing=jsonb_build_object(
+    'serverNow',floor(extract(epoch from stamp)*1000)::bigint,
+    'expiresAt',floor(extract(epoch from expires_at)*1000)::bigint
+  );
   if p_reason='time_limit' and stamp<expires_at then
     return jsonb_build_object(
       'closed',false,
       'reason','not_expired',
-      'timing',jsonb_build_object(
-        'serverNow',floor(extract(epoch from stamp)*1000)::bigint,
-        'expiresAt',floor(extract(epoch from expires_at)*1000)::bigint
-      )
+      'timing',timing
     );
   end if;
 
-  select exists(
+  if exists(
     select 1 from chat_turns
     where session_id=s.id and status='generating' and lease_until>stamp
-  ) into has_live_turn;
-  if has_live_turn then
+  ) then
     return jsonb_build_object(
       'closed',false,
       'reason','turn_pending',
-      'timing',jsonb_build_object(
-        'serverNow',floor(extract(epoch from stamp)*1000)::bigint,
-        'expiresAt',floor(extract(epoch from expires_at)*1000)::bigint
-      )
+      'timing',timing
     );
   end if;
 
@@ -139,8 +130,7 @@ begin
   where session_id=s.id and (status='failed' or (status='generating' and lease_until<=stamp))
   order by request_id
   limit 1;
-  has_unresolved_turn := found;
-  if has_unresolved_turn and (
+  if found and (
     p_confirm_request_id is distinct from unresolved_request_id
     or p_confirm_attempt is distinct from unresolved_attempt
   ) then
@@ -149,10 +139,7 @@ begin
       'reason','turn_unresolved',
       'requestId',unresolved_request_id,
       'attempt',unresolved_attempt,
-      'timing',jsonb_build_object(
-        'serverNow',floor(extract(epoch from stamp)*1000)::bigint,
-        'expiresAt',floor(extract(epoch from expires_at)*1000)::bigint
-      )
+      'timing',timing
     );
   end if;
 

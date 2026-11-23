@@ -270,6 +270,9 @@ try:
                     raise RuntimeError('Recovery readback failure left function behind')
                 print('PASS resolution prerequisite rejects drift and rolls back')
             query('BEGIN;\n' + path.read_text() + '\nCOMMIT;')
+            if 'atomic_chat_view_close_expand' in path.name:
+                query((ROOT / 'supabase/tests/chat-close-expansion.sql').read_text())
+                print('PASS closure expand preserves legacy app access and scopes the new RPC')
             if 'chat_turn_lease_fencing' in path.name and query(lease_contract) != lease_before_metadata:
                 raise RuntimeError('Chat lease fencing changed routine metadata or grants')
             if 'assessment_observed_chronology' in path.name and query(chronology_contract) != chronology_before_metadata:
