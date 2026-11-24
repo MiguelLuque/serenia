@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { latestSafetyPromptRequestId } from '@/lib/shared/chat/safety-prompt'
 import { DefaultChatTransport, type UIMessage } from 'ai'
-import { MessageBubble } from './message-bubble'
+import { MessageBubble, TypingBubble } from './message-bubble'
+import { BreathingExercise } from './breathing-exercise'
+import { BrandOrb } from '@/components/brand/brand-mark'
 import { ChatInput } from './chat-input'
 import { CrisisBanner } from './crisis-banner'
 import { QuestionnaireCard } from './questionnaire-card'
@@ -95,6 +97,9 @@ function hasVisibleAssistantResponseAfter(messages: readonly UIMessage[], userMe
   return false
 }
 
+const primaryActionClass = 'inline-flex min-h-9 items-center rounded-full border border-teal-700 bg-white px-3.5 font-medium text-teal-800 hover:bg-teal-50 disabled:opacity-60'
+const secondaryActionClass = 'inline-flex min-h-9 items-center rounded-full px-3 font-medium text-stone-700 underline underline-offset-2 hover:bg-white/70 disabled:opacity-60'
+
 export function ChatView({
   sessionId,
   initialMessages,
@@ -115,6 +120,8 @@ export function ChatView({
   const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
   const listRef = useRef<HTMLDivElement>(null)
+  // Mensajes ya presentes al cargar: no se animan, solo los nuevos.
+  const [initialMessageIds] = useState(() => new Set(initialMessages.map(message => message.id)))
   const refreshedToolsRef = useRef<Set<string>>(new Set())
   const crisisRedirectRef = useRef(false)
 
@@ -706,6 +713,9 @@ export function ChatView({
     }
   }, [messages, status])
 
+  const lastMessage = messages.at(-1)
+  const lastHasAssistantText = lastMessage?.role === 'assistant' && lastMessage.parts.some(part => part.type === 'text' && part.text.trim().length > 0)
+  const showTyping = status === 'submitted' || (status === 'streaming' && !lastHasAssistantText)
   const unresolvedSubmission = localSubmissions.find(submission => submission.state === 'uncertain' || submission.state === 'interrupted')
   const recoveryStatus = recoveryChecking
     ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.'
@@ -726,29 +736,35 @@ export function ChatView({
                 : 'El contador indica el fin del tiempo; falta confirmar el cierre guardado.'
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="mx-auto flex h-[calc(100dvh-7.5rem)] w-full max-w-2xl flex-col gap-3 md:h-[calc(100dvh-5rem)]">
       <div
-        className={`flex items-center justify-between gap-3 border-b px-4 py-2 text-xs ${
+        className={`flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-sm sm:px-4 ${
           isEnding
             ? 'border-amber-200 bg-amber-50 text-amber-900'
-            : 'border-slate-200 bg-slate-50 text-slate-500'
+            : 'border-stone-200/80 bg-white text-muted-foreground'
         }`}
       >
-        <span>
-          {isClosed
-            ? 'La sesión ha terminado.'
-            : isTimeExpired ? 'Tiempo agotado · cierre pendiente de confirmar' : `${minsLeft} min restantes`}
-        </span>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <BrandOrb className="size-7" />
+          <div className="min-w-0 leading-tight">
+            <p className="font-semibold text-stone-900">Serenia</p>
+            <p className="text-xs tabular-nums">
+              {isClosed
+                ? 'La sesión ha terminado.'
+                : isTimeExpired ? 'Tiempo agotado · cierre pendiente de confirmar' : `${minsLeft} min restantes`}
+            </p>
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           {isEnding && !isExpired && (
-            <span className="font-medium">Queda poco tiempo.</span>
+            <span className="hidden text-xs font-medium sm:inline">Queda poco tiempo.</span>
           )}
           {!isClosed && (
               <button
                 type="button"
                 disabled={closing || closeUncertain || status === 'submitted' || status === 'streaming'}
                 onClick={() => void finishSession()}
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-100"
+                className="min-h-9 rounded-full border border-stone-300 bg-white px-3.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-60"
               >
                 {closing ? 'Confirmando cierre…' : closeUncertain ? 'Cierre sin confirmar' : closeConfirmation ? 'Terminar sin respuesta' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
               </button>
@@ -756,24 +772,36 @@ export function ChatView({
         </div>
       </div>
 
-      {closeNotice && <p role="status" className="px-3 py-2 text-sm">{closeNotice}</p>}
-      {retrying && <p role="status" className="px-3 py-2 text-sm">Reintentando el mismo turno guardado. Puedes seguir escribiendo mientras esperamos.</p>}
+      {closeNotice && <p role="status" className="rounded-xl bg-muted px-3 py-2 text-sm text-stone-800">{closeNotice}</p>}
+      {retrying && <p role="status" className="rounded-xl bg-muted px-3 py-2 text-sm text-stone-800">Reintentando el mismo turno guardado. Puedes seguir escribiendo mientras esperamos.</p>}
 
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-1 py-2">
         {messages.length === 0 ? (
-          <p className="text-center text-sm text-slate-500">
-            Empieza la conversación cuando estés lista.
-          </p>
-
+          <div className="flex h-full flex-col items-center justify-center gap-5 px-4 text-center">
+            <BrandOrb className="size-14" />
+            <div>
+              <p className="landing-serif text-[1.75rem] leading-tight text-stone-900">Empieza cuando quieras.</p>
+              <p className="mx-auto mt-2 max-w-sm text-[15px] text-muted-foreground">
+                Escribe abajo lo que tengas en mente. Si antes prefieres bajar el ritmo, puedes respirar un minuto.
+              </p>
+            </div>
+            <BreathingExercise />
+          </div>
         ) : (
-          messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+          messages.map((message, index) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              showAvatar={index === 0 || messages[index - 1].role !== message.role}
+              animate={!initialMessageIds.has(message.id)}
+            />
           ))
         )}
+        {showTyping && <TypingBubble />}
       </div>
 
       {localSubmissions.filter(submission => submission.state !== 'sending' || isClosed).map((submission, index) => (
-        <section key={submission.requestId} role="status" aria-live="polite" className="border-t bg-amber-50 p-3 text-sm text-slate-800">
+        <section key={submission.requestId} role="status" aria-live="polite" className="rounded-xl bg-muted p-3 text-sm text-stone-800">
           <p className="font-medium">
             {submission.state === 'sending'
               ? `Envío pendiente. ${LOCAL_TEXT_COPY_WARNING}`
@@ -782,14 +810,14 @@ export function ChatView({
               : `No hemos podido confirmar el envío. ${LOCAL_TEXT_COPY_WARNING} Comprueba el estado antes de volver a enviarlo.`}
           </p>
           {isClosed
-            ? <textarea aria-label={`Mensaje pendiente ${index + 1}`} value={submission.text} readOnly className="mt-2 block w-full rounded border bg-white p-2" />
+            ? <textarea aria-label={`Mensaje pendiente ${index + 1}`} value={submission.text} readOnly className="mt-2 block w-full rounded-lg border border-stone-300 bg-white p-2" />
             : <p className="mt-2 whitespace-pre-wrap">{submission.text}</p>}
-          <button type="button" onClick={() => void copyLocalSubmission(submission)} className="mt-2 underline">
+          <button type="button" onClick={() => void copyLocalSubmission(submission)} className={`mt-2 ${secondaryActionClass}`}>
             Copiar texto
           </button>
           {copiedSubmissionIds.includes(submission.requestId) && <p role="status" className="mt-1">Texto copiado al portapapeles.</p>}
           {submission.state === 'uncertain' && !isClosed && (
-            <button type="button" disabled={closing || retrying || resolvingTurn || recoveryChecking || status === 'submitted' || status === 'streaming'} onClick={() => void send(submission.text, submission)} className="mt-2 underline">
+            <button type="button" disabled={closing || retrying || resolvingTurn || recoveryChecking || status === 'submitted' || status === 'streaming'} onClick={() => void send(submission.text, submission)} className={`mt-2 ml-2 ${primaryActionClass}`}>
               Reintentar la misma señal guardada
             </button>
           )}
@@ -797,21 +825,21 @@ export function ChatView({
       ))}
 
       {isClosed ? (
-        <div className="border-t border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-4 text-center text-[15px] text-stone-700">
           <p>La sesión ha terminado.{' '}
-            <Link href="/app" className="font-medium text-slate-900 underline">
+            <Link href="/app" className="font-medium text-primary underline underline-offset-4">
               Vuelve al inicio.
             </Link>
           </p>
           {draft.trim() && <div className="mt-3 text-left">
-            <label htmlFor={`unsent-${sessionId}`} className="font-medium">Borrador sin enviar</label>
-            <textarea id={`unsent-${sessionId}`} value={draft} readOnly className="mt-1 block w-full rounded border p-2" />
-            <p>Este texto no se ha enviado. Puedes copiarlo antes de salir. Si necesitas ayuda inmediata, los recursos de seguridad siguen disponibles abajo.</p>
+            <label htmlFor={`unsent-${sessionId}`} className="text-sm font-medium">Borrador sin enviar</label>
+            <textarea id={`unsent-${sessionId}`} value={draft} readOnly className="mt-1 block w-full rounded-lg border border-stone-300 p-2" />
+            <p className="mt-2 text-sm text-muted-foreground">Este texto no se ha enviado. Puedes copiarlo antes de salir. Si necesitas ayuda inmediata, los recursos de seguridad siguen disponibles abajo.</p>
           </div>}
         </div>
       ) : (
         <>
-          {isTimeExpired && <p role="status" className="border-t bg-slate-50 p-3 text-sm">Tiempo agotado para mensajes nuevos ordinarios. El borrador pendiente solo sigue en esta pantalla; cópialo antes de recargar o salir. Una respuesta ya aceptada puede terminar y puedes reintentar el mismo turno. Confirma el cierre cuando termine. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. Si necesitas atención inmediata, llama al 112 o al 024.</p>}
+          {isTimeExpired && <p role="status" className="rounded-xl bg-muted p-3 text-sm text-stone-800">Tiempo agotado para mensajes nuevos ordinarios. El borrador pendiente solo sigue en esta pantalla; cópialo antes de recargar o salir. Una respuesta ya aceptada puede terminar y puedes reintentar el mismo turno. Confirma el cierre cuando termine. Si necesitas comunicar una señal urgente nueva, activa el envío urgente. <UrgentHelpText lead={false} linkClassName="font-semibold underline underline-offset-2" /></p>}
           {!isTimeExpired && activeQuestionnaire &&
             activeQuestionnaire.status !== 'scored' && (
               <QuestionnaireCard
@@ -827,16 +855,18 @@ export function ChatView({
                 }}
               />
             )}
-          {(isTimeExpired || closeUncertain || closeConfirmation || closeNotice || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div className="space-y-2 border-t p-3 text-sm">
-            <p role="status" aria-live="polite">{recoveryStatus}</p>
-            {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || resolvingTurn || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className="underline">Reintentar el mismo mensaje</button>}
-            {recovery?.attempt !== undefined && !urgentMode && <><p>Comprobar y resolver puede detener una respuesta pendiente que aún no se haya guardado.</p><button type="button" disabled={resolvingTurn || closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void resolveTurn()} className="block underline">Comprobar y resolver turno pendiente</button></>}
+          {(isTimeExpired || closeUncertain || closeConfirmation || closeNotice || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div role="group" aria-label="Estado del envío" className="space-y-2.5 rounded-xl bg-muted p-3 text-sm text-stone-800">
+            <p role="status" aria-live="polite" className="font-medium">{recoveryStatus}</p>
+            {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || resolvingTurn || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className={primaryActionClass}>Reintentar el mismo mensaje</button>}
+            {recovery?.attempt !== undefined && !urgentMode && <><p className="text-muted-foreground">Comprobar y resolver puede detener una respuesta pendiente que aún no se haya guardado.</p><button type="button" disabled={resolvingTurn || closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void resolveTurn()} className={secondaryActionClass}>Comprobar y resolver turno pendiente</button></>}
             {resolutionNotice && <p role="status">{resolutionNotice}</p>}
-            <button type="button" onClick={interruptForUrgentSignal} className="block underline">Interrumpir espera y enviar una señal urgente</button>
-            <button type="button" onClick={checkSavedState} className="block underline">Comprobar estado guardado</button>
-            {recoveryError && <p role="alert">No se pudo comprobar el estado. {LOCAL_TEXT_COPY_WARNING} Vuelve a comprobarlo cuando puedas.</p>}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={checkSavedState} className={secondaryActionClass}>Comprobar estado guardado</button>
+            </div>
+            <button type="button" onClick={interruptForUrgentSignal} className="flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-400 bg-white px-3 font-medium text-stone-900 hover:bg-stone-50">Interrumpir espera y enviar una señal urgente</button>
+            {recoveryError && <p role="alert" className="text-red-800">No se pudo comprobar el estado. {LOCAL_TEXT_COPY_WARNING} Vuelve a comprobarlo cuando puedas.</p>}
           </div>}
-          {urgentMode && <p role="status" className="px-3 text-sm">Escribe con claridad que necesitas ayuda ahora, por ejemplo «necesito ayuda inmediata» o «estoy en peligro». Solo un aviso urgente reconocido por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. <UrgentHelpText lead={false} linkClassName="underline" /></p>}
+          {urgentMode && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-stone-800">Escribe con claridad que necesitas ayuda ahora, por ejemplo «necesito ayuda inmediata» o «estoy en peligro». Solo un aviso urgente reconocido por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. <UrgentHelpText lead={false} linkClassName="font-semibold underline underline-offset-2" /></p>}
           <ChatInput
             status={(recovery || recoveryChecking) && !urgentMode ? 'submitted' : status}
             disabled={closing || ((isTimeExpired || closeUncertain) && !urgentMode)}

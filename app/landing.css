@@ -98,47 +98,7 @@
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: none; } }
 
-/* ---- Respiración guiada (decorativa) ---- */
-.breath {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-.breath-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  background: radial-gradient(circle at 35% 30%, rgba(204, 251, 241, 0.95), rgba(45, 212, 191, 0.55) 55%, rgba(15, 118, 110, 0.25));
-  /* Seis respiraciones (1 min) y se detiene: no compite con la lectura. */
-  animation: breathe 10s ease-in-out 6;
-}
-.breath-ring:nth-child(2) {
-  background: none;
-  border: 1px solid rgba(153, 246, 228, 0.35);
-  animation: breathe-halo 10s ease-in-out 6;
-}
-.breath-label { position: relative; display: grid; }
-.breath-label > span { grid-area: 1 / 1; text-align: center; animation: breath-in 10s ease-in-out 6; }
-.breath-label > span + span { animation-name: breath-out; }
-@keyframes breathe {
-  0%, 100% { transform: scale(0.62); }
-  40%, 50% { transform: scale(1); }
-}
-@keyframes breathe-halo {
-  0%, 100% { transform: scale(0.7); opacity: 0; }
-  45% { transform: scale(1.18); opacity: 1; }
-  60% { opacity: 0; }
-}
-@keyframes breath-in {
-  0%, 45% { opacity: 1; }
-  50%, 95% { opacity: 0; }
-  100% { opacity: 1; }
-}
-@keyframes breath-out {
-  0%, 45% { opacity: 0; }
-  50%, 95% { opacity: 1; }
-  100% { opacity: 0; }
-}
+/* La respiración guiada (.breath*) vive en globals.css: también la usa la app. */
 
 /* ---- FAQ ---- */
 .faq summary { list-style: none; cursor: pointer; }

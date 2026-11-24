@@ -140,3 +140,76 @@
 .landing-orb-mini {
   background: radial-gradient(circle at 30% 30%, #ccfbf1, #2dd4bf 45%, #0f766e 100%);
 }
+
+/* ---- Respiración guiada (landing, acceso y chat) ---- */
+.breath {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.breath-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, rgba(204, 251, 241, 0.95), rgba(45, 212, 191, 0.55) 55%, rgba(15, 118, 110, 0.25));
+  /* Seis respiraciones (1 min) y se detiene: no compite con la lectura. */
+  animation: breathe 10s ease-in-out 6;
+}
+.breath-ring:nth-child(2) {
+  background: none;
+  border: 1px solid rgba(153, 246, 228, 0.35);
+  animation: breathe-halo 10s ease-in-out 6;
+}
+.breath-label { position: relative; display: grid; }
+.breath-label > span { grid-area: 1 / 1; text-align: center; animation: breath-in 10s ease-in-out 6; }
+.breath-label > span + span { animation-name: breath-out; }
+@keyframes breathe {
+  0%, 100% { transform: scale(0.62); }
+  40%, 50% { transform: scale(1); }
+}
+@keyframes breathe-halo {
+  0%, 100% { transform: scale(0.7); opacity: 0; }
+  45% { transform: scale(1.18); opacity: 1; }
+  60% { opacity: 0; }
+}
+@keyframes breath-in {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes breath-out {
+  0%, 45% { opacity: 0; }
+  50%, 95% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---- Chat de la app ---- */
+/* Puntos de «escribiendo»: tres ciclos (menos de 5 s, WCAG 2.2.2) y quedan quietos. */
+.chat-typing-dot {
+  width: 6px; height: 6px; border-radius: 9999px;
+  background: #a8a29e;
+  animation: chat-typing 1.2s ease-in-out 3;
+}
+.chat-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.chat-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chat-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+/* Mensajes nuevos (no el historial al cargar): fundido breve. */
+.chat-msg-in { animation: chat-msg-in 0.2s ease-out both; }
+@keyframes chat-msg-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breath-ring,
+  .breath-label > span,
+  .chat-typing-dot,
+  .chat-msg-in {
+    animation: none !important;
+  }
+  .breath-ring { transform: scale(0.85); }
+  .breath-label > span + span { opacity: 0; }
+}
