@@ -49,38 +49,39 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Paleta de marca (landing y acceso): papel cálido, texto stone, primario teal. */
+  --background: #f8f6f2;
+  --foreground: #292524;
+  --card: #ffffff;
+  --card-foreground: #292524;
+  --popover: #ffffff;
+  --popover-foreground: #292524;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --secondary: #f0ede6;
+  --secondary-foreground: #292524;
+  --muted: #f0ede6;
+  --muted-foreground: #57534e;
+  --accent: #e7f3f0;
+  --accent-foreground: #134e4a;
+  --destructive: #b91c1c;
+  --border: #e7e5e4;
+  --input: #d6d3d1;
+  --ring: #0d9488;
+  --chart-1: #0f766e;
+  --chart-2: #2dd4bf;
+  --chart-3: #78716c;
+  --chart-4: #d97706;
+  --chart-5: #134e4a;
+  --radius: 0.75rem;
+  --sidebar: #f2efe8;
+  --sidebar-foreground: #292524;
+  --sidebar-primary: #0f766e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4eeeb;
+  --sidebar-accent-foreground: #134e4a;
+  --sidebar-border: #e7e5e4;
+  --sidebar-ring: #0d9488;
 }
 
 .dark {
@@ -127,4 +128,15 @@
   html {
     @apply font-sans;
   }
+}
+
+/* ---- Elementos de marca compartidos por la landing, el acceso y la app ----
+   El movimiento se desactiva con prefers-reduced-motion. */
+.landing-serif {
+  font-family: var(--font-landing-serif), ui-serif, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.landing-orb-mini {
+  background: radial-gradient(circle at 30% 30%, #ccfbf1, #2dd4bf 45%, #0f766e 100%);
 }

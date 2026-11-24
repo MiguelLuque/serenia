@@ -10,6 +10,10 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
+import { PageHeader } from '@/components/brand/page-header'
+import { BrandOrb } from '@/components/brand/brand-mark'
+import { brandCardClass, safetyCardClass, safetyLinkClass } from '@/components/brand/styles'
+import Link from 'next/link'
 
 const closureLabels: Record<string, string> = {
   user_request: 'Cerrada por ti',
@@ -44,33 +48,36 @@ export default async function SesionesPage() {
   const reports = await getPatientReports(supabase, sessionIds)
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Tus sesiones</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Aquí encontrarás un resumen de cada sesión cerrada.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Historial"
+        title="Tus sesiones"
+        description="Aquí encontrarás un resumen de cada sesión cerrada."
+      />
 
       {(!sessions || sessions.length === 0) ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-slate-600">
-            Todavía no tienes sesiones cerradas.
+        <Card className={brandCardClass}>
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <BrandOrb className="size-10" />
+            <p className="text-[15px] text-stone-700">Todavía no tienes sesiones cerradas.</p>
+            <Link href="/app" className="text-sm font-medium text-primary underline underline-offset-4">
+              Ir al inicio para empezar una
+            </Link>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <ol className="space-y-3">
           {sessions.map((session) => {
             const report = reports.get(session.id)
             const summary = report?.state === 'available' ? report.summary : null
             const isCrisis = session.closure_reason === 'crisis_detected'
             return (
+              <li key={session.id}>
               <Card
-                key={session.id}
-                className={isCrisis ? 'border-red-200 bg-red-50' : undefined}
+                className={isCrisis ? safetyCardClass : brandCardClass}
               >
                 <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <CardTitle className="text-base">
                       {session.closed_at
                         ? formatDate(session.closed_at)
@@ -86,23 +93,25 @@ export default async function SesionesPage() {
                   {isCrisis && (
                     <CardDescription className="text-red-900">
                       No hay revisión humana inmediata garantizada. Si necesitas ayuda ahora,
-                      llama a la <strong>{SAFETY_RESOURCES.suicide.name}</strong>.
+                      llama a la <a className={safetyLinkClass} href={SAFETY_RESOURCES.suicide.href}>{SAFETY_RESOURCES.suicide.name}</a>{' '}
+                      (gratuita, 24 horas) o al <a className={safetyLinkClass} href={SAFETY_RESOURCES.emergency.href}>{SAFETY_RESOURCES.emergency.phone}</a> en caso de emergencia.
                     </CardDescription>
                   )}
                 </CardHeader>
                 <CardContent>
                   {summary ? (
-                    <p className="text-sm text-slate-700">{summary}</p>
+                    <p className="text-[15px] leading-relaxed text-stone-700">{summary}</p>
                   ) : (
-                    <p className="text-sm italic text-slate-500">
+                    <p className="text-sm text-muted-foreground">
                       {report && report.state !== 'available' ? REPORT_STATE_COPY[report.state] : REPORT_STATE_COPY.unavailable}
                     </p>
                   )}
                 </CardContent>
               </Card>
+              </li>
             )
           })}
-        </div>
+        </ol>
       )}
     </div>
   )

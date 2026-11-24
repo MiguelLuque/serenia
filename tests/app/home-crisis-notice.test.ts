@@ -60,6 +60,13 @@ describe('home crisis notice — copy clínicamente crítica de crisis', () => {
     expect(safetySrc).toContain(`name: '${SIGNED_LINE_024_MENTION}'`)
   })
 
+  it('links both 024 and 112 from SAFETY_RESOURCES in home and history notices', () => {
+    for (const src of [pageSrc, read('app/app/sesiones/page.tsx')]) {
+      expect(src).toContain('href={SAFETY_RESOURCES.suicide.href}')
+      expect(src).toContain('href={SAFETY_RESOURCES.emergency.href}')
+    }
+  })
+
   it('renders the crisis branch only when closureReason === "crisis_detected"', () => {
     // Regression: la rama de crisis depende de `lastClosed?.closureReason === 'crisis_detected'`.
     // Si alguien cambiase el literal del closure reason, el aviso dejaría de dispararse.
