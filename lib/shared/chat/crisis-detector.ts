@@ -137,7 +137,7 @@ const URGENT_DANGER = /\b(?:(?:estoy|me\s+siento)\s+en\s+peligro|no\s+estoy\s+a\
 // A clause that is only a call for help: "¡Socorro!", "ayúdame, por favor".
 const HELP_CALL = /^(?:socorro|auxilio|ayuda|ayudame|ayudadme|que\s+alguien\s+me\s+ayude)(?:\s+(?:por\s+favor|porfa|porfavor|xfa|ya|ahora(?:\s+mismo)?|socorro|auxilio|ayuda|ayudame|ayudadme|urgente|de\s+verdad))*$/
 // A call for help followed by an everyday problem: "¡Ayuda! No sé usar la app".
-const HELP_CALL_ORDINARY_NEXT = /^(?:no\s+(?:se|encuentro|consigo|puedo)\s+(?:como|usar|abrir|entrar|ver|encontrar|donde\s+(?:esta|se))|no\s+entiendo|como\s+(?:se|hago|puedo|funciona)|donde\s+(?:esta|se)|que\s+(?:no\s+(?:se|entiendo)|examen|dificil|rollo|lio)|con\s+(?:el|la|los|las|esto|este|esta|mi)|mi\s+(?:jefe|profe|profesor|ordenador|movil))\b/
+const HELP_CALL_ORDINARY_NEXT = /^(?:no\s+(?:se|encuentro|consigo|puedo)\s+(?:como|usar|abrir|entrar|ver|encontrar|donde\s+se)|no\s+entiendo|como\s+(?:se|hago|puedo|funciona)|donde\s+se|que\s+(?:no\s+(?:se|entiendo)|examen|dificil|rollo|lio)|con\s+(?:el|la|los|las|esto|este|esta)\s+(?:app|aplicacion|ejercicio|examen|informe|deberes|cuestionario|trabajo|tarea)|mi\s+(?:jefe|profe|profesor|ordenador|movil))\b/
 const LAUGHTER = /\b(?:ja(?:ja)+|je(?:je)+|xd+|lol)\b/
 // Questions, but not every "?": in chat "estoy en peligro??" is distress.
 const URGENT_QUESTION_START = /^(?:que\s+(?:hago|puedo|debo|tengo\s+que|hay\s+que|pasa)|quien|como\s+(?:hago|puedo|se|debo|llamo|pido|consigo)|donde|cuando\s+(?:debo|tengo|hay|puedo)|a\s+quien|a\s+donde|cual|por\s+que|con\s+quien)\b/
@@ -151,7 +151,7 @@ const URGENT_FICTION_OR_PAST = /\b(?:(?:en|de)\s+(?:la|el|una|un|esta|esa|mi)\s+
 const URGENT_ORDINARY_AFTER = /^\s+(?:con|sobre|del|a\s+la\s+hora\s+de|a\s+[a-z]+(?:ar|er|ir)(?:me|te|se|nos)?\b|en\s+(?!(?:mi\s+|la\s+)?casa\b|la\s+calle\b|este\s+momento\b|serio\b)|de\s+(?!verdad\b|inmediato\b|una\s+vez\b|muerte\b|alguien\b|algun[oa]?\b|un\s+profesional\b|una\s+persona\b|la\s+policia\b|emergencia\b|urgencia\b)|para\s+(?!no\b|salir\b|escapar\b|huir\b|estar\s+a\s+salvo\b|protegerme\b|sobrevivir\b|seguir\b|aguantar\b)|por\s+(?!mi\s+(?:vida|ex|pareja|marido|mujer|novi[oa]|padre|madre|familia)\b|culpa\s+de\b|alguien\b|favor\b))/
 // Danger wording only reads as everyday with a non-violent "de"/"por":
 // "en peligro de suspender", "en peligro por las deudas".
-const DANGER_ORDINARY_AFTER = /^\s+(?:de\s+(?:suspender|extincion|perder\s+(?:el|la|mi)\s+(?:trabajo|beca|curso|piso)|repetir|quiebra|desahucio)|por\s+(?:(?:las|mis|los|el|la|mi)\s+)?(?:deudas|notas|examenes?|facturas|trabajo|estudios|hipoteca|alquiler)\b)/
+const DANGER_ORDINARY_AFTER = /^\s+(?:de\s+(?:suspender|extincion|perder\s+(?:el|la|mi)\s+(?:trabajo|beca|curso|piso)|repetir|quiebra|desahucio)|por\s+(?:(?:las|mis|los|el|la|mi)\s+)?(?:deudas|notas|examenes?|facturas|estudios|hipoteca|alquiler)\b)/
 // Endings that do not start a new sentence after "si"/"sí".
 const URGENT_FILLERS = /^(?:\s*(?:por\s+favor|porfa|porfavor|xfa|ya|ahora|mismo|de\s+verdad|en\s+serio|urgente|ayuda|ayudame|ayudadme))*\s*$/
 // What follows a condition: "si necesito ayuda urgente, ¿qué hago?".
@@ -168,12 +168,15 @@ function urgentHelpDisposition(clause: string, following: string, rest: string):
   const text = urgentCleanText(clause)
   if (URGENT_QUESTION_START.test(text)) return null
   if (HELP_CALL.test(text)) return HELP_CALL_ORDINARY_NEXT.test(urgentCleanText(following)) || LAUGHTER.test(rest) ? null : 'explicit_current'
+  // An everyday help request does not hide danger wording in the same clause:
+  // "necesito ayuda urgente con mi ex estoy en peligro".
   const helpMatch = URGENT_HELP.exec(text)
-  const match = helpMatch ?? URGENT_DANGER.exec(text)
+  const helpIsOrdinary = Boolean(helpMatch && URGENT_ORDINARY_AFTER.test(text.slice(helpMatch.index + helpMatch[0].length)))
+  const match = helpMatch && !helpIsOrdinary ? helpMatch : URGENT_DANGER.exec(text)
   if (!match) return null
   const before = text.slice(0, match.index)
   const after = text.slice(match.index + match[0].length)
-  const ordinaryAfter = helpMatch ? URGENT_ORDINARY_AFTER.test(after) : DANGER_ORDINARY_AFTER.test(after)
+  const ordinaryAfter = match === helpMatch ? false : DANGER_ORDINARY_AFTER.test(after)
   if (URGENT_NEGATED_BEFORE.test(before) || URGENT_CONDITIONAL_BEFORE.test(before) || ordinaryAfter) return null
   // Accents are gone, so "si" is also "sí". Right before the phrase it reads
   // as "sí" unless a consequence follows: "si necesito ayuda urgente, ¿qué hago?".

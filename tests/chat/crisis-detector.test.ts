@@ -700,6 +700,10 @@ describe('classifyCrisisSignal — immediate help without self-harm wording', ()
     'Sí estoy en peligro ahora mismo',
     'sí necesito ayuda ya, no puedo más',
     'como estoy en peligro necesito ayuda urgente',
+    'Ayuda, con mi pareja no puedo más',
+    'necesito ayuda urgente con mi ex estoy en peligro',
+    'estoy en peligro por mi trabajo, mi jefe me amenaza',
+    'Ayuda, no sé dónde está mi ex',
   ])('treats "%s" as an explicit current signal', text => {
     expect(classifyCrisisSignal(text)).toEqual(urgent)
   })
