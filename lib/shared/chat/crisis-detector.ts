@@ -127,26 +127,45 @@ const DIRECT_EXTRA = new RegExp(String.raw`(?<!no )(?<!nunca )(?<!jamas )(?:\bme
 const DENIAL_EXTRA = new RegExp(String.raw`\b(?:no|nunca|jamas)\s+(?:(?:me\s+)?(?:quiero|voy a|quisiera|pienso|he querido|estoy pensando en)\s+(?:morir(?:me)?|matar(?:me)?|ahorcar(?:me)?|colgar(?:me)?|desaparecer|estar muert[oa]|${DIRECT_METHOD})|tengo ganas de (?:morir(?:me)?|matarme)|pienso en (?:la muerte|morir(?:me)?)|(?:pienso|tengo intencion de|tengo ninguna intencion de)\s+(?:hacerme dan[oó]|cortarme|autolesionarme|suicidarme|matarme|quitarme la vida)|me (?:quiero|voy a) (?:cortar|hacer dan[oó]|quitar la vida)|me (?:he cortado|corte|hago dan[oó]|he hecho dan[oó]|lastimo|quemo))\b`, 'i')
 // First-person requests for immediate help or statements of being in danger
 // now, written without naming self-harm or suicide. The urgent-send notice
-// asks people to say exactly this, so these clauses must count as an explicit
-// current signal ('crisis_other'). Each cue must close its clause so that
-// "necesito ayuda urgente con el informe" or "estoy en peligro de suspender"
-// stay ordinary.
-const URGENT_TAIL = String.raw`(?:\s+(?:por\s+favor|ahora(?:\s+mismo)?|ya))*\s*$`
-const URGENT_HELP = new RegExp(String.raw`(?:^|\b)(?:(?:necesito|me\s+hace\s+falta|pido)\s+(?:una\s+)?ayuda\s+(?:inmediata|urgente|urgentemente|ya|ahora(?:\s+mismo)?)|necesito\s+que\s+me\s+ayuden\s+(?:ya|ahora(?:\s+mismo)?|urgentemente)|(?:estoy|me\s+siento)\s+en\s+peligro|no\s+estoy\s+a\s+salvo|temo\s+por\s+mi\s+(?:vida|seguridad)|^(?:socorro|auxilio))${URGENT_TAIL}`, 'i')
-const URGENT_HELP_NEGATED = /\b(?:no|nunca|jamas|ya\s+no|tampoco)\s+(?:(?:creo\s+que\s+)?(?:necesito|me\s+hace\s+falta|pido)|estoy\s+en\s+peligro|me\s+siento\s+en\s+peligro|temo)\b|\b(?:no\s+se\s+si|no\s+creo\s+que|quizas|quiza|a\s+lo\s+mejor|no\s+estoy\s+segur[oa]\s+de\s+si)\b/i
-type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<CrisisRiskType, null> }
+// asks people to say exactly this, so these phrases count as an explicit
+// current signal ('crisis_other'). They are matched on a copy of the clause
+// with emoji and punctuation removed, so "necesito ayuda urgente 🙏" or
+// "estoy en peligro :(" still count.
+const URGENCY = String.raw`(?:inmediata(?:mente)?|urgente(?:mente)?|ya(?:\s+mismo)?|ahora(?:\s+mismo)?|de\s+inmediato)`
+const URGENT_HELP = new RegExp(String.raw`\b(?:(?:necesito|me\s+hace\s+falta|pido|quiero)\s+(?:una\s+)?ayuda\s+${URGENCY}|necesito\s+que\s+(?:alguien\s+)?me\s+ayude(?:n|s)?\s+${URGENCY}|(?:estoy|me\s+siento)\s+en\s+peligro|no\s+estoy\s+a\s+salvo|(?:temo|tengo\s+miedo)\s+por\s+mi\s+(?:vida|seguridad)|mi\s+vida\s+(?:corre|esta\s+en)\s+peligro)\b`, 'i')
+// A clause that is only a call for help: "¡Socorro!", "ayúdame, por favor".
+const HELP_CALL = /^(?:socorro|auxilio|ayuda|ayudame|ayudadme|que\s+alguien\s+me\s+ayude)(?:\s+(?:por\s+favor|porfa|porfavor|xfa|ya|ahora(?:\s+mismo)?|socorro|auxilio|ayuda|ayudame|ayudadme|urgente|de\s+verdad))*$/
+// What may come right before the phrase and undo it.
+const URGENT_NEGATED_BEFORE = /\b(?:no|nunca|jamas|tampoco|ya\s+no|no\s+se\s+si|no\s+creo\s+que|quizas?|a\s+lo\s+mejor|igual)\s+(?:(?:creo\s+que|que|yo)\s+)?$/
+const URGENT_CONDITIONAL_BEFORE = /\b(?:si|cuando|en\s+caso\s+de(?:\s+que)?|por\s+si(?:\s+acaso)?)\s+(?:(?:alguna\s+vez|algun\s+dia|yo|un\s+dia)\s+)?$/
+const URGENT_REPORTED_BEFORE = /\b(?:dijo|dice|dicen|dijeron|cree|creen|creia|creian|piensa|piensan|conto|cuenta|cuentan|comento|comenta|pregunto|pregunta|escribio|escribe|escriben|grita|grito)\s+(?:que\s+)?(?:yo\s+|el\s+|ella\s+)?$/
+const URGENT_FICTION_OR_PAST_BEFORE = /\b(?:pelicula|serie|cancion|libro|novela|personaje|obra|juego|videojuego|hace\s+anos|el\s+ano\s+pasado|en\s+el\s+pasado|cuando\s+era)\b/
+// What may come right after the phrase and turn it into an everyday request:
+// "ayuda urgente con el informe", "en peligro de suspender".
+const URGENT_ORDINARY_AFTER = /^\s+(?:con|para|sobre|de|del)\s+(?!verdad\b|inmediato\b|una\s+vez\b)/
+const URGENT_QUOTE_TAIL = /^(?:me\s+)?(?:dijo|dice|dicen|conto|cuenta|comento|comenta|pregunto|pregunta|escribio|escribe|grita|grito)\b/
 
-const THIRD_PARTY_LEAD = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|hijo|hija)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta|escribio|escribe)\b/i
-const THIRD_PARTY_TAIL = /^(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta|escribio|escribe)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|hijo|hija|el|ella)\b/i
-
-/** Immediate-help wording with no self-harm or suicide cue in the clause. */
-function urgentHelpClause(clause: string, following: string): ClauseClassification[] {
-  const text = clause.replace(/^[\s"'“”‘’«»¡¿]+|[\s"'“”‘’«»!?]+$/g, '')
-  if (!URGENT_HELP.test(text) || URGENT_HELP_NEGATED.test(text)) return []
-  const reported = THIRD_PARTY_LEAD.test(text) || THIRD_PARTY_TAIL.test(following.replace(/^[\s"'“”‘’«»]+/, ''))
-    || /\b(pelicula|serie|cancion|libro|clase|articulo|dijo|dice|personaje|antes|cuando era|hace anos|el ano pasado|en el pasado)\b/i.test(text)
-  return [{ disposition: reported ? 'contextual' : 'explicit_current', riskType: 'crisis_other' }]
+function urgentCleanText(clause: string): string {
+  return clause.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
+
+/** Own, current immediate-help wording in a clause, or null if none. */
+function urgentHelpDisposition(clause: string, question: boolean, following: string): 'explicit_current' | 'contextual' | null {
+  if (question || /^[\s"'“‘«]*¿/.test(clause)) return null
+  const text = urgentCleanText(clause)
+  if (/^(?:si|cuando|en caso de|por si)\b/.test(text)) return null
+  if (HELP_CALL.test(text)) return /^\s*que\s/.test(following) ? null : 'explicit_current'
+  const match = URGENT_HELP.exec(text)
+  if (!match) return null
+  const before = text.slice(0, match.index)
+  const after = text.slice(match.index + match[0].length)
+  if (URGENT_NEGATED_BEFORE.test(before) || URGENT_CONDITIONAL_BEFORE.test(before) || URGENT_ORDINARY_AFTER.test(after)) return null
+  const quotedThenAttributed = /^[\s"'“‘«]/.test(clause) && URGENT_QUOTE_TAIL.test(urgentCleanText(following))
+  if (URGENT_REPORTED_BEFORE.test(before) || URGENT_FICTION_OR_PAST_BEFORE.test(before) || quotedThenAttributed) return 'contextual'
+  return 'explicit_current'
+}
+
+type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<CrisisRiskType, null> }
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
@@ -221,7 +240,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
   }
   for (const range of quoteRanges.reverse()) normalized = `${normalized.slice(0, range.start)}${range.replacement}${normalized.slice(range.end)}`
   normalized = normalized.trim()
-  const clauses: Array<{ text: string; separator: 'start' | 'and' | 'other' }> = []
+  const clauses: Array<{ text: string; separator: 'start' | 'and' | 'other'; question: boolean }> = []
   const separators = /([;,.!?]|\s+(y|pero|aunque|sin embargo|porque)\s+)/g
   let previousEnd = 0
   let previousSeparator: 'start' | 'and' | 'other' = 'start'
@@ -238,12 +257,12 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     }
     if (quoteCloser) continue
     const clauseText = normalized.slice(previousEnd, separatorIndex).trim()
-    if (clauseText) clauses.push({ text: clauseText, separator: previousSeparator })
+    if (clauseText) clauses.push({ text: clauseText, separator: previousSeparator, question: match[1] === '?' })
     previousEnd = separatorIndex + match[0].length
     previousSeparator = match[2] === 'y' ? 'and' : 'other'
   }
   const lastClause = normalized.slice(previousEnd).trim()
-  if (lastClause) clauses.push({ text: lastClause, separator: previousSeparator })
+  if (lastClause) clauses.push({ text: lastClause, separator: previousSeparator, question: false })
 
   const results = [...quotedContexts, ...clauses.flatMap<ClauseClassification>((item, index) => {
     const previous = clauses[index - 1]?.text ?? ''
@@ -254,7 +273,8 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     if (GROOMING.test(clause)) return []
     const suicide = SUICIDE.test(clause)
     const selfHarm = SELF_HARM.test(clause)
-    if (!suicide && !selfHarm) return urgentHelpClause(clause, clauses[index + 1]?.text ?? '')
+    const urgentHelp = urgentHelpDisposition(clause, item.question, clauses[index + 1]?.text ?? '')
+    if (!suicide && !selfHarm) return urgentHelp ? [{ disposition: urgentHelp, riskType: 'crisis_other' } as ClauseClassification] : []
     const riskType = suicide ? 'suicidal_ideation' : 'self_harm'
     const attributionClause = clause.replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, '')
     const attributionLead = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.exec(attributionClause)
@@ -273,12 +293,21 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
       (currentAction && !/\b(me hice dano hoy)\b/i.test(clause)) ||
       directIntentOrBehavior
     )
-    const disposition = explicit ? 'explicit_current' : (context || past || clearDenial ? 'contextual' : 'ambiguous')
+    const ownUrgentRequest = urgentHelp === 'explicit_current' && !attributedQuote && !attributedBelief && !context && !past && !clearDenial
+    const disposition = explicit || ownUrgentRequest ? 'explicit_current' : (context || past || clearDenial ? 'contextual' : 'ambiguous')
     return [{ disposition, riskType } as ClauseClassification]
   })]
   if (!results.length) return { disposition: 'none', riskType: null }
   const explicit: ClauseClassification | undefined = results.find(result => result.disposition === 'explicit_current' && result.riskType === 'suicidal_ideation')
+    ?? results.find(result => result.disposition === 'explicit_current' && result.riskType === 'self_harm')
     ?? results.find(result => result.disposition === 'explicit_current')
+  // An immediate-help request next to a death wish or self-harm cue keeps
+  // the more specific risk type for the professional.
+  if (explicit?.riskType === 'crisis_other') {
+    const specific = results.find(result => result.disposition === 'ambiguous' && result.riskType === 'suicidal_ideation')
+      ?? results.find(result => result.disposition === 'ambiguous' && result.riskType === 'self_harm')
+    if (specific) return { disposition: 'explicit_current', riskType: specific.riskType }
+  }
   if (explicit) return explicit
   const ambiguous: ClauseClassification | undefined = results.find(result => result.disposition === 'ambiguous')
   if (ambiguous) return ambiguous
