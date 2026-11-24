@@ -6,12 +6,6 @@ import {
   QUESTIONNAIRE_REGISTRY,
 } from '@/lib/shared/questionnaires/registry'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 
 function formatRelative(iso: string | null): string {
   if (!iso) return 'fecha desconocida'
@@ -63,57 +57,52 @@ function buildLongitudinalLine(row: InboxRow): string {
 export function InboxList({ rows }: { rows: InboxRow[] }) {
   if (rows.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardDescription>
-            No hay sesiones cerradas por revisar.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <p className="rounded-2xl border border-dashed border-stone-300 bg-white/60 px-4 py-8 text-center text-sm text-muted-foreground">
+        No hay sesiones cerradas por revisar.
+      </p>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <ul className="divide-y divide-stone-200/80 overflow-hidden rounded-2xl border border-stone-200/80 bg-white">
       {rows.map((row) => {
         const status = assessmentStatusLabel(row.assessmentStatus)
         const riskBadge =
           row.riskState !== 'none' ? RISK_LABEL[row.riskState] : null
         return (
-          <Link
-            key={row.sessionId}
-            href={`/app/clinica/sesion/${row.sessionId}`}
-            className="block transition-opacity hover:opacity-90"
-          >
-            <Card className={row.hasCrisis ? 'border-red-200 bg-red-50' : undefined}>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">
-                      {row.displayName ?? 'Paciente sin nombre'}
-                    </CardTitle>
-                    <CardDescription>
-                      Cerrada {formatRelative(row.closedAt)}
-                    </CardDescription>
-                    <p className="mt-1 text-xs text-slate-600">
-                      {buildLongitudinalLine(row)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {riskBadge && (
-                      <Badge variant={riskBadge.variant}>{riskBadge.label}</Badge>
-                    )}
-                    {row.hasCrisis && (
-                      <Badge variant="destructive">CRISIS</Badge>
-                    )}
-                    <Badge variant={status.variant}>{status.label}</Badge>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
+          <li key={row.sessionId} className={row.hasCrisis ? 'bg-red-50' : undefined}>
+            <Link
+              href={`/app/clinica/sesion/${row.sessionId}`}
+              className={`flex flex-col gap-2 px-4 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${
+                row.hasCrisis ? 'shadow-[inset_4px_0_0_var(--color-red-500)] hover:bg-red-100/60' : 'hover:bg-stone-50'
+              }`}
+            >
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                  <span className="font-semibold text-stone-900">
+                    {row.displayName ?? 'Paciente sin nombre'}
+                  </span>
+                  <span className="text-muted-foreground">
+                    Cerrada {formatRelative(row.closedAt)}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                  {buildLongitudinalLine(row)}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                {riskBadge && (
+                  <Badge variant={riskBadge.variant}>{riskBadge.label}</Badge>
+                )}
+                {row.hasCrisis && (
+                  <Badge variant="destructive">CRISIS</Badge>
+                )}
+                <Badge variant={status.variant}>{status.label}</Badge>
+              </div>
+            </Link>
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }

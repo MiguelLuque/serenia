@@ -1,5 +1,7 @@
 'use client'
 
+import { ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import type { SessionDetail } from '@/lib/server/clinician/session-detail'
@@ -86,7 +88,7 @@ function formatTime(iso: string): string {
 
 function BulletList({ items }: { items: readonly string[] }) {
   if (items.length === 0) {
-    return <p className="text-sm text-slate-600">—</p>
+    return <p className="text-sm text-muted-foreground">—</p>
   }
   return (
     <ul className="list-disc space-y-1 pl-5 text-sm">
@@ -109,8 +111,12 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
 
   return (
     <div className="space-y-6">
+      <Link href="/app" className="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground underline-offset-4 hover:text-stone-900 hover:underline outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+        <ArrowLeft aria-hidden className="size-4" />
+        Bandeja
+      </Link>
       {isCrisis && (
-        <Card className="border-red-300 bg-red-50">
+        <Card className="rounded-2xl border border-red-300 bg-red-50 ring-0">
           <CardHeader>
             <CardTitle className="text-base text-red-900">
               Crisis detectada
@@ -128,9 +134,10 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-xl">
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">Revisión de sesión</p>
+              <h1 className="landing-serif mt-1 text-[1.75rem] leading-tight text-stone-900">
                 {patient?.displayName ?? 'Paciente sin nombre'}
-              </CardTitle>
+              </h1>
               <CardDescription>
                 Sesión abierta {formatDateTime(session.openedAt)}
                 {session.closedAt ? (
@@ -198,15 +205,15 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
         </CardHeader>
         <CardContent>
           {messages.length > 0 && (
-            <details className="rounded-md border bg-slate-50 p-3 text-sm">
+            <details className="rounded-md border bg-muted/60 p-3 text-sm">
               <summary className="cursor-pointer font-medium">
                 Mostrar transcripción completa
               </summary>
               <ol className="mt-3 space-y-3">
                 {messages.map((m) => (
-                  <li key={m.id} className="border-l-2 border-slate-300 pl-3">
-                    <div className="text-xs text-slate-600">
-                      <span className="font-medium text-slate-800">
+                  <li key={m.id} className="border-l-2 border-stone-300 pl-3">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium text-stone-800">
                         {m.role === 'user' ? 'Paciente' : 'Serenia'}
                       </span>
                       {' · '}
@@ -386,7 +393,7 @@ function AssessmentSections({
           {risk.notes && (
             <div>
               <div className="font-medium">Notas</div>
-              <p className="whitespace-pre-wrap text-slate-700">
+              <p className="whitespace-pre-wrap text-stone-700">
                 {risk.notes}
               </p>
             </div>
@@ -403,14 +410,14 @@ function AssessmentSections({
         </CardHeader>
         <CardContent>
           {summary.questionnaires.length === 0 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               Sin cuestionarios completados.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-slate-600">
+                  <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Código</th>
                     <th className="py-2 pr-3 font-medium">Puntuación</th>
                     <th className="py-2 font-medium">Banda</th>
@@ -441,7 +448,7 @@ function AssessmentSections({
                         >
                           <td
                             colSpan={3}
-                            className="pb-3 text-xs text-slate-700"
+                            className="pb-3 text-xs text-stone-700"
                           >
                             <ul className="list-disc space-y-0.5 pl-5">
                               {q.flags.map((f, fi) => (
@@ -506,14 +513,14 @@ function AssessmentSections({
         </CardHeader>
         <CardContent>
           {summary.proposed_tasks.length === 0 ? (
-            <p className="text-sm text-slate-600">—</p>
+            <p className="text-sm text-muted-foreground">—</p>
           ) : (
             <ul className="space-y-2">
               {summary.proposed_tasks.map((task, i) => (
                 <li key={i} className="rounded-md border p-3">
                   <p className="text-sm font-medium">{task.descripcion}</p>
                   {task.nota && (
-                    <p className="mt-1 text-xs text-slate-500">{task.nota}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{task.nota}</p>
                   )}
                 </li>
               ))}
@@ -543,7 +550,7 @@ function AssessmentSections({
                       {TASK_STATUS_LABEL[task.estado] ?? task.estado}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Acordada el{' '}
                     {new Date(task.createdAt).toLocaleDateString('es-ES', {
                       day: 'numeric',
@@ -553,7 +560,7 @@ function AssessmentSections({
                     · Sesión anterior
                   </p>
                   {task.nota && (
-                    <p className="mt-1 text-xs text-slate-600">{task.nota}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{task.nota}</p>
                   )}
                 </li>
               ))}
@@ -596,7 +603,7 @@ function AssessmentSections({
       )}
 
       {/* Resumen para el paciente — muted card para diferenciarlo */}
-      <Card className="bg-slate-50">
+      <Card className="bg-muted/60">
         <CardHeader>
           <CardTitle className="text-base">Resumen para el paciente</CardTitle>
           <CardDescription>
