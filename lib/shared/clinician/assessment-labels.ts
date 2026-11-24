@@ -9,7 +9,9 @@ export type AssessmentStatusLabel = {
 
 /**
  * Map an assessment status (or null when no assessment exists yet) to a
- * Spanish user-facing label and shadcn Badge variant.
+ * Spanish user-facing label and shadcn Badge variant. Red (destructive) is
+ * reserved for states that need attention beyond routine review; pending
+ * review is the normal inbox state, so it stays neutral.
  */
 export function assessmentStatusLabel(
   status: AssessmentStatus | null
@@ -20,7 +22,7 @@ export function assessmentStatusLabel(
   switch (status) {
     case 'draft_ai':
     case 'pending_clinician_review':
-      return { label: 'Sin revisar', variant: 'destructive' }
+      return { label: 'Sin revisar', variant: 'outline' }
     case 'reviewed_confirmed':
     case 'reviewed_modified':
       return { label: 'Revisado', variant: 'secondary' }
