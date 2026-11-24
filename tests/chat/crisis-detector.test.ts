@@ -667,6 +667,21 @@ describe('classifyCrisisSignal — immediate help without self-harm wording', ()
     'Necesito ayuda urgente, me dice mi hermana que os escriba',
     'Estoy en peligro. Dice mi madre que os escriba',
     'No, pero necesito ayuda urgente',
+    'Sí necesito ayuda urgente',
+    'Si necesito ayuda inmediata',
+    'sí estoy en peligro',
+    'si no me ayudáis estoy en peligro',
+    'necesito ayuda urgente??',
+    'estoy en peligro?',
+    'estoy en peligro de muerte',
+    'mi vida esta en peligro de muerte',
+    'necesito ayuda urgente de alguien',
+    'necesito ayuda inmediata de la policía',
+    'necesito ayuda urgente para salir de casa',
+    'necesito ayuda urgente para no hacer una locura',
+    'estoy en peligro por mi ex',
+    'necesito ayuda urgente en casa',
+    'esto no es un juego estoy en peligro',
   ])('treats "%s" as an explicit current signal', text => {
     expect(classifyCrisisSignal(text)).toEqual(urgent)
   })
@@ -692,6 +707,18 @@ describe('classifyCrisisSignal — immediate help without self-harm wording', ()
     'Necesito ayuda urgente para el TFG',
     'no necesito ayuda urgente 🙂',
     'socorro, que examen más difícil',
+    'necesito ayuda ya que no entiendo el ejercicio',
+    'necesito ayuda ahora que lo pienso',
+    'necesito ayuda urgente en matemáticas',
+    'Necesito ayuda urgente a la hora de estudiar',
+    'quiero ayuda ya mismo a organizarme',
+    'estoy en peligro por las deudas',
+    'tengo miedo por mi seguridad laboral',
+    '¡Ayuda! No sé cómo usar la app',
+    'Ayuda porfa, no entiendo el cuestionario',
+    'Socorro, mi jefe me odia jaja',
+    'si necesito ayuda urgente, ¿qué hago?',
+    'cuando necesito ayuda urgente llamo a mi madre',
   ])('does not route "%s"', text => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
   })
@@ -719,6 +746,10 @@ describe('classifyCrisisSignal — immediate help without self-harm wording', ()
     ['me hago daño, necesito ayuda urgente', 'self_harm'],
   ])('keeps the specific risk type in "%s"', (text, riskType) => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'explicit_current', riskType })
+  })
+
+  it('does not turn what someone else believes into an explicit risk type', () => {
+    expect(classifyCrisisSignal('mi amigo cree que quiero morir, necesito ayuda ya')).toEqual({ disposition: 'explicit_current', riskType: 'crisis_other' })
   })
 
   it('counts immediate-help wording as a yes to the safety question', () => {
