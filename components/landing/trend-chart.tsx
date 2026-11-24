@@ -31,7 +31,7 @@ export function TrendChart() {
           <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">PHQ-9</p>
           <p className="mt-0.5 text-sm text-stone-600">Ánimo en las últimas seis semanas</p>
         </div>
-        <p className="text-right text-[11px] text-stone-400">Ejemplo con datos ficticios</p>
+        <p className="text-right text-[11px] font-medium text-stone-600">Ejemplo con datos ficticios</p>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -48,7 +48,7 @@ export function TrendChart() {
               height={y(band.from) - y(band.to + 1)}
               className={i % 2 === 0 ? 'fill-stone-50' : 'fill-white'}
             />
-            <text x={W - PAD.right - 4} y={y(band.to + 1) + 11} textAnchor="end" className="fill-stone-400 text-[8px]">
+            <text x={W - PAD.right - 4} y={y(band.to + 1) + 11} textAnchor="end" className="fill-stone-500 text-[8px]">
               {band.label}
             </text>
           </g>
@@ -82,7 +82,7 @@ export function TrendChart() {
           />
         ))}
         {WEEKS.map((label, i) => (
-          <text key={label} x={x(i)} y={H - 8} textAnchor="middle" className="fill-stone-400 text-[9px]">
+          <text key={label} x={x(i)} y={H - 8} textAnchor="middle" className="fill-stone-500 text-[9px]">
             {label}
           </text>
         ))}

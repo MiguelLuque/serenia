@@ -41,7 +41,7 @@ const STEPS = [
   {
     icon: FileText,
     title: 'Llévalo a tu profesional',
-    body: 'Cada sesión deja un resumen. Los informes preliminares quedan marcados como pendientes de revisión profesional y nunca se presentan como un diagnóstico.',
+    body: 'Cada sesión deja un resumen. Los informes preliminares quedan marcados como pendientes de revisión profesional, sin un plazo garantizado, y nunca se presentan como un diagnóstico.',
   },
 ] as const
 
@@ -68,7 +68,7 @@ const FAQ = [
   },
   {
     q: '¿Quién puede ver lo que escribo?',
-    a: 'Tú ves el resumen de cada sesión. Los informes clínicos internos se reservan al profesional autorizado. Tienes los detalles en la información de privacidad.',
+    a: 'Tú ves el resumen de cada sesión cuando el profesional lo ha revisado y autorizado; no hay un plazo de revisión garantizado. Los informes clínicos internos se reservan al profesional autorizado. Tienes los detalles en la información de privacidad.',
   },
   {
     q: '¿Cómo puedo empezar?',
@@ -203,7 +203,7 @@ export default function HomePage() {
             <Reveal className="max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-wider text-teal-700">Cómo funciona</p>
               <h2 id="como-funciona-titulo" className="landing-serif mt-3 text-4xl leading-tight text-stone-900 sm:text-5xl">
-                Una conversación, un seguimiento y alguien que lo revisa.
+                Una conversación, un seguimiento y un profesional detrás.
               </h2>
             </Reveal>
             <ol className="mt-14 grid gap-5 md:grid-cols-3">
@@ -262,7 +262,7 @@ export default function HomePage() {
               <p className="mt-5 max-w-lg text-lg leading-relaxed text-teal-100/90">
                 El profesional dispone de un panel con los resúmenes de sesión, la evolución de los cuestionarios y las
                 señales de riesgo que la conversación haya detectado. Los informes preliminares los revisa y corrige
-                el profesional: la última palabra es siempre humana.
+                el profesional, sin un plazo de revisión garantizado: la última palabra es siempre humana.
               </p>
             </Reveal>
           </div>

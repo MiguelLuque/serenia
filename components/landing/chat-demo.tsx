@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, FileText } from 'lucide-react'
+import { Check, FileText, Pause, Play } from 'lucide-react'
 
 /**
  * Demostración animada de una sesión. Todo el contenido es ficticio.
@@ -21,10 +21,16 @@ const STEP_DURATIONS = [1400, 1500, 2600, 1600, 1500, 2600, 1700, 1500, 4200]
 export function ChatDemo() {
   const [step, setStep] = useState(FINAL_STEP)
   const [fading, setFading] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [animated, setAnimated] = useState(false)
+  const pausedRef = useRef(false)
+  const resumeRef = useRef<() => void>(() => {})
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- el control de pausa solo existe si hay animación
+    setAnimated(true)
 
     let visible = true
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -41,7 +47,7 @@ export function ChatDemo() {
     if (rootRef.current) observer?.observe(rootRef.current)
 
     function advance() {
-      if (!visible || document.hidden) return
+      if (!visible || document.hidden || pausedRef.current) return
       if (current >= FINAL_STEP) {
         setFading(true)
         timer = setTimeout(() => {
@@ -62,6 +68,8 @@ export function ChatDemo() {
       timer = setTimeout(advance, ms)
     }
 
+    resumeRef.current = () => schedule(600)
+
     function onVisibility() {
       if (!document.hidden && visible) schedule(800)
     }
@@ -74,13 +82,27 @@ export function ChatDemo() {
       clearTimeout(timer)
       observer?.disconnect()
       document.removeEventListener('visibilitychange', onVisibility)
+      delete document.documentElement.dataset.motion
     }
   }, [])
+
+  function togglePause() {
+    const next = !pausedRef.current
+    pausedRef.current = next
+    setPaused(next)
+    if (next) {
+      document.documentElement.dataset.motion = 'paused'
+    } else {
+      delete document.documentElement.dataset.motion
+      resumeRef.current()
+    }
+  }
 
   const shown = (at: number) => step >= at
   const typing = step === 1 || step === 4
 
   return (
+    <div className="w-full max-w-md">
     <div
       ref={rootRef}
       className="relative w-full max-w-md rounded-[2rem] border border-white/70 bg-white/80 p-2 shadow-[0_30px_80px_-30px_rgba(15,80,75,0.45)] ring-1 ring-stone-900/5 backdrop-blur-xl"
@@ -119,7 +141,7 @@ export function ChatDemo() {
           <div className={`chat-item ${shown(6) ? 'is-shown' : ''} rounded-2xl border border-teal-100 bg-white p-3.5 shadow-sm`}>
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">GAD-7 · 1 de 7</p>
-              <p className="text-[11px] text-stone-400">Últimas 2 semanas</p>
+              <p className="text-[11px] text-stone-500">Últimas 2 semanas</p>
             </div>
             <p className="mt-1.5 text-[13px] font-medium text-stone-800">Sentirse nervioso/a, ansioso/a o muy alterado/a</p>
             <div className="mt-2.5 grid grid-cols-2 gap-1.5">
@@ -152,6 +174,18 @@ export function ChatDemo() {
           </div>
         </div>
       </div>
+    </div>
+    {animated && (
+      <button
+        type="button"
+        onClick={togglePause}
+        aria-pressed={paused}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-white/70 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-teal-700"
+      >
+        {paused ? <Play aria-hidden className="size-3.5" /> : <Pause aria-hidden className="size-3.5" />}
+        {paused ? 'Reanudar animaciones' : 'Pausar animaciones'}
+      </button>
+    )}
     </div>
   )
 }

@@ -156,6 +156,16 @@
 .faq summary svg { transition: transform 0.25s ease; }
 .faq[open] summary svg { transform: rotate(180deg); }
 
+/* Pausa manual desde la demo del chat (WCAG 2.2.2) */
+[data-motion='paused'] .landing-aurora span,
+[data-motion='paused'] .landing-float,
+[data-motion='paused'] .landing-float-late,
+[data-motion='paused'] .typing-dot,
+[data-motion='paused'] .breath-ring,
+[data-motion='paused'] .breath-label > span {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-aurora span,
   .landing-enter,

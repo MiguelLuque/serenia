@@ -38,10 +38,17 @@ describe('public landing page', () => {
     expect(closed).toContain('solo por invitación')
   })
 
+  it('does not promise a review deadline for the patient summary', () => {
+    const text = renderToStaticMarkup(HomePage()).replace(/<[^>]+>/g, ' ')
+
+    expect(text).toContain('no hay un plazo de revisión garantizado')
+    expect(text).toContain('cuando el profesional lo ha revisado y autorizado')
+  })
+
   it('does not make diagnostic or curative claims', () => {
     const text = renderToStaticMarkup(HomePage()).replace(/<[^>]+>/g, ' ').toLowerCase()
 
-    for (const claim of ['cura ', 'curar', 'garantiza', 'sustituye a tu psicólogo', 'diagnóstico preciso', '100%']) {
+    for (const claim of ['cura ', 'curar', 'garantizamos', 'te garantiza', 'sustituye a tu psicólogo', 'diagnóstico preciso', '100%']) {
       expect(text).not.toContain(claim)
     }
   })
