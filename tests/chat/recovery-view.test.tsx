@@ -565,7 +565,10 @@ it('stopping an actual outstanding request keeps the urgent exit open and preser
  await screen.findByText(/Esperando respuesta/)
  fireEvent.change(input, { target: { value: 'Voy a matarme' } })
  fireEvent.click(screen.getByRole('button', { name: 'Interrumpir espera y enviar una señal urgente' }))
- await waitFor(() => expect(screen.getByText(/Escribe una señal nueva de peligro/)).toBeTruthy())
+ await waitFor(() => expect(screen.getByText(/Escribe con claridad que necesitas ayuda ahora/)).toBeTruthy())
+ const urgentNotice = screen.getByText(/Escribe con claridad que necesitas ayuda ahora/).textContent ?? ''
+ expect(urgentNotice).toMatch(/ayuda inmediata/)
+ expect(urgentNotice).not.toMatch(/hacerte daño|quitarte la vida|suicid|en crisis/i)
  expect(input.value).toBe('Voy a matarme')
  expect((screen.getByRole('button', { name: 'Enviar' }) as HTMLButtonElement).disabled).toBe(false)
 })

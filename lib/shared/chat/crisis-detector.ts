@@ -125,7 +125,28 @@ const GROOMING = /\b(?:me estoy cortando|cortarme|me corto|me he cortado|me cort
 const DIRECT_METHOD = String.raw`matarme|quitarme la vida|acabar con mi vida|terminar con mi vida|ahorcarme|colgarme|quitarme de en medio|tomarme (?:todas las|todas mis|un bote de|una caja de) pastillas|pegarme un tiro|${JUMP}`
 const DIRECT_EXTRA = new RegExp(String.raw`(?<!no )(?<!nunca )(?<!jamas )(?:\bme (?:quiero|voy a) (?:matar|ahorcar|colgar|quitar la vida|quitar de en medio|pegar un tiro|hacer dan[oó]|cortar las venas|(?:tirar|lanzar|arrojar) (?:de|del|desde|por|a|al) ${PLACE}|tomar (?:todas las|todas mis|un bote de|una caja de) pastillas)\b|\bme voy a cortar\b|${PILLS_TAKEN}|\b(?:quiero|voy a) (?:${DIRECT_METHOD})\b|\btengo un plan para (?:${DIRECT_METHOD})\b|\bkill myself\b)`, 'i')
 const DENIAL_EXTRA = new RegExp(String.raw`\b(?:no|nunca|jamas)\s+(?:(?:me\s+)?(?:quiero|voy a|quisiera|pienso|he querido|estoy pensando en)\s+(?:morir(?:me)?|matar(?:me)?|ahorcar(?:me)?|colgar(?:me)?|desaparecer|estar muert[oa]|${DIRECT_METHOD})|tengo ganas de (?:morir(?:me)?|matarme)|pienso en (?:la muerte|morir(?:me)?)|(?:pienso|tengo intencion de|tengo ninguna intencion de)\s+(?:hacerme dan[oó]|cortarme|autolesionarme|suicidarme|matarme|quitarme la vida)|me (?:quiero|voy a) (?:cortar|hacer dan[oó]|quitar la vida)|me (?:he cortado|corte|hago dan[oó]|he hecho dan[oó]|lastimo|quemo))\b`, 'i')
+// First-person requests for immediate help or statements of being in danger
+// now, written without naming self-harm or suicide. The urgent-send notice
+// asks people to say exactly this, so these clauses must count as an explicit
+// current signal ('crisis_other'). Each cue must close its clause so that
+// "necesito ayuda urgente con el informe" or "estoy en peligro de suspender"
+// stay ordinary.
+const URGENT_TAIL = String.raw`(?:\s+(?:por\s+favor|ahora(?:\s+mismo)?|ya))*\s*$`
+const URGENT_HELP = new RegExp(String.raw`(?:^|\b)(?:(?:necesito|me\s+hace\s+falta|pido)\s+(?:una\s+)?ayuda\s+(?:inmediata|urgente|urgentemente|ya|ahora(?:\s+mismo)?)|necesito\s+que\s+me\s+ayuden\s+(?:ya|ahora(?:\s+mismo)?|urgentemente)|(?:estoy|me\s+siento)\s+en\s+peligro|no\s+estoy\s+a\s+salvo|temo\s+por\s+mi\s+(?:vida|seguridad)|^(?:socorro|auxilio))${URGENT_TAIL}`, 'i')
+const URGENT_HELP_NEGATED = /\b(?:no|nunca|jamas|ya\s+no|tampoco)\s+(?:(?:creo\s+que\s+)?(?:necesito|me\s+hace\s+falta|pido)|estoy\s+en\s+peligro|me\s+siento\s+en\s+peligro|temo)\b|\b(?:no\s+se\s+si|no\s+creo\s+que|quizas|quiza|a\s+lo\s+mejor|no\s+estoy\s+segur[oa]\s+de\s+si)\b/i
 type ClauseClassification = { disposition: CrisisDisposition; riskType: Exclude<CrisisRiskType, null> }
+
+const THIRD_PARTY_LEAD = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|hijo|hija)\s+(?:me\s+)?(?:dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta|escribio|escribe)\b/i
+const THIRD_PARTY_TAIL = /^(?:me\s+)?(?:dijo|dice|conto|cuenta|comento|comenta|pregunto|pregunta|escribio|escribe)\s+(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana|hijo|hija|el|ella)\b/i
+
+/** Immediate-help wording with no self-harm or suicide cue in the clause. */
+function urgentHelpClause(clause: string, following: string): ClauseClassification[] {
+  const text = clause.replace(/^[\s"'“”‘’«»¡¿]+|[\s"'“”‘’«»!?]+$/g, '')
+  if (!URGENT_HELP.test(text) || URGENT_HELP_NEGATED.test(text)) return []
+  const reported = THIRD_PARTY_LEAD.test(text) || THIRD_PARTY_TAIL.test(following.replace(/^[\s"'“”‘’«»]+/, ''))
+    || /\b(pelicula|serie|cancion|libro|clase|articulo|dijo|dice|personaje|antes|cuando era|hace anos|el ano pasado|en el pasado)\b/i.test(text)
+  return [{ disposition: reported ? 'contextual' : 'explicit_current', riskType: 'crisis_other' }]
+}
 
 /** Conversation routing heuristic only; this does not estimate clinical severity or diagnose. */
 export function classifyCrisisSignal(text: string): CrisisSignalClassification {
@@ -233,7 +254,7 @@ export function classifyCrisisSignal(text: string): CrisisSignalClassification {
     if (GROOMING.test(clause)) return []
     const suicide = SUICIDE.test(clause)
     const selfHarm = SELF_HARM.test(clause)
-    if (!suicide && !selfHarm) return []
+    if (!suicide && !selfHarm) return urgentHelpClause(clause, clauses[index + 1]?.text ?? '')
     const riskType = suicide ? 'suicidal_ideation' : 'self_harm'
     const attributionClause = clause.replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, '')
     const attributionLead = /^(?:(?:mi|un|una|el|la)\s+)?(?:amigo|amiga|pareja|companero|companera|madre|padre|hermano|hermana)\s+(?:me\s+)?(dijo|dice|conto|cuenta|cree|piensa|comento|comenta|pregunto|pregunta)\b/i.exec(attributionClause)

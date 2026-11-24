@@ -622,3 +622,58 @@ describe('classifySafetyClarificationReply', () => {
     expect(classifySafetyClarificationReply('Quiero suicidarme')).not.toBe('skip')
   })
 })
+
+describe('classifyCrisisSignal — immediate help without self-harm wording', () => {
+  const urgent = { disposition: 'explicit_current', riskType: 'crisis_other' }
+
+  it.each([
+    'Necesito ayuda inmediata',
+    'necesito ayuda urgente, por favor',
+    'Necesito ayuda ya!',
+    'necesito ayuda ahora mismo',
+    'Me hace falta ayuda urgente',
+    'necesito que me ayuden ya',
+    'Estoy en peligro',
+    'creo que estoy en peligro ahora mismo',
+    'me siento en peligro',
+    'No estoy a salvo',
+    'temo por mi vida',
+    '¡Socorro!',
+    'No puedo más y necesito ayuda inmediata',
+    'Hola. Necesito ayuda urgente.',
+  ])('treats "%s" as an explicit current signal', text => {
+    expect(classifyCrisisSignal(text)).toEqual(urgent)
+  })
+
+  it.each([
+    'No necesito ayuda urgente, solo hablar',
+    'ya no necesito ayuda inmediata',
+    'no estoy en peligro',
+    'No me siento en peligro',
+    'No sé si necesito ayuda urgente',
+    'quizás necesito ayuda urgente',
+    'Necesito ayuda urgente con el informe del trabajo',
+    'estoy en peligro de suspender el examen',
+    'mi hermana está en peligro',
+    'necesito ayuda para organizarme',
+    'hoy he pedido ayuda en el trabajo',
+  ])('does not route "%s"', text => {
+    expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
+  })
+
+  it.each([
+    'Mi amiga me dijo que necesito ayuda urgente',
+    '"Estoy en peligro", dice mi hermana',
+    'en la película el personaje grita «estoy en peligro»',
+  ])('keeps reported or fictional wording "%s" contextual', text => {
+    expect(classifyCrisisSignal(text).disposition).not.toBe('explicit_current')
+  })
+
+  it('still prefers a suicidal signal in the same message', () => {
+    expect(classifyCrisisSignal('Necesito ayuda inmediata, quiero matarme')).toEqual({ disposition: 'explicit_current', riskType: 'suicidal_ideation' })
+  })
+
+  it('counts immediate-help wording as a yes to the safety question', () => {
+    expect(classifySafetyClarificationReply('necesito ayuda urgente')).toBe('affirmative')
+  })
+})
