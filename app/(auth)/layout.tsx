@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { brandSerif } from '@/app/fonts'
-import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
+import { UrgentHelpText } from '@/components/shared/urgent-help'
 import '@/app/landing.css'
 
 /**
@@ -38,15 +38,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <p className="max-w-md text-sm leading-relaxed text-teal-100/70">
-          Serenia no es un servicio de urgencias. Si piensas en hacerte daño, llama a la{' '}
-          <a className="font-medium text-white underline underline-offset-2" href={SAFETY_RESOURCES.suicide.href}>
-            {SAFETY_RESOURCES.suicide.name}
-          </a>{' '}
-          (gratuita, 24 horas). En peligro inmediato, al{' '}
-          <a className="font-medium text-white underline underline-offset-2" href={SAFETY_RESOURCES.emergency.href}>
-            {SAFETY_RESOURCES.emergency.phone}
-          </a>
-          .
+          <UrgentHelpText linkClassName="font-medium text-white underline underline-offset-2" />
         </p>
       </aside>
 
@@ -74,15 +66,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         <footer className="space-y-4 px-5 pb-8 text-xs leading-relaxed text-stone-500 sm:px-8">
           <p className="lg:hidden">
-            Serenia no es un servicio de urgencias. Si piensas en hacerte daño, llama a la{' '}
-            <a className="font-medium text-stone-700 underline underline-offset-2" href={SAFETY_RESOURCES.suicide.href}>
-              {SAFETY_RESOURCES.suicide.name}
-            </a>{' '}
-            (gratuita, 24 horas). En peligro inmediato, al{' '}
-            <a className="font-medium text-stone-700 underline underline-offset-2" href={SAFETY_RESOURCES.emergency.href}>
-              {SAFETY_RESOURCES.emergency.phone}
-            </a>
-            .
+            <UrgentHelpText linkClassName="font-medium text-stone-700 underline underline-offset-2" />
           </p>
           <nav aria-label="Legal" className="flex justify-center gap-5 lg:justify-end">
             <Link className="hover:text-stone-800" href="/privacidad">Privacidad</Link>
