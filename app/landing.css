@@ -120,15 +120,16 @@
   inset: 0;
   border-radius: 9999px;
   background: radial-gradient(circle at 35% 30%, rgba(204, 251, 241, 0.95), rgba(45, 212, 191, 0.55) 55%, rgba(15, 118, 110, 0.25));
-  animation: breathe 10s ease-in-out infinite;
+  /* Seis respiraciones (1 min) y se detiene: no compite con la lectura. */
+  animation: breathe 10s ease-in-out 6;
 }
 .breath-ring:nth-child(2) {
   background: none;
   border: 1px solid rgba(153, 246, 228, 0.35);
-  animation: breathe-halo 10s ease-in-out infinite;
+  animation: breathe-halo 10s ease-in-out 6;
 }
 .breath-label { position: relative; display: grid; }
-.breath-label > span { grid-area: 1 / 1; text-align: center; animation: breath-in 10s ease-in-out infinite; }
+.breath-label > span { grid-area: 1 / 1; text-align: center; animation: breath-in 10s ease-in-out 6; }
 .breath-label > span + span { animation-name: breath-out; }
 @keyframes breathe {
   0%, 100% { transform: scale(0.62); }

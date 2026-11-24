@@ -179,7 +179,6 @@ export function ChatDemo() {
       <button
         type="button"
         onClick={togglePause}
-        aria-pressed={paused}
         className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-white/70 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-teal-700"
       >
         {paused ? <Play aria-hidden className="size-3.5" /> : <Pause aria-hidden className="size-3.5" />}

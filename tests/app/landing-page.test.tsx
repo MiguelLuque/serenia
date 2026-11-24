@@ -48,8 +48,10 @@ describe('public landing page', () => {
   it('does not make diagnostic or curative claims', () => {
     const text = renderToStaticMarkup(HomePage()).replace(/<[^>]+>/g, ' ').toLowerCase()
 
-    for (const claim of ['cura ', 'curar', 'garantizamos', 'te garantiza', 'sustituye a tu psicólogo', 'diagnóstico preciso', '100%']) {
+    for (const claim of ['cura ', 'curar', 'garantizamos', 'sustituye a tu psicólogo', 'diagnóstico preciso', '100%']) {
       expect(text).not.toContain(claim)
     }
+    // «garantiza» como palabra suelta; «sin plazo garantizado» sí está permitido.
+    expect(text).not.toMatch(/\bgarantiza\b/)
   })
 })
