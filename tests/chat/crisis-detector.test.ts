@@ -682,6 +682,24 @@ describe('classifyCrisisSignal — immediate help without self-harm wording', ()
     'estoy en peligro por mi ex',
     'necesito ayuda urgente en casa',
     'esto no es un juego estoy en peligro',
+    'estoy en peligro en mi piso, mi ex está aquí',
+    'me siento en peligro en mi propia casa',
+    'estoy en peligro en el coche',
+    'no estoy a salvo en el piso',
+    'temo por mi vida en esta casa',
+    'estoy en peligro por él',
+    'estoy en peligro por un hombre que me sigue',
+    'estoy en peligro por lo que me puedo hacer',
+    'Ayuda, no sé qué hacer',
+    '¡Ayuda! No sé qué hacer, estoy fatal',
+    'Ayuda, no sé a quién acudir',
+    '¡Socorro, que me pegan!',
+    'Ayuda, que viene mi ex',
+    'Sí necesito ayuda urgente, por favor',
+    'sí necesito ayuda urgente porfa',
+    'Sí estoy en peligro ahora mismo',
+    'sí necesito ayuda ya, no puedo más',
+    'como estoy en peligro necesito ayuda urgente',
   ])('treats "%s" as an explicit current signal', text => {
     expect(classifyCrisisSignal(text)).toEqual(urgent)
   })
@@ -719,6 +737,9 @@ describe('classifyCrisisSignal — immediate help without self-harm wording', ()
     'Socorro, mi jefe me odia jaja',
     'si necesito ayuda urgente, ¿qué hago?',
     'cuando necesito ayuda urgente llamo a mi madre',
+    'si necesito ayuda urgente llamo a mi madre',
+    'estoy en peligro de perder el trabajo',
+    'como hago si estoy en peligro',
   ])('does not route "%s"', text => {
     expect(classifyCrisisSignal(text)).toEqual({ disposition: 'none', riskType: null })
   })
