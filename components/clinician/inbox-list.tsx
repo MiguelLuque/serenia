@@ -74,7 +74,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
             <Link
               href={`/app/clinica/sesion/${row.sessionId}`}
               className={`flex flex-col gap-2 px-4 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${
-                row.hasCrisis ? 'border-l-4 border-red-500 hover:bg-red-100/60' : 'hover:bg-stone-50'
+                row.hasCrisis ? 'shadow-[inset_4px_0_0_var(--color-red-500)] hover:bg-red-100/60' : 'hover:bg-stone-50'
               }`}
             >
               <div className="min-w-0">

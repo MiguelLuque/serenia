@@ -36,8 +36,8 @@ export default async function PatientsIndexPage() {
                 href={`/app/clinica/paciente/${p.userId}`}
                 className="flex items-center justify-between gap-3 px-4 py-3 text-sm outline-none transition-colors hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <div>
-                  <div className="font-semibold text-stone-900">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-stone-900">
                     {p.displayName ?? 'Paciente sin nombre'}
                   </div>
                   <div className="text-muted-foreground">
@@ -47,7 +47,7 @@ export default async function PatientsIndexPage() {
                       : 'sesiones cerradas'}
                   </div>
                 </div>
-                <div className="text-right text-muted-foreground">
+                <div className="shrink-0 text-right text-muted-foreground">
                   <div className="text-xs uppercase tracking-wide">
                     Última sesión
                   </div>

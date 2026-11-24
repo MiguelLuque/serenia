@@ -123,17 +123,17 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
     try { openRiskSignals = await getOpenSessionRiskSignals(supabase) }
     catch { openRiskUnavailable = true; console.error('[inbox] open-session risk signals unavailable') }
     const tabClass = (active: boolean) =>
-      `inline-flex min-h-9 items-center rounded-full px-4 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+      `inline-flex min-h-11 sm:min-h-9 items-center rounded-full px-4 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
         active ? 'bg-white text-primary shadow-sm ring-1 ring-stone-900/5' : 'text-muted-foreground hover:text-stone-900'
       }`
     const pagerClass =
-      'inline-flex min-h-9 items-center rounded-full border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 hover:bg-stone-50 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+      'inline-flex min-h-11 sm:min-h-9 items-center rounded-full border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 hover:bg-stone-50 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
     return (
       <div className="space-y-6">
         <PageHeader
           eyebrow="Panel clínico"
           title="Bandeja"
-          description="Sesiones cerradas pendientes de revisión."
+          description={pendingOnly ? "Sesiones cerradas pendientes de revisión." : "Todas las sesiones cerradas."}
         />
         <OpenRiskSignals signals={openRiskSignals} />
         {openRiskUnavailable && <p role="alert" className="text-sm text-red-800">No se pudieron comprobar las señales de riesgo de sesiones abiertas. Recarga para reintentar.</p>}
