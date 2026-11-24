@@ -1,0 +1,192 @@
+/* Estilos propios de la landing pública. Todo el movimiento se desactiva con
+   prefers-reduced-motion y nada depende de JS para ser legible. */
+
+.landing-serif {
+  font-family: var(--font-landing-serif), ui-serif, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Fondo del hero: manchas de color que respiran muy despacio ---- */
+.landing-aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.landing-aurora span {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.landing-aurora span:nth-child(1) {
+  width: 38rem; height: 38rem; left: -10rem; top: -14rem;
+  background: radial-gradient(circle, #99f6e4 0%, transparent 70%);
+  animation: aurora-a 22s ease-in-out infinite alternate;
+}
+.landing-aurora span:nth-child(2) {
+  width: 32rem; height: 32rem; right: -8rem; top: 4rem;
+  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
+  opacity: 0.4;
+  animation: aurora-b 26s ease-in-out infinite alternate;
+}
+.landing-aurora span:nth-child(3) {
+  width: 30rem; height: 30rem; left: 30%; bottom: -16rem;
+  background: radial-gradient(circle, #c7d2fe 0%, transparent 70%);
+  opacity: 0.35;
+  animation: aurora-c 30s ease-in-out infinite alternate;
+}
+@keyframes aurora-a { to { transform: translate3d(6rem, 4rem, 0) scale(1.1); } }
+@keyframes aurora-b { to { transform: translate3d(-5rem, 3rem, 0) scale(0.92); } }
+@keyframes aurora-c { to { transform: translate3d(-4rem, -3rem, 0) scale(1.15); } }
+
+/* ---- Entrada del hero al cargar ---- */
+.landing-enter {
+  animation: landing-enter 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+@keyframes landing-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- Aparición al hacer scroll (ver components/landing/reveal.tsx) ---- */
+.reveal {
+  transition:
+    opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal[data-reveal='pending'] {
+  opacity: 0;
+  transform: translateY(22px);
+}
+
+/* ---- Demo del chat ---- */
+.chat-item:not(.is-shown) { display: none; }
+.chat-item.is-shown { animation: chat-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.typing-dot {
+  width: 6px; height: 6px; border-radius: 9999px;
+  background: #a8a29e;
+  animation: typing 1.2s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ---- Tarjetas flotantes alrededor de la demo ---- */
+.landing-float { animation: float 7s ease-in-out infinite; }
+.landing-float-late { animation: float 8s ease-in-out -3s infinite; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* ---- Orbe de marca ---- */
+.landing-orb-mini {
+  background: radial-gradient(circle at 30% 30%, #ccfbf1, #2dd4bf 45%, #0f766e 100%);
+}
+
+/* ---- Gráfico de evolución: se dibuja al revelarse ---- */
+.trend-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.trend-area { opacity: 1; }
+[data-reveal='shown'] .trend-line { animation: draw 1.6s cubic-bezier(0.4, 0, 0.2, 1) both; }
+[data-reveal='shown'] .trend-area { animation: fade 1.2s ease-out 0.7s both; }
+[data-reveal='shown'] .trend-dot { animation: pop 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) both; transform-box: fill-box; transform-origin: center; }
+[data-reveal='pending'] .trend-line { stroke-dashoffset: 1; }
+[data-reveal='pending'] .trend-area,
+[data-reveal='pending'] .trend-dot { opacity: 0; }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: none; } }
+
+/* ---- Respiración guiada (decorativa) ---- */
+.breath {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.breath-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, rgba(204, 251, 241, 0.95), rgba(45, 212, 191, 0.55) 55%, rgba(15, 118, 110, 0.25));
+  /* Seis respiraciones (1 min) y se detiene: no compite con la lectura. */
+  animation: breathe 10s ease-in-out 6;
+}
+.breath-ring:nth-child(2) {
+  background: none;
+  border: 1px solid rgba(153, 246, 228, 0.35);
+  animation: breathe-halo 10s ease-in-out 6;
+}
+.breath-label { position: relative; display: grid; }
+.breath-label > span { grid-area: 1 / 1; text-align: center; animation: breath-in 10s ease-in-out 6; }
+.breath-label > span + span { animation-name: breath-out; }
+@keyframes breathe {
+  0%, 100% { transform: scale(0.62); }
+  40%, 50% { transform: scale(1); }
+}
+@keyframes breathe-halo {
+  0%, 100% { transform: scale(0.7); opacity: 0; }
+  45% { transform: scale(1.18); opacity: 1; }
+  60% { opacity: 0; }
+}
+@keyframes breath-in {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes breath-out {
+  0%, 45% { opacity: 0; }
+  50%, 95% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---- FAQ ---- */
+.faq summary { list-style: none; cursor: pointer; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary svg { transition: transform 0.25s ease; }
+.faq[open] summary svg { transform: rotate(180deg); }
+
+/* Pausa manual desde la demo del chat (WCAG 2.2.2) */
+[data-motion='paused'] .landing-aurora span,
+[data-motion='paused'] .landing-float,
+[data-motion='paused'] .landing-float-late,
+[data-motion='paused'] .typing-dot,
+[data-motion='paused'] .breath-ring,
+[data-motion='paused'] .breath-label > span {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-aurora span,
+  .landing-enter,
+  .landing-float,
+  .landing-float-late,
+  .chat-item.is-shown,
+  .typing-dot,
+  .breath-ring,
+  .breath-label > span,
+  [data-reveal] .trend-line,
+  [data-reveal] .trend-area,
+  [data-reveal] .trend-dot {
+    animation: none !important;
+  }
+  .reveal { transition: none; }
+  .breath-ring { transform: scale(0.85); }
+  .breath-label > span + span { opacity: 0; }
+}
+
+/* ---- Variante oscura del fondo (panel de marca de las páginas de acceso) ---- */
+.landing-aurora--dark span { opacity: 0.22; }
+.landing-aurora--dark span:nth-child(2) { opacity: 0.12; }
+.landing-aurora--dark span:nth-child(3) { opacity: 0.18; }
