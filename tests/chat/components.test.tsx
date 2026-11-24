@@ -54,3 +54,12 @@ it('questionnaire server errors preserve selections for the identical submission
  fireEvent.click(screen.getByRole('button',{name:'Enviar'})); await screen.findByRole('status')
  expect(fetch.mock.calls[1][1].body).toBe(fetch.mock.calls[0][1].body)
 })
+
+it('moves focus to the next prompt only after advancing, and labels the options by the prompt', () => {
+  render(<QuestionnaireCard instanceId="f" definition={{ code: 'PHQ9', name: 'PHQ-9' }} items={items.slice(0, 2)} />)
+  const first = screen.getByText('Pregunta clínica 1')
+  expect(document.activeElement).not.toBe(first)
+  expect(screen.getByRole('radiogroup', { name: 'Pregunta clínica 1' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('radio', { name: 'No' })); fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+  expect(document.activeElement).toBe(screen.getByText('Pregunta clínica 2'))
+})

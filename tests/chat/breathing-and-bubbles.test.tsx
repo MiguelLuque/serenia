@@ -17,6 +17,15 @@ it('breathing exercise only starts when asked and can be stopped', () => {
   expect(container.querySelector('.breath-ring')).toBeNull()
 })
 
+it('with reduced motion the exercise gives a text cadence instead of relying on the circle', () => {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia
+  render(<BreathingExercise />)
+  fireEvent.click(screen.getByRole('button', { name: 'Respirar un minuto' }))
+  expect(screen.getByRole('status').textContent).toMatch(/contando hasta cuatro/)
+  window.matchMedia = original
+})
+
 it('typing indicator is decorative (the chat status line carries the accessible state)', () => {
   const { container } = render(<TypingBubble />)
   expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true')

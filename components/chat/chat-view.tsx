@@ -757,7 +757,7 @@ export function ChatView({
         </div>
         <div className="flex items-center gap-3">
           {isEnding && !isExpired && (
-            <span className="hidden text-xs font-medium sm:inline">Queda poco tiempo.</span>
+            <span className="sr-only text-xs font-medium sm:not-sr-only">Queda poco tiempo.</span>
           )}
           {!isClosed && (
               <button
