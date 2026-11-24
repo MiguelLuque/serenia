@@ -28,8 +28,8 @@ const pages = {
 describe('fixed urgent-help notices', () => {
   it.each(Object.entries(pages))('%s keeps 024 and 112 reachable', (_name, render) => {
     const html = render()
-    expect(html).toContain('024')
-    expect(html).toContain('112')
+    expect(html).toContain('href="tel:024"')
+    expect(html).toContain('href="tel:112"')
   })
 
   it.each(Object.entries(pages))('%s talks about immediate help, not self-harm', (_name, render) => {

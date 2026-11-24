@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: '¿Qué pasa si estoy pasando por un momento muy difícil?',
-    a: `Si en la conversación notamos que lo estás pasando especialmente mal, Serenia te mostrará recursos de ayuda inmediata y lo dejará señalado para tu profesional. Pero no es un servicio de urgencias: ${URGENT_HELP_SENTENCE}`,
+    a: `Si en la conversación aparecen señales de que necesitas ayuda inmediata, Serenia te mostrará recursos de ayuda y lo dejará señalado para tu profesional. Pero no es un servicio de urgencias: ${URGENT_HELP_SENTENCE}`,
   },
   {
     q: '¿Quién puede ver lo que escribo?',
