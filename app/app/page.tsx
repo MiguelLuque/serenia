@@ -172,6 +172,26 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
   }
 
   const name = patientDisplayName(profile)
+  const lastClosedForCrisis = lastClosed?.closureReason === 'crisis_detected'
+  const newSessionCard = (
+    <Card className={`${brandCardClass} relative overflow-hidden`}>
+      <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[radial-gradient(circle,#ccfbf1_0%,transparent_70%)] opacity-70" />
+      <CardHeader className="relative gap-1.5 sm:px-6 sm:pt-2">
+        <div className="flex items-center gap-3">
+          <BrandOrb className="size-9" />
+          <CardTitle className="text-lg">Empieza una sesión nueva</CardTitle>
+        </div>
+        <CardDescription className="mt-1 max-w-xl leading-relaxed">
+          Las sesiones duran hasta 60 minutos. Si pasan 30 minutos sin actividad, la sesión puede cerrarse.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="relative sm:px-6 sm:pb-2">
+        <form action={startSessionAction}>
+          <Button type="submit" className={brandPrimaryButtonClass}>Iniciar nueva sesión</Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <div className="space-y-8">
@@ -220,25 +240,9 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
             </Card>
           ) : null}
 
-          <Card className={`${brandCardClass} relative overflow-hidden`}>
-            <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[radial-gradient(circle,#ccfbf1_0%,transparent_70%)] opacity-70" />
-            <CardHeader className="relative gap-1.5 sm:px-6 sm:pt-2">
-              <div className="flex items-center gap-3">
-                <BrandOrb className="size-9" />
-                <CardTitle className="text-lg">Empieza una sesión nueva</CardTitle>
-              </div>
-              <CardDescription className="mt-1 max-w-xl leading-relaxed">
-                Las sesiones duran hasta 60 minutos. Si pasan 30 minutos sin actividad, la sesión puede cerrarse.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative sm:px-6 sm:pb-2">
-              <form action={startSessionAction}>
-                <Button type="submit" className={brandPrimaryButtonClass}>Iniciar nueva sesión</Button>
-              </form>
-            </CardContent>
-          </Card>
+          {!lastClosedForCrisis && newSessionCard}
 
-          {lastClosed?.report?.state === 'available' ? (
+          {lastClosed?.report?.state === 'available' && !lastClosedForCrisis ? (
             <Card className={brandCardClass}>
               <CardHeader>
                 <CardTitle>Resumen de tu última sesión</CardTitle>
@@ -255,6 +259,9 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
           {openTasks.length > 0 || lastClosed !== null ? (
             <OpenAgreementsCard tasks={openTasks} />
           ) : null}
+
+          {/* Tras un cierre por crisis el aviso de seguridad manda: la nueva sesión va al final. */}
+          {lastClosedForCrisis && newSessionCard}
         </>
       )}
     </div>

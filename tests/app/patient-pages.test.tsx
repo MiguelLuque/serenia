@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const state = vi.hoisted(() => ({ status: 'rejected', rpcError: false, role: 'patient', hasMore: true }))
+const state = vi.hoisted(() => ({ status: 'rejected', rpcError: false, role: 'patient', hasMore: true, crisis: false }))
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: async () => ({
   auth: { getUser: async () => ({ data: { user: { id: 'patient' } }, error: null }) },
   rpc: async (name: string) => name === 'get_clinician_inbox_page' ? ({ data: { rows: [], hasMore: state.hasMore }, error: state.rpcError ? Error('offline') : null }) : ({ data: [{ sessionId: 'closed', state: state.status === 'reviewed_modified' ? 'available' : state.status === 'rejected' ? 'rejected' : 'unavailable', summary: state.status === 'reviewed_modified' ? 'Authorized summary' : null }], error: state.rpcError ? Error('offline') : null }),
@@ -9,7 +9,7 @@ vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient: asyn
     let open = false
     const chain = { select: () => chain, eq: (key: string, value: string) => { if (key === 'status' && value === 'open') open = true; return chain }, in: () => chain, order: () => chain, limit: () => chain, single: () => chain, maybeSingle: () => chain,
       then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: table === 'user_profiles' ? { role: state.role, display_name: null, informal_name: 'Luna' } : table === 'clinical_sessions' ? open ? null : [{ id: 'closed', opened_at: '2026-01-01', closed_at: '2026-01-01', closure_reason: null }] : table === 'assessments' ? [{ session_id: 'closed', status: state.status, summary_json: { patient_facing_summary: 'Private old report' } }] : [], error: null }).then(resolve) }
-    chain.maybeSingle = () => ({ ...chain, then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: table === 'clinical_sessions' ? open ? null : { id: 'closed', closure_reason: null } : table === 'assessments' ? { summary_json: { patient_facing_summary: 'Private old report' } } : { role: state.role, display_name: null, informal_name: 'Luna' }, error: null }).then(resolve) })
+    chain.maybeSingle = () => ({ ...chain, then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: table === 'clinical_sessions' ? open ? null : { id: 'closed', closure_reason: state.crisis ? 'crisis_detected' : null } : table === 'assessments' ? { summary_json: { patient_facing_summary: 'Private old report' } } : { role: state.role, display_name: null, informal_name: 'Luna' }, error: null }).then(resolve) })
     return chain
   },
 }) }))
@@ -17,11 +17,25 @@ vi.mock('@/app/app/actions', () => ({ startSessionAction: async () => {} }))
 import AppHome from '@/app/app/page'
 import SesionesPage from '@/app/app/sesiones/page'
 afterEach(cleanup)
-beforeEach(() => { state.status = 'rejected'; state.rpcError = false; state.role = 'patient' })
+beforeEach(() => { state.status = 'rejected'; state.rpcError = false; state.role = 'patient'; state.crisis = false })
 it('home uses informal name and hides a rejected report', async () => {
   render(await AppHome())
   expect(screen.getByText('Hola, Luna.')).toBeTruthy()
   expect(screen.queryByText('Private old report')).toBeNull()
+})
+it('home shows the available summary after an ordinary close', async () => {
+  state.status = 'reviewed_modified'; render(await AppHome())
+  expect(screen.getByText('Authorized summary')).toBeTruthy()
+})
+it('after a crisis close, home shows only the safety notice first and no summary', async () => {
+  state.status = 'reviewed_modified'; state.crisis = true; render(await AppHome())
+  expect(screen.getByText('Tu última sesión se cerró por seguridad.')).toBeTruthy()
+  expect(screen.queryByText('Authorized summary')).toBeNull()
+  expect(screen.getByRole('link', { name: 'Línea 024' }).getAttribute('href')).toBe('tel:024')
+  expect(screen.getByRole('link', { name: '112' }).getAttribute('href')).toBe('tel:112')
+  const text = document.body.textContent ?? ''
+  expect(text.indexOf('Tu última sesión se cerró por seguridad.')).toBeLessThan(text.indexOf('Empieza una sesión nueva'))
+  expect(text.indexOf('Tus acuerdos recientes')).toBeLessThan(text.indexOf('Empieza una sesión nueva'))
 })
 it.each(['rejected', 'superseded'])('history hides %s report', async status => {
   state.status = status; render(await SesionesPage())
