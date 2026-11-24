@@ -6,6 +6,9 @@ const { createAuthenticatedClient } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/server/supabase/server', () => ({ createAuthenticatedClient }))
+vi.mock('next/font/google', () => ({
+  Instrument_Serif: () => ({ variable: 'font-landing-serif', className: 'font-landing-serif' }),
+}))
 
 import { registerAction } from '@/app/(auth)/actions'
 import HomePage from '@/app/page'

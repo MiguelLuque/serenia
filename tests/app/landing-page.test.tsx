@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+vi.mock('next/font/google', () => ({
+  Instrument_Serif: () => ({ variable: 'font-landing-serif', className: 'font-landing-serif' }),
+}))
+
 import HomePage from '@/app/page'
 
 describe('public landing page', () => {
@@ -35,10 +39,10 @@ describe('public landing page', () => {
   })
 
   it('does not make diagnostic or curative claims', () => {
-    const html = renderToStaticMarkup(HomePage()).toLowerCase()
+    const text = renderToStaticMarkup(HomePage()).replace(/<[^>]+>/g, ' ').toLowerCase()
 
     for (const claim of ['cura ', 'curar', 'garantiza', 'sustituye a tu psicólogo', 'diagnóstico preciso', '100%']) {
-      expect(html).not.toContain(claim)
+      expect(text).not.toContain(claim)
     }
   })
 })
