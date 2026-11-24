@@ -21,6 +21,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
+import { PageHeader } from '@/components/brand/page-header'
+import { BrandOrb } from '@/components/brand/brand-mark'
+import {
+  brandCardClass,
+  brandPrimaryButtonClass,
+  safetyCardClass,
+  safetyLinkClass,
+} from '@/components/brand/styles'
 import { startSessionAction } from './actions'
 
 function formatMinutesAgo(from: string): string {
@@ -37,36 +45,46 @@ const AGREED_ON_FORMATTER = new Intl.DateTimeFormat('es-ES', {
   timeZone: 'Europe/Madrid',
 })
 
+const TODAY_FORMATTER = new Intl.DateTimeFormat('es-ES', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Madrid',
+})
+
 function formatAgreedOn(iso: string): string {
   return AGREED_ON_FORMATTER.format(new Date(iso))
 }
 
 function OpenAgreementsCard({ tasks }: { tasks: PatientOpenTask[] }) {
   return (
-    <div>
-      <Card>
+    <section aria-labelledby="acuerdos-titulo">
+      <Card className={brandCardClass}>
         <CardHeader>
-          <CardTitle>Tus acuerdos recientes</CardTitle>
+          <CardTitle id="acuerdos-titulo">Tus acuerdos recientes</CardTitle>
           <CardDescription>
             Acuerdos validados tras una revisión clínica.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {tasks.length === 0 ? (
-            <p className="text-sm text-slate-600">
-              Aún no hay acuerdos. Aparecerán aquí cuando tu psicólogo revise
+            <p className="text-sm text-muted-foreground">
+              Aún no hay acuerdos. Aparecerán aquí cuando tu profesional revise
               una sesión.
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-stone-100">
               {tasks.map((task) => (
-                <li key={task.id}>
-                  <p className="font-medium text-slate-800">
-                    {task.descripcion}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    acordado el {formatAgreedOn(task.createdAt)}
-                  </p>
+                <li key={task.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                  <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
+                  <div>
+                    <p className="font-medium text-stone-800">
+                      {task.descripcion}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      acordado el {formatAgreedOn(task.createdAt)}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -74,12 +92,12 @@ function OpenAgreementsCard({ tasks }: { tasks: PatientOpenTask[] }) {
         </CardContent>
       </Card>
       {tasks.length > 0 ? (
-        <p className="mt-2 text-xs text-slate-500">
-          Estos acuerdos los revisó tu psicólogo después de una sesión.
+        <p className="mt-2 px-1 text-xs text-muted-foreground">
+          Estos acuerdos los revisó tu profesional después de una sesión.
           Serenia los tendrá presentes la próxima vez que hables con ella.
         </p>
       ) : null}
-    </div>
+    </section>
   )
 }
 
@@ -153,26 +171,32 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
     }
   }
 
+  const name = patientDisplayName(profile)
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Hola, {patientDisplayName(profile) ?? 'bienvenida'}.</h2>
-        <p className="mt-2 text-slate-600">
-          Aquí puedes iniciar una sesión con Serenia o continuar la que ya tienes abierta.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow={TODAY_FORMATTER.format(new Date())}
+        title={name ? `Hola, ${name}.` : 'Hola.'}
+        description="Aquí puedes iniciar una sesión con Serenia o continuar la que ya tienes abierta."
+      />
 
       {activeSession ? (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Tienes una sesión en curso.</CardTitle>
-              <CardDescription>
-                Iniciada {formatMinutesAgo(activeSession.opened_at)}.
-              </CardDescription>
+          <Card className={`${brandCardClass} relative overflow-hidden`}>
+            <CardHeader className="gap-1.5 sm:px-6 sm:pt-2">
+              <div className="flex items-center gap-3">
+                <BrandOrb className="size-9" />
+                <div>
+                  <CardTitle className="text-lg">Tienes una sesión en curso.</CardTitle>
+                  <CardDescription>
+                    Iniciada {formatMinutesAgo(activeSession.opened_at)}.
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <Button render={<Link href={`/app/sesion/${activeSession.id}`} />} nativeButton={false}>
+            <CardContent className="sm:px-6 sm:pb-2">
+              <Button className={brandPrimaryButtonClass} render={<Link href={`/app/sesion/${activeSession.id}`} />} nativeButton={false}>
                 Continuar tu sesión
               </Button>
             </CardContent>
@@ -184,46 +208,53 @@ export default async function AppHome({ searchParams }: { searchParams?: Promise
       ) : (
         <>
           {lastClosed?.closureReason === 'crisis_detected' ? (
-            <Card className="border-red-200 bg-red-50">
+            <Card className={safetyCardClass}>
               <CardHeader>
-                <CardTitle>Tu última sesión se cerró por seguridad.</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-red-950">Tu última sesión se cerró por seguridad.</CardTitle>
+                <CardDescription className="text-red-900">
                   No hay revisión humana inmediata garantizada. Si necesitas ayuda ahora,
-                  llama a la <strong>{SAFETY_RESOURCES.suicide.name}</strong>.
+                  llama a la <a className={safetyLinkClass} href={SAFETY_RESOURCES.suicide.href}>{SAFETY_RESOURCES.suicide.name}</a>{' '}
+                  (gratuita, 24 horas) o al <a className={safetyLinkClass} href={SAFETY_RESOURCES.emergency.href}>{SAFETY_RESOURCES.emergency.phone}</a> en caso de emergencia.
                 </CardDescription>
               </CardHeader>
             </Card>
-          ) : lastClosed?.report?.state === 'available' ? (
-            <Card>
+          ) : null}
+
+          <Card className={`${brandCardClass} relative overflow-hidden`}>
+            <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[radial-gradient(circle,#ccfbf1_0%,transparent_70%)] opacity-70" />
+            <CardHeader className="relative gap-1.5 sm:px-6 sm:pt-2">
+              <div className="flex items-center gap-3">
+                <BrandOrb className="size-9" />
+                <CardTitle className="text-lg">Empieza una sesión nueva</CardTitle>
+              </div>
+              <CardDescription className="mt-1 max-w-xl leading-relaxed">
+                Las sesiones duran hasta 60 minutos. Si pasan 30 minutos sin actividad, la sesión puede cerrarse.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="relative sm:px-6 sm:pb-2">
+              <form action={startSessionAction}>
+                <Button type="submit" className={brandPrimaryButtonClass}>Iniciar nueva sesión</Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {lastClosed?.report?.state === 'available' ? (
+            <Card className={brandCardClass}>
               <CardHeader>
                 <CardTitle>Resumen de tu última sesión</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-slate-700">
+                <p className="text-[15px] leading-relaxed text-stone-700">
                   {lastClosed.report?.summary}
                 </p>
               </CardContent>
             </Card>
           ) : null}
 
-          {lastClosed?.report && lastClosed.report.state !== 'available' && <p role="status" className="text-sm text-slate-600">{REPORT_STATE_COPY[lastClosed.report.state]}</p>}
+          {lastClosed?.report && lastClosed.report.state !== 'available' && <p role="status" className="px-1 text-sm text-muted-foreground">{REPORT_STATE_COPY[lastClosed.report.state]}</p>}
           {openTasks.length > 0 || lastClosed !== null ? (
             <OpenAgreementsCard tasks={openTasks} />
           ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Empieza una sesión nueva</CardTitle>
-              <CardDescription>
-                Las sesiones duran hasta 60 minutos. Tras 30 minutos de inactividad se comprueba el cierre al retomar la sesión o en la revisión automática.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form action={startSessionAction}>
-                <Button type="submit">Iniciar nueva sesión</Button>
-              </form>
-            </CardContent>
-          </Card>
         </>
       )}
     </div>

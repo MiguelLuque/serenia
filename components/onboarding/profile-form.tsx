@@ -31,6 +31,7 @@ export function ProfileForm({ initial }: { initial?: { informal_name: string; pr
           Nombre por el que prefieres que te llamemos
         </Label>
         <Input
+          className="h-10 bg-white"
           id="informalName"
           name="informalName"
           defaultValue={initial?.informal_name}
@@ -48,7 +49,7 @@ export function ProfileForm({ initial }: { initial?: { informal_name: string; pr
           name="pronouns"
           defaultValue={initial?.pronouns ?? ''}
           required
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+          className="flex h-10 w-full rounded-lg border border-input bg-white px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
         >
           <option value="">Selecciona…</option>
           <option value="el">Él</option>
@@ -60,13 +61,14 @@ export function ProfileForm({ initial }: { initial?: { informal_name: string; pr
 
       <div className="space-y-2">
         <Label htmlFor="birthDate">Fecha de nacimiento</Label>
-        <Input id="birthDate" name="birthDate" type="date" defaultValue={initial?.birth_date ?? ''} required />
-        <p className="text-sm text-slate-600">Acceso para personas de 18 años o más.</p>
+        <Input className="h-10 bg-white" id="birthDate" name="birthDate" type="date" defaultValue={initial?.birth_date ?? ''} required />
+        <p className="text-sm text-muted-foreground">Acceso para personas de 18 años o más.</p>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="reasonForConsulting">¿Qué te trae a Serenia?</Label>
         <Textarea
+          className="bg-white"
           id="reasonForConsulting"
           name="reasonForConsulting"
           defaultValue={initial?.reason_for_consulting ?? ''}
@@ -79,10 +81,10 @@ export function ProfileForm({ initial }: { initial?: { informal_name: string; pr
 
       <input type="hidden" name="acceptanceVersion" value={CURRENT_ACCEPTANCE_VERSION} />
       <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" name="acceptance" required className="mt-1" />
+        <input type="checkbox" name="acceptance" required className="mt-1 size-4 accent-teal-700" />
         <span>He leído el <Link href="/terminos" className="underline">borrador técnico de uso</Link> y la <Link href="/privacidad" className="underline">información provisional de privacidad</Link> ({CURRENT_ACCEPTANCE_VERSION}). Entiendo las limitaciones de la IA y que no hay atención de emergencias ni revisión humana inmediata garantizada. Esta aceptación se registra con fecha y versión para pruebas; no autoriza un lanzamiento.</span>
       </label>
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending} className="h-11 w-full rounded-full text-[15px] shadow-md shadow-teal-900/15">
         {pending ? 'Guardando…' : 'Completar perfil'}
       </Button>
     </form>

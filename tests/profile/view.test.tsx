@@ -121,7 +121,7 @@ it('has no action controls when memory read is unavailable', () => {
   render(<ProfileMemoryView memory={null} />)
   expect(screen.getByRole('alert').textContent).toMatch(/no se pudo cargar/i)
   expect(screen.queryByRole('button', { name: 'Activar memoria' })).toBeNull()
-  expect(screen.getByRole('link', { name: 'Volver a la conversación' }).getAttribute('href')).toBe('/app')
+  expect(screen.getByRole('link', { name: 'Volver al inicio' }).getAttribute('href')).toBe('/app')
 })
 it('keeps rejected and superseded history readable without review controls', () => {
   render(<ProfileMemoryView memory={{ ...empty, observations: [{ ...old, disputed: false, status: 'rejected' }, { ...correction, status: 'superseded' }] }} />)

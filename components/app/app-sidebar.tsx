@@ -16,6 +16,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { logoutAction } from '@/app/(auth)/actions'
+import { BrandOrb } from '@/components/brand/brand-mark'
 
 interface AppSidebarProps {
   displayName: string
@@ -52,10 +53,18 @@ export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: 
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <div className="px-2 py-1">
+      <SidebarHeader className="gap-4 px-3 pt-4 group-data-[collapsible=icon]:px-2">
+        <Link
+          href="/app"
+          onClick={() => { if (isMobile) setOpenMobile(false) }}
+          className="flex items-center gap-2.5 rounded-md text-lg font-semibold tracking-tight text-stone-900 outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center"
+        >
+          <BrandOrb className="size-7" />
+          <span className="group-data-[collapsible=icon]:hidden">Serenia</span>
+        </Link>
+        <div className="rounded-xl border border-sidebar-border bg-white/60 px-3 py-2.5 group-data-[collapsible=icon]:hidden">
           <p className="text-xs text-muted-foreground">
-            {role === 'clinician' ? 'Panel clínico' : 'Serenia'}
+            {role === 'clinician' ? 'Panel clínico' : 'Tu espacio'}
           </p>
           <p className="truncate text-sm font-medium">
             {displayName || 'Sin nombre'}
@@ -63,7 +72,7 @@ export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: 
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="px-3 group-data-[collapsible=icon]:px-2">
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
@@ -71,9 +80,10 @@ export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: 
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
-                      render={<Link href={item.href} onClick={() => { if (isMobile) setOpenMobile(false) }} />}
+                      render={<Link href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => { if (isMobile) setOpenMobile(false) }} />}
                       isActive={isActive}
                       tooltip={item.label}
+                      className="h-10 rounded-lg px-3 data-active:bg-white data-active:text-primary data-active:shadow-sm data-active:ring-1 data-active:ring-stone-900/5"
                     >
                       <item.icon />
                       <span>{item.label}</span>
@@ -85,13 +95,14 @@ export function AppSidebar({ displayName, role, profileMemoryEnabled = false }: 
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="px-3 pb-4 group-data-[collapsible=icon]:px-2">
         <form action={logoutAction}>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 type="submit"
                 tooltip="Cerrar sesión"
+                className="h-10 rounded-lg px-3 text-muted-foreground"
               >
                 <LogOut />
                 <span>Cerrar sesión</span>
