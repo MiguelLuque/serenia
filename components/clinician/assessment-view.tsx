@@ -111,7 +111,7 @@ export function AssessmentView({ detail }: { detail: SessionDetail }) {
 
   return (
     <div className="space-y-6">
-      <Link href="/app" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-stone-900 hover:underline">
+      <Link href="/app" className="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground underline-offset-4 hover:text-stone-900 hover:underline outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         <ArrowLeft aria-hidden className="size-4" />
         Bandeja
       </Link>

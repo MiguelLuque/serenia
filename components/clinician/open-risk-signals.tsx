@@ -19,7 +19,7 @@ export function OpenRiskSignals({ signals }: { signals: OpenSessionRiskSignal[] 
   return (
     <section aria-labelledby="open-risk-heading" className="space-y-3 rounded-2xl border border-red-300 bg-red-50 p-4">
       <div>
-        <h3 id="open-risk-heading" className="text-base font-semibold text-red-900">Señales de riesgo en sesiones sin cerrar</h3>
+        <h2 id="open-risk-heading" className="text-base font-semibold text-red-900">Señales de riesgo en sesiones sin cerrar</h2>
         <p className="mt-1 text-sm text-red-900">
           Señales automáticas provisionales, no un diagnóstico. La sesión sigue abierta y todavía no tiene informe.
         </p>
@@ -27,7 +27,7 @@ export function OpenRiskSignals({ signals }: { signals: OpenSessionRiskSignal[] 
       <ul className="space-y-2">
         {signals.map(signal => (
           <li key={signal.eventId}>
-            <Link href={`/app/clinica/paciente/${signal.userId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-white p-3 text-sm transition-colors hover:bg-red-50/50">
+            <Link href={`/app/clinica/paciente/${signal.userId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-white p-3 text-sm transition-colors hover:bg-red-50/50 outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:ring-offset-red-50">
               <span className="font-medium">{signal.displayName ?? 'Paciente sin nombre'}</span>
               <span className="flex flex-wrap items-center gap-2">
                 <Badge variant="destructive">{signal.severity === 'critical' ? 'Crítica' : 'Alta'}</Badge>
