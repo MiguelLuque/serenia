@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Instrument_Serif } from 'next/font/google'
 import {
   ArrowRight,
   ChartLine,
@@ -18,14 +17,9 @@ import { Reveal } from '@/components/landing/reveal'
 import { TrendChart } from '@/components/landing/trend-chart'
 import { isPublicRegistrationEnabled } from '@/lib/shared/auth/registration-policy'
 import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
+import { brandSerif as serif } from './fonts'
 import './landing.css'
 
-const serif = Instrument_Serif({
-  weight: '400',
-  subsets: ['latin'],
-  variable: '--font-landing-serif',
-  display: 'swap',
-})
 
 export const metadata: Metadata = {
   title: 'Serenia — Apoyo conversacional para ansiedad y ánimo bajo',

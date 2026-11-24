@@ -174,3 +174,8 @@
   .breath-ring { transform: scale(0.85); }
   .breath-label > span + span { opacity: 0; }
 }
+
+/* ---- Variante oscura del fondo (panel de marca de las páginas de acceso) ---- */
+.landing-aurora--dark span { opacity: 0.22; }
+.landing-aurora--dark span:nth-child(2) { opacity: 0.12; }
+.landing-aurora--dark span:nth-child(3) { opacity: 0.18; }
