@@ -45,7 +45,7 @@ export function ChatInput({ onSend, status, disabled = false, draft }: ChatInput
 
   return (
     <div>
-      <div className="flex items-end gap-2 rounded-2xl border border-stone-300 bg-white p-2 shadow-[0_1px_3px_rgba(28,25,23,0.06)] transition-colors focus-within:border-teal-600 focus-within:ring-3 focus-within:ring-teal-600/15">
+      <div className="flex items-end gap-2 rounded-2xl border border-stone-300 bg-white p-2 shadow-[0_1px_3px_rgba(28,25,23,0.06)] transition-colors focus-within:border-teal-600 focus-within:ring-3 focus-within:ring-teal-600/35">
         <Textarea
           aria-label="Mensaje para Serenia"
           value={text}

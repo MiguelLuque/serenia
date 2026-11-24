@@ -15,7 +15,7 @@ export function CrisisBanner() {
           {SAFETY_RESOURCES.suicide.name}
         </a>
         <span className="text-stone-600">(gratuita, 24 h)</span>
-        <span aria-hidden className="text-stone-400">·</span>
+        <span aria-hidden className="hidden text-stone-400 sm:inline">·</span>
         <a
           href={SAFETY_RESOURCES.emergency.href}
           className="inline-flex min-h-8 items-center sm:min-h-10 gap-1.5 rounded-md px-1.5 font-semibold text-amber-950 underline underline-offset-2"

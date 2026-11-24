@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 
 /**
@@ -12,6 +12,9 @@ export function BreathingExercise() {
   const [active, setActive] = useState(false)
   // Con movimiento reducido el círculo no se mueve: la pauta va en texto.
   const [reducedMotion, setReducedMotion] = useState(false)
+  const stopRef = useRef<HTMLButtonElement>(null)
+  // Al empezar, el foco va a «Parar» para que el lector de pantalla lo anuncie y sea fácil detenerlo.
+  useEffect(() => { if (active) stopRef.current?.focus() }, [active])
 
   if (!active) {
     return (
@@ -45,6 +48,7 @@ export function BreathingExercise() {
           : 'Inhala mientras el círculo crece y suelta el aire mientras se encoge.'}
       </p>
       <Button
+        ref={stopRef}
         type="button"
         variant="ghost"
         className="h-10 rounded-full px-5"

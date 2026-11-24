@@ -716,6 +716,8 @@ export function ChatView({
   const lastMessage = messages.at(-1)
   const lastHasAssistantText = lastMessage?.role === 'assistant' && lastMessage.parts.some(part => part.type === 'text' && part.text.trim().length > 0)
   const showTyping = status === 'submitted' || (status === 'streaming' && !lastHasAssistantText)
+  // Espera normal de respuesta: el panel de estado se muestra igual, pero más ligero.
+  const onlyWaiting = (status === 'submitted' || status === 'streaming') && !isTimeExpired && !closeUncertain && !closeConfirmation && !closeNotice && !recovery && !recoveryChecking && !localSubmissions.some(submission => submission.state !== 'sending')
   const unresolvedSubmission = localSubmissions.find(submission => submission.state === 'uncertain' || submission.state === 'interrupted')
   const recoveryStatus = recoveryChecking
     ? recoveryError ? 'No hemos podido comprobar cómo terminó el turno. Puedes comprobar el estado de nuevo.' : 'Estamos comprobando cómo terminó el turno.'
@@ -855,15 +857,15 @@ export function ChatView({
                 }}
               />
             )}
-          {(isTimeExpired || closeUncertain || closeConfirmation || closeNotice || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div role="group" aria-label="Estado del envío" className="space-y-2.5 rounded-xl bg-muted p-3 text-sm text-stone-800">
-            <p role="status" aria-live="polite" className="font-medium">{recoveryStatus}</p>
+          {(isTimeExpired || closeUncertain || closeConfirmation || closeNotice || recovery || recoveryChecking || status === 'error' || status === 'submitted' || status === 'streaming' || localSubmissions.some(submission => submission.state !== 'sending')) && <div role="group" aria-label="Estado del envío" className={`space-y-2.5 rounded-xl text-sm text-stone-800 ${onlyWaiting ? 'px-1' : 'bg-muted p-3'}`}>
+            <p role="status" aria-live="polite" className={onlyWaiting ? 'text-muted-foreground' : 'font-medium'}>{recoveryStatus}</p>
             {recovery?.canRetry && !recoveryChecking && !urgentMode && <button type="button" disabled={closing || retrying || resolvingTurn || status === 'submitted' || status === 'streaming'} onClick={() => void retry()} className={primaryActionClass}>Reintentar el mismo mensaje</button>}
             {recovery?.attempt !== undefined && !urgentMode && <><p className="text-muted-foreground">Comprobar y resolver puede detener una respuesta pendiente que aún no se haya guardado.</p><button type="button" disabled={resolvingTurn || closing || retrying || status === 'submitted' || status === 'streaming'} onClick={() => void resolveTurn()} className={secondaryActionClass}>Comprobar y resolver turno pendiente</button></>}
             {resolutionNotice && <p role="status">{resolutionNotice}</p>}
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={checkSavedState} className={secondaryActionClass}>Comprobar estado guardado</button>
             </div>
-            <button type="button" onClick={interruptForUrgentSignal} className="flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-400 bg-white px-3 font-medium text-stone-900 hover:bg-stone-50">Interrumpir espera y enviar una señal urgente</button>
+            <button type="button" onClick={interruptForUrgentSignal} className={`flex min-h-10 items-center justify-center rounded-lg border border-stone-400 bg-white px-3 font-medium text-stone-900 hover:bg-stone-50 ${onlyWaiting ? 'w-full sm:w-auto' : 'w-full'}`}>Interrumpir espera y enviar una señal urgente</button>
             {recoveryError && <p role="alert" className="text-red-800">No se pudo comprobar el estado. {LOCAL_TEXT_COPY_WARNING} Vuelve a comprobarlo cuando puedas.</p>}
           </div>}
           {urgentMode && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-stone-800">Escribe con claridad que necesitas ayuda ahora, por ejemplo «necesito ayuda inmediata» o «estoy en peligro». Solo un aviso urgente reconocido por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. <UrgentHelpText lead={false} linkClassName="font-semibold underline underline-offset-2" /></p>}
