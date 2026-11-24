@@ -12,6 +12,7 @@ import { CrisisBanner } from './crisis-banner'
 import { QuestionnaireCard } from './questionnaire-card'
 import { closeOwnedSessionFromView, getOwnedChatState, resolveOwnedChatTurn } from '@/app/app/chat-recovery-actions'
 import type { ChatRecovery } from '@/lib/shared/chat/recovery'
+import { UrgentHelpText } from '@/components/shared/urgent-help'
 
 interface ActiveQuestionnaire {
   instanceId: string
@@ -835,7 +836,7 @@ export function ChatView({
             <button type="button" onClick={checkSavedState} className="block underline">Comprobar estado guardado</button>
             {recoveryError && <p role="alert">No se pudo comprobar el estado. {LOCAL_TEXT_COPY_WARNING} Vuelve a comprobarlo cuando puedas.</p>}
           </div>}
-          {urgentMode && <p role="status" className="px-3 text-sm">Escribe una señal nueva de peligro inmediato para ti, como pensamientos de hacerte daño o quitarte la vida. Solo una señal explícita admitida por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. Si hay peligro inmediato para ti o para otra persona, llama al 112. También puedes llamar al 024.</p>}
+          {urgentMode && <p role="status" className="px-3 text-sm">Escribe con claridad que necesitas ayuda ahora, por ejemplo «necesito ayuda inmediata» o «estoy en peligro». Solo un aviso urgente reconocido por el servidor puede sustituir el turno pendiente; un mensaje ordinario seguirá esperando. <UrgentHelpText lead={false} linkClassName="underline" /></p>}
           <ChatInput
             status={(recovery || recoveryChecking) && !urgentMode ? 'submitted' : status}
             disabled={closing || ((isTimeExpired || closeUncertain) && !urgentMode)}
