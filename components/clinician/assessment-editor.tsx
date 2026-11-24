@@ -386,14 +386,14 @@ export function AssessmentEditor({
         </CardHeader>
         <CardContent>
           {draft.questionnaires.length === 0 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               Sin cuestionarios completados.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-slate-600">
+                  <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Código</th>
                     <th className="py-2 pr-3 font-medium">Puntuación</th>
                     <th className="py-2 font-medium">Banda</th>
@@ -473,7 +473,7 @@ export function AssessmentEditor({
         </CardHeader>
         <CardContent className="space-y-4">
           {draft.proposed_tasks.length === 0 ? (
-            <p className="text-sm text-slate-600">Sin tareas propuestas.</p>
+            <p className="text-sm text-muted-foreground">Sin tareas propuestas.</p>
           ) : (
             draft.proposed_tasks.map((task, i) => (
               <div key={i} className="space-y-2 rounded-md border p-3">
@@ -537,7 +537,7 @@ export function AssessmentEditor({
               return (
                 <div key={task.id} className="space-y-2 rounded-md border p-3">
                   <p className="text-sm font-medium">{task.descripcion}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Acordada el{' '}
                     {new Date(task.createdAt).toLocaleDateString('es-ES', {
                       day: 'numeric',
@@ -593,7 +593,7 @@ export function AssessmentEditor({
       )}
 
       {/* Resumen para el paciente */}
-      <Card className="bg-slate-50">
+      <Card className="bg-muted/60">
         <CardHeader>
           <CardTitle className="text-base">Resumen para el paciente</CardTitle>
           <CardDescription>
@@ -676,7 +676,7 @@ function EditableList({
   return (
     <div className="space-y-2">
       {items.length === 0 ? (
-        <p className="text-sm text-slate-600">Sin entradas.</p>
+        <p className="text-sm text-muted-foreground">Sin entradas.</p>
       ) : (
         items.map((item, i) => (
           <div key={i} className="flex items-start gap-2">

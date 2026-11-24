@@ -1,3 +1,5 @@
+import { PageHeader } from '@/components/brand/page-header'
+import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { createAuthenticatedClient } from '@/lib/server/supabase/server'
 import { getPatientDetail } from '@/lib/server/clinician/patient'
@@ -95,18 +97,17 @@ export default async function PatientDetailPage({
   return (
     <div className="space-y-6">
       {/* Cabecera */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">
-            {profile.displayName ?? 'Paciente sin nombre'}
-          </CardTitle>
-          {profile.birthDate && (
-            <p className="text-sm text-slate-600">
-              {calculateAge(profile.birthDate)} años
-            </p>
-          )}
-        </CardHeader>
-      </Card>
+      <div className="space-y-4">
+        <Link href="/app/clinica/pacientes" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-stone-900 hover:underline">
+          <ArrowLeft aria-hidden className="size-4" />
+          Pacientes
+        </Link>
+        <PageHeader
+          eyebrow="Paciente"
+          title={profile.displayName ?? 'Paciente sin nombre'}
+          description={profile.birthDate ? `${calculateAge(profile.birthDate)} años` : undefined}
+        />
+      </div>
 
       {/* Tendencias cuestionarios */}
       <Card>
@@ -115,14 +116,14 @@ export default async function PatientDetailPage({
         </CardHeader>
         <CardContent>
           {questionnaireResults.length === 0 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               Sin cuestionarios completados.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-slate-600">
+                  <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Cuestionario</th>
                     <th className="py-2 pr-3 font-medium">Fecha</th>
                     <th className="py-2 pr-3 font-medium">Puntuación</th>
@@ -138,7 +139,7 @@ export default async function PatientDetailPage({
                       <td className="py-2 pr-3 font-medium">
                         {QUESTIONNAIRE_LABEL[r.code] ?? r.code}
                       </td>
-                      <td className="py-2 pr-3 text-slate-600">
+                      <td className="py-2 pr-3 text-muted-foreground">
                         {formatDate(r.scoredAt)}
                       </td>
                       <td className="py-2 pr-3">{r.totalScore}</td>
@@ -161,10 +162,10 @@ export default async function PatientDetailPage({
         </CardHeader>
         <CardContent>
           {riskEvents.length > 0 && (
-            <p className="mb-3 text-sm text-slate-600">Los tipos y niveles registrados requieren valoración clínica y no confirman por sí solos un diagnóstico.</p>
+            <p className="mb-3 text-sm text-muted-foreground">Los tipos y niveles registrados requieren valoración clínica y no confirman por sí solos un diagnóstico.</p>
           )}
           {riskEvents.length === 0 ? (
-            <p className="text-sm text-slate-600">Sin eventos de riesgo.</p>
+            <p className="text-sm text-muted-foreground">Sin eventos de riesgo.</p>
           ) : (
             <ul className="space-y-2">
               {riskEvents.map((event) => {
@@ -181,18 +182,18 @@ export default async function PatientDetailPage({
                     <div>
                       <div className="font-medium">{label}</div>
                       {event.provenance === 'automatic_lexical' && (
-                        <div className="text-slate-600">La coincidencia textual por sí sola no confirma el riesgo; requiere contextualización. El nivel registrado requiere valoración.</div>
+                        <div className="text-muted-foreground">La coincidencia textual por sí sola no confirma el riesgo; requiere contextualización. El nivel registrado requiere valoración.</div>
                       )}
                       {event.provenance === 'questionnaire' && (
-                        <div className="text-slate-600">Fuente registrada: cuestionario. El resultado requiere contextualización clínica.</div>
+                        <div className="text-muted-foreground">Fuente registrada: cuestionario. El resultado requiere contextualización clínica.</div>
                       )}
                       {event.provenance === 'manual_review' && (
-                        <div className="text-slate-600">Fuente indicada: revisión manual. La fuente por sí sola no acredita validación clínica.</div>
+                        <div className="text-muted-foreground">Fuente indicada: revisión manual. La fuente por sí sola no acredita validación clínica.</div>
                       )}
                       {event.provenance === 'unknown' && (
-                        <div className="text-slate-600">Origen desconocido; requiere contextualización.</div>
+                        <div className="text-muted-foreground">Origen desconocido; requiere contextualización.</div>
                       )}
-                      <div className="text-slate-600">
+                      <div className="text-muted-foreground">
                         {formatDateTime(event.createdAt)}
                       </div>
                     </div>
@@ -226,7 +227,7 @@ export default async function PatientDetailPage({
         </CardHeader>
         <CardContent>
           {openTasks.length === 0 ? (
-            <p className="text-sm text-slate-600">Sin acuerdos abiertos.</p>
+            <p className="text-sm text-muted-foreground">Sin acuerdos abiertos.</p>
           ) : (
             <ul className="space-y-2">
               {openTasks.map((task) => (
@@ -239,7 +240,7 @@ export default async function PatientDetailPage({
                       <div className="min-w-0">
                         <div className="font-medium">{task.descripcion}</div>
                         {task.nota && (
-                          <div className="text-slate-600">{task.nota}</div>
+                          <div className="text-muted-foreground">{task.nota}</div>
                         )}
                       </div>
                       <Badge variant="secondary">
@@ -261,7 +262,7 @@ export default async function PatientDetailPage({
         </CardHeader>
         <CardContent>
           {sessions.length === 0 ? (
-            <p className="text-sm text-slate-600">Sin sesiones.</p>
+            <p className="text-sm text-muted-foreground">Sin sesiones.</p>
           ) : (
             <ul className="space-y-2">
               {sessions.map((session) => {
@@ -283,7 +284,7 @@ export default async function PatientDetailPage({
                             {formatDate(dateIso)}
                           </div>
                           {closureLabel && (
-                            <div className="text-slate-600">{closureLabel}</div>
+                            <div className="text-muted-foreground">{closureLabel}</div>
                           )}
                         </div>
                         <Badge variant={status.variant}>{status.label}</Badge>
