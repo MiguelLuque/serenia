@@ -16,7 +16,7 @@ import { ClinicianPreview } from '@/components/landing/clinician-preview'
 import { Reveal } from '@/components/landing/reveal'
 import { TrendChart } from '@/components/landing/trend-chart'
 import { isPublicRegistrationEnabled } from '@/lib/shared/auth/registration-policy'
-import { SAFETY_RESOURCES } from '@/lib/shared/safety-resources'
+import { URGENT_HELP_SENTENCE, UrgentHelpText } from '@/components/shared/urgent-help'
 import { brandSerif as serif } from './fonts'
 import './landing.css'
 
@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: '¿Qué pasa si estoy pasando por un momento muy difícil?',
-    a: `Si en la conversación aparecen señales de riesgo, Serenia te mostrará recursos de ayuda inmediata y lo dejará señalado para el profesional. Pero no es un servicio de urgencias: si estás en peligro, llama al ${SAFETY_RESOURCES.emergency.phone}, y si piensas en hacerte daño, a la ${SAFETY_RESOURCES.suicide.name}.`,
+    a: `Si en la conversación aparecen señales de que necesitas ayuda inmediata, Serenia te mostrará recursos de ayuda y lo dejará señalado para tu profesional. Pero no es un servicio de urgencias: ${URGENT_HELP_SENTENCE}`,
   },
   {
     q: '¿Quién puede ver lo que escribo?',
@@ -188,11 +188,7 @@ export default function HomePage() {
               <Phone className="size-5 text-amber-700" />
             </span>
             <p className="text-sm leading-relaxed">
-              <strong className="font-semibold">Serenia no es un servicio de urgencias.</strong> Si piensas en hacerte
-              daño o en quitarte la vida, llama ahora a la{' '}
-              <a className="font-semibold underline underline-offset-2" href={SAFETY_RESOURCES.suicide.href}>{SAFETY_RESOURCES.suicide.name}</a>{' '}
-              (gratuita, 24 horas). Si tu vida o la de otra persona corre peligro inmediato, llama al{' '}
-              <a className="font-semibold underline underline-offset-2" href={SAFETY_RESOURCES.emergency.href}>{SAFETY_RESOURCES.emergency.phone}</a>.
+              <UrgentHelpText linkClassName="font-semibold underline underline-offset-2" />
             </p>
           </div>
         </section>
@@ -358,15 +354,7 @@ export default function HomePage() {
       <footer className="border-t border-stone-200 bg-white">
         <div className="mx-auto max-w-6xl space-y-6 px-5 py-10 text-sm text-stone-500">
           <p>
-            Serenia no es un servicio de urgencias. Si estás en peligro, llama al{' '}
-            <a className="font-medium text-stone-700 underline underline-offset-2" href={SAFETY_RESOURCES.emergency.href}>
-              {SAFETY_RESOURCES.emergency.phone}
-            </a>
-            . Si piensas en hacerte daño, llama a la{' '}
-            <a className="font-medium text-stone-700 underline underline-offset-2" href={SAFETY_RESOURCES.suicide.href}>
-              {SAFETY_RESOURCES.suicide.name}
-            </a>{' '}
-            (gratuita, 24 horas).
+            <UrgentHelpText linkClassName="font-medium text-stone-700 underline underline-offset-2" />
           </p>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="flex items-center gap-2">
