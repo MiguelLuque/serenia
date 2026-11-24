@@ -136,3 +136,11 @@ it('checks a pending lease after two server minutes even if the browser is an ho
   expect(f.state).toHaveBeenCalledTimes(1)
   expect(screen.getByRole('button', { name: 'Reintentar el mismo mensaje' })).toBeTruthy()
 })
+
+it('the time-expired notice keeps 024 and 112 as phone links', () => {
+  view()
+  const notice = screen.getAllByRole('status').find(node => node.textContent?.includes('Tiempo agotado para mensajes nuevos ordinarios'))!
+  expect(notice.textContent).toMatch(/ayuda inmediata/)
+  const hrefs = Array.from(notice.querySelectorAll('a')).map(a => a.getAttribute('href'))
+  expect(hrefs).toEqual(expect.arrayContaining(['tel:024', 'tel:112']))
+})

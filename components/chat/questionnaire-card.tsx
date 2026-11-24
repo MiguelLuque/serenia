@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -66,6 +66,8 @@ function QuestionnaireInstance({
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const promptRef = useRef<HTMLParagraphElement>(null)
+  const advancedRef = useRef(false)
 
   const sorted = [...items].sort((a, b) => a.order_index - b.order_index)
   const isCssrs = definition.code === 'CSSRS'
@@ -95,6 +97,7 @@ function QuestionnaireInstance({
     if (!current) return
     if (!answers[current.order_index]) return
     if (!isLast) {
+      advancedRef.current = true
       setCurrentIdx((i) => i + 1)
       return
     }
@@ -129,10 +132,17 @@ function QuestionnaireInstance({
     }
   }
 
+  // Al pasar de pregunta, el foco va al nuevo enunciado (no en la primera).
+  useEffect(() => {
+    if (!advancedRef.current) return
+    advancedRef.current = false
+    promptRef.current?.focus()
+  }, [currentIdx])
+
   if (submitted) {
     return (
-      <Card className="mx-3 mb-2 border-emerald-200 bg-emerald-50">
-        <CardContent role="status" className="py-3 text-sm text-emerald-900">
+      <Card className="rounded-2xl border border-teal-200 bg-teal-50 ring-0">
+        <CardContent role="status" className="py-1 text-sm text-teal-900">
           Enviado. Serenia tiene tu resultado.
         </CardContent>
       </Card>
@@ -144,42 +154,50 @@ function QuestionnaireInstance({
   const options = parseOptions(current.options_json)
   const selected = answers[current.order_index]
 
+  const promptId = `question-prompt-${instanceId}-${current.order_index}`
+  const progress = Math.round(((currentIdx + 1) / visibleItems.length) * 100)
+
   return (
-    <Card className="mx-3 mb-2" size="sm">
-      <CardHeader>
-        <CardTitle>{header.title}</CardTitle>
+    <Card className="max-h-[55dvh] overflow-y-auto rounded-2xl border border-stone-200/80 shadow-[0_8px_30px_-12px_rgba(15,80,75,0.25)] ring-0" size="sm">
+      <CardHeader className="gap-1.5">
+        <CardTitle className="text-[15px]">{header.title}</CardTitle>
         <p className="text-xs text-muted-foreground">{header.duration}</p>
-        <p className="text-xs text-muted-foreground">
-          Pregunta {currentIdx + 1} de {visibleItems.length}
-        </p>
+        <div className="mt-1 flex items-center gap-3">
+          <div aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-stone-100">
+            <div className="h-full rounded-full bg-primary transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            Pregunta {currentIdx + 1} de {visibleItems.length}
+          </p>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm">{current.prompt}</p>
-        <div role="radiogroup" aria-label={current.prompt} className="flex flex-col gap-2">
+        <p id={promptId} ref={promptRef} tabIndex={-1} className="text-[15px] font-medium text-stone-900 outline-none">{current.prompt}</p>
+        <div role="radiogroup" aria-labelledby={promptId} className="flex flex-col gap-2">
           {options.map((opt) => {
             const isSelected = selected?.value === opt.value
             return (
               <label
                 key={opt.value}
-                className={`rounded border px-3 py-2 text-left text-sm transition ${
+                className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2 text-left text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-teal-600 ${
                   isSelected
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
+                    ? 'border-teal-700 bg-teal-50 text-teal-950'
+                    : 'border-stone-200 bg-white text-stone-800 hover:border-stone-300 hover:bg-stone-50'
                 }`}
               >
-                <input type="radio" name={`question-${instanceId}-${current.order_index}`} value={opt.value} checked={isSelected} disabled={submitting} onChange={() => selectOption(opt)} className="mr-2" />
+                <input type="radio" name={`question-${instanceId}-${current.order_index}`} value={opt.value} checked={isSelected} disabled={submitting} onChange={() => selectOption(opt)} className="size-4 shrink-0 accent-teal-700" />
                 {opt.label}
               </label>
             )
           })}
         </div>
-        {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
         <div className="flex justify-end">
           <Button
             type="button"
-            size="sm"
             onClick={handleNext}
             disabled={!selected || submitting}
+            className="h-10 rounded-full px-5"
           >
             {isLast ? (submitting ? 'Enviando…' : 'Enviar') : 'Siguiente'}
           </Button>

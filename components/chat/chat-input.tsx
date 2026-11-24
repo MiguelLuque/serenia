@@ -4,6 +4,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import type { ChatStatus } from 'ai'
+import { ArrowUp } from 'lucide-react'
 
 interface ChatInputProps {
   onSend: (text: string) => void | boolean | Promise<void | boolean>
@@ -43,26 +44,28 @@ export function ChatInput({ onSend, status, disabled = false, draft }: ChatInput
   }
 
   return (
-    <div className="flex gap-2 border-t border-slate-200 bg-white p-3">
-      <Textarea
-        aria-label="Mensaje para Serenia"
-        value={text}
-        onChange={e => setText(e.target.value)}
-        placeholder="Escribe lo que quieras compartir..."
-        onKeyDown={handleKeyDown}
-        disabled={isDisabled}
-        className="max-h-32 min-h-[2.5rem] resize-none"
-      />
-      {error && <p role="alert">No se pudo enviar. Tu texto sigue aquí.</p>}
-      <Button
-        type="button"
-        onClick={() => void submit()}
-        disabled={sendDisabled || !text.trim()}
-        size="sm"
-        className="self-end"
-      >
-        Enviar
-      </Button>
+    <div>
+      <div className="flex items-end gap-2 rounded-2xl border border-stone-300 bg-white p-2 shadow-[0_1px_3px_rgba(28,25,23,0.06)] transition-colors focus-within:border-teal-600 focus-within:ring-3 focus-within:ring-teal-600/35">
+        <Textarea
+          aria-label="Mensaje para Serenia"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder="Escribe lo que quieras compartir…"
+          onKeyDown={handleKeyDown}
+          disabled={isDisabled}
+          className="max-h-40 min-h-11 resize-none border-0 bg-transparent px-2 py-2.5 text-base shadow-none focus-visible:ring-0 md:text-[15px] dark:bg-transparent"
+        />
+        <Button
+          type="button"
+          onClick={() => void submit()}
+          disabled={sendDisabled || !text.trim()}
+          className="size-11 shrink-0 rounded-full p-0 shadow-md shadow-teal-900/15 sm:w-auto sm:px-4"
+        >
+          <ArrowUp aria-hidden className="size-5 sm:size-4" />
+          <span className="sr-only sm:not-sr-only">Enviar</span>
+        </Button>
+      </div>
+      {error && <p role="alert" className="mt-2 px-2 text-sm text-red-800">No se pudo enviar. Tu texto sigue aquí.</p>}
     </div>
   )
 }
