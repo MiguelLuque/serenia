@@ -162,6 +162,31 @@ it('identifies a lexical event as an automatic observation in the report input',
   expect(generateObjectMock.mock.calls[0][0].prompt).toContain('observación léxica automática')
 })
 
+it('measures only transcript text: stored reasoning parts do not trip the context limit', async () => {
+  const reasoning = 'r'.repeat(12_000)
+  const messages = makeMessages(8).map((m) => m.role === 'assistant'
+    ? { ...m, parts: [{ type: 'step-start' }, { type: 'reasoning', text: reasoning, providerMetadata: { openai: { reasoningEncryptedContent: reasoning } } }, ...m.parts] }
+    : m)
+  expect(JSON.stringify(messages).length).toBeGreaterThan(80_000)
+  const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+    messages: { rows: messages }, questionnaire_instances: { rows: [] }, risk_events: { rows: [] } })
+  createServiceRoleClientMock.mockReturnValue(db)
+  generateObjectMock.mockResolvedValue({ object: summaryResult, usage: {} })
+  await generateAssessmentStep(makeSession())
+  const prompt = generateObjectMock.mock.calls[0][0].prompt as string
+  expect(prompt).toContain('Paciente: msg 0')
+  expect(prompt).not.toContain(reasoning)
+})
+
+it('still refuses a transcript whose text exceeds the safe context limit', async () => {
+  const messages = makeMessages(4).map((m) => ({ ...m, parts: [{ type: 'text', text: 'x'.repeat(25_000) }] }))
+  const db = makeSupabase({ clinical_sessions: { rows: makeSession() }, assessments: { rows: null },
+    messages: { rows: messages }, questionnaire_instances: { rows: [] }, risk_events: { rows: [] } })
+  createServiceRoleClientMock.mockReturnValue(db)
+  await expect(generateAssessmentStep(makeSession())).rejects.toThrow(/safe context limit/)
+  expect(generateObjectMock).not.toHaveBeenCalled()
+})
+
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
     id: 'session-1',

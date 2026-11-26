@@ -17,6 +17,7 @@ type Supabase = SupabaseClient<Database>
 
 const MIN_USER_MESSAGES = 3
 const MAX_TRANSCRIPT_MESSAGES = 60
+const MAX_TRANSCRIPT_CHARS = 80_000
 
 export type RejectionContext = {
   rejectionReason: string
@@ -240,7 +241,7 @@ export async function generateAssessmentStep(
     )
   }
 
-  if (messages.length > MAX_TRANSCRIPT_MESSAGES || JSON.stringify(messages).length > 80000) throw new FatalError('Transcript exceeds safe context limit; manual review required')
+  if (messages.length > MAX_TRANSCRIPT_MESSAGES) throw new FatalError('Transcript exceeds safe context limit; manual review required')
   const transcript = messages
     .map((m) => {
       const text = extractText(m.parts)
@@ -249,6 +250,9 @@ export async function generateAssessmentStep(
     })
     .filter((line) => line.length > 0)
     .join('\n')
+  // Measure only what reaches the model. Stored parts also carry reasoning and
+  // tool payloads, which pushed ordinary ~14-turn sessions past the limit.
+  if (transcript.length > MAX_TRANSCRIPT_CHARS) throw new FatalError('Transcript exceeds safe context limit; manual review required')
 
   const questionnaireFacts = await loadQuestionnaireFacts(supabase, session.id, session.user_id)
   const questionnaireBlocks: string[] = []
