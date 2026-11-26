@@ -152,6 +152,7 @@ it('asks before a voluntary close and keeps the session open when the patient go
   expect(screen.getByText(/¿Terminar la sesión\?/)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Seguir en la sesión' }))
   expect(screen.queryByText(/¿Terminar la sesión\?/)).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Terminar sesión' }))
   expect(f.close).not.toHaveBeenCalled()
   expect(screen.getByText('60 min restantes')).toBeTruthy()
 })

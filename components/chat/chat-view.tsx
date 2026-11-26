@@ -117,6 +117,7 @@ export function ChatView({
   const [closeUncertain, setCloseUncertain] = useState(false)
   const [closeConfirmation, setCloseConfirmation] = useState<{ requestId: string; attempt: number } | null>(null)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
+  const endButtonRef = useRef<HTMLButtonElement>(null)
   const [closeNotice, setCloseNotice] = useState('')
   const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
@@ -772,7 +773,9 @@ export function ChatView({
                   if (!isTimeExpired && !closeConfirmation && !closeUncertain && !closing) { setConfirmingEnd(true); return }
                   void finishSession()
                 }}
+                ref={endButtonRef}
                 aria-expanded={confirmingEnd}
+                aria-controls={confirmingEnd ? 'end-session-panel' : undefined}
                 className="min-h-9 rounded-full border border-stone-300 bg-white px-3.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-60"
               >
                 {closing ? 'Confirmando cierre…' : closeUncertain ? 'Cierre sin confirmar' : closeConfirmation ? 'Terminar sin respuesta' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
@@ -782,12 +785,12 @@ export function ChatView({
       </div>
 
       {confirmingEnd && !isClosed && (
-        <div role="group" aria-labelledby="end-session-confirm" className="space-y-2.5 rounded-xl bg-muted p-3 text-sm text-stone-800">
+        <div id="end-session-panel" role="group" aria-labelledby="end-session-confirm" className="space-y-2.5 rounded-xl bg-muted p-3 text-sm text-stone-800">
           <p id="end-session-confirm" className="font-medium">¿Terminar la sesión? Después no podrás seguir escribiendo en ella.</p>
           {activeQuestionnaire && activeQuestionnaire.status !== 'scored' && <p>Tienes un cuestionario sin terminar: las respuestas que no hayas enviado no se guardarán.</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" autoFocus disabled={closing || status === 'submitted' || status === 'streaming'} onClick={() => { setConfirmingEnd(false); void finishSession() }} className={primaryActionClass}>Sí, terminar la sesión</button>
-            <button type="button" onClick={() => setConfirmingEnd(false)} className={secondaryActionClass}>Seguir en la sesión</button>
+            <button type="button" onClick={() => { setConfirmingEnd(false); endButtonRef.current?.focus() }} className={secondaryActionClass}>Seguir en la sesión</button>
           </div>
         </div>
       )}
