@@ -449,7 +449,7 @@ El resultado estructurado contiene una señal que requiere interpretación profe
   return `[RESULTADO DE CUESTIONARIO — ${def.code}]
 Puntuación: ${result.total_score} (${result.severity_band}).
 Flags: ${flagsLabel}.
-El paciente ha completado el cuestionario. Acknowledge con tacto, valida el esfuerzo, explícale qué significa la puntuación en términos no clínicos (sin citar cifras), y continúa la sesión. NO diagnostiques. Menciona que tu psicólogo revisará el informe.
+El paciente ha completado el cuestionario. Acknowledge con tacto, valida el esfuerzo, explícale qué significa la puntuación en términos no clínicos (sin citar cifras), y continúa la sesión. NO diagnostiques. Si mencionas la revisión, di que el resultado queda guardado para que un profesional pueda revisarlo más adelante, sin plazo garantizado; no prometas que lo revisará contigo ni cuándo.
 
 ---
 
