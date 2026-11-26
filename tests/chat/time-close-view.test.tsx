@@ -74,6 +74,8 @@ it('offers saved-state recovery when a manual close finds a turn from another ta
   render(<ChatView sessionId="open-pending" initialMessages={[]} serverNow={new Date(now)} expiresAt={new Date(now + 60 * 60_000)} />)
 
   fireEvent.click(screen.getByRole('button', { name: 'Terminar sesión' }))
+  expect(f.close).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Sí, terminar la sesión' }))
   await screen.findByText(/Hay una respuesta en curso/)
 
   expect(screen.getByText('60 min restantes')).toBeTruthy()
@@ -143,4 +145,13 @@ it('the time-expired notice keeps 024 and 112 as phone links', () => {
   expect(notice.textContent).toMatch(/ayuda inmediata/)
   const hrefs = Array.from(notice.querySelectorAll('a')).map(a => a.getAttribute('href'))
   expect(hrefs).toEqual(expect.arrayContaining(['tel:024', 'tel:112']))
+})
+it('asks before a voluntary close and keeps the session open when the patient goes back', async () => {
+  render(<ChatView sessionId="open-confirm" initialMessages={[]} serverNow={new Date(now)} expiresAt={new Date(now + 60 * 60_000)} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Terminar sesión' }))
+  expect(screen.getByText(/¿Terminar la sesión\?/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Seguir en la sesión' }))
+  expect(screen.queryByText(/¿Terminar la sesión\?/)).toBeNull()
+  expect(f.close).not.toHaveBeenCalled()
+  expect(screen.getByText('60 min restantes')).toBeTruthy()
 })

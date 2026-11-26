@@ -116,6 +116,7 @@ export function ChatView({
   const [closing, setClosing] = useState(false)
   const [closeUncertain, setCloseUncertain] = useState(false)
   const [closeConfirmation, setCloseConfirmation] = useState<{ requestId: string; attempt: number } | null>(null)
+  const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [closeNotice, setCloseNotice] = useState('')
   const isTimeExpired = minsLeft <= 0
   const isEnding = minsLeft > 0 && minsLeft <= 10
@@ -765,7 +766,13 @@ export function ChatView({
               <button
                 type="button"
                 disabled={closing || closeUncertain || status === 'submitted' || status === 'streaming'}
-                onClick={() => void finishSession()}
+                onClick={() => {
+                  // A plain, voluntary close cannot be undone: ask first. Time-limit and
+                  // unresolved-turn closes already carry their own explicit confirmation.
+                  if (!isTimeExpired && !closeConfirmation && !closeUncertain && !closing) { setConfirmingEnd(true); return }
+                  void finishSession()
+                }}
+                aria-expanded={confirmingEnd}
                 className="min-h-9 rounded-full border border-stone-300 bg-white px-3.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-60"
               >
                 {closing ? 'Confirmando cierre…' : closeUncertain ? 'Cierre sin confirmar' : closeConfirmation ? 'Terminar sin respuesta' : isTimeExpired ? 'Confirmar cierre por tiempo' : 'Terminar sesión'}
@@ -774,6 +781,16 @@ export function ChatView({
         </div>
       </div>
 
+      {confirmingEnd && !isClosed && (
+        <div role="group" aria-labelledby="end-session-confirm" className="space-y-2.5 rounded-xl bg-muted p-3 text-sm text-stone-800">
+          <p id="end-session-confirm" className="font-medium">¿Terminar la sesión? Después no podrás seguir escribiendo en ella.</p>
+          {activeQuestionnaire && activeQuestionnaire.status !== 'scored' && <p>Tienes un cuestionario sin terminar: las respuestas que no hayas enviado no se guardarán.</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" autoFocus disabled={closing || status === 'submitted' || status === 'streaming'} onClick={() => { setConfirmingEnd(false); void finishSession() }} className={primaryActionClass}>Sí, terminar la sesión</button>
+            <button type="button" onClick={() => setConfirmingEnd(false)} className={secondaryActionClass}>Seguir en la sesión</button>
+          </div>
+        </div>
+      )}
       {closeNotice && <p role="status" className="rounded-xl bg-muted px-3 py-2 text-sm text-stone-800">{closeNotice}</p>}
       {retrying && <p role="status" className="rounded-xl bg-muted px-3 py-2 text-sm text-stone-800">Reintentando el mismo turno guardado. Puedes seguir escribiendo mientras esperamos.</p>}
 
